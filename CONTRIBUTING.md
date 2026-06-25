@@ -59,7 +59,7 @@ ruff format .
 
 ## Application-specific code
 
-Domain-specific skills (grasp a cup, move a chess piece, wipe a patient) do **not** belong in this repo. They live in the application repository that depends on ANIMA — for example [`soma-care`](https://github.com/jeffliulab/soma-care) or [`soma-arm`](https://github.com/jeffliulab/soma-arm).
+Domain-specific skills (move a chess piece, grasp a cup) do **not** belong in this repo. They live in the application repository that depends on ANIMA — for example [`soma-zero`](https://github.com/jeffliulab/soma-zero), the live body for VLA chess.
 
 ## Release process
 
