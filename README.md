@@ -94,14 +94,15 @@ print(status)  # Status.SUCCESS
 
 ## Reference applications
 
-ANIMA is the brain shared across the **Soma Homies** robot family. Two application branches exist today:
+ANIMA is the brain; the body that exercises it lives in a separate repo.
 
 | Application | Repo | What it does |
 |---|---|---|
-| **SOMA Care** | [jeffliulab/soma-care](https://github.com/jeffliulab/soma-care) | Medical-care embodied AI. Hospital-ward simulation with ADL skills (drink, call-help, turn-over, fetch-medicine); upstream signal is text → future BCI. |
-| **SOMA Arm** | [jeffliulab/soma-arm](https://github.com/jeffliulab/soma-arm) | Tabletop manipulator. Chess play: identify legal captures, execute pick-and-place, respect game rules. Upstream signal is text. |
+| **SOMA Zero** | [jeffliulab/soma-zero](https://github.com/jeffliulab/soma-zero) | **Live.** The body for VLA chess — perception (camera → board state) + arm execution (pick-and-place). The reference application this brain pairs with. |
+| _SOMA Arm_ | [ARCHIVE_soma-arm](https://github.com/jeffliulab/ARCHIVE_soma-arm) | _Archived._ Old O1 tabletop chess arm; superseded by SOMA Zero. |
+| _SOMA Care_ | [ARCHIVE_soma-care](https://github.com/jeffliulab/ARCHIVE_soma-care) | _Archived._ Medical-care hospital-ward sim; kept as a capstone seed. |
 
-Domain-specific skills (grasp a cup, move a chess piece, wipe a patient) live in those repos, not here. ANIMA itself ships only the framework, the mocks, and the tests.
+Domain-specific skills (move a chess piece, grasp a cup) live in the application repo, not here. ANIMA itself ships only the framework, the mocks, and the tests.
 
 ## Status
 

@@ -17,9 +17,9 @@
    - [`src/anima/test_and_check.py`](../src/anima/test_and_check.py) — six-gate validation before execution
    - [`src/anima/taskspec.py`](../src/anima/taskspec.py) — Pydantic schemas
 
-3. **See the reference applications** that exercise this framework end-to-end:
-   - [`soma-care`](https://github.com/jeffliulab/soma-care) — medical-care embodied AI (hospital-ward simulation)
-   - [`soma-arm`](https://github.com/jeffliulab/soma-arm) — tabletop manipulator for chess play
+3. **See the reference application** that exercises this framework end-to-end:
+   - [`soma-zero`](https://github.com/jeffliulab/soma-zero) — the body for VLA chess (perception + arm execution); pairs with this brain
+   - _Archived predecessors:_ [`ARCHIVE_soma-arm`](https://github.com/jeffliulab/ARCHIVE_soma-arm) (old O1 chess arm), [`ARCHIVE_soma-care`](https://github.com/jeffliulab/ARCHIVE_soma-care) (medical-care sim, kept as a capstone seed)
 
 ## Design invariants (do not change)
 

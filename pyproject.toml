@@ -43,8 +43,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/jeffliulab/anima-zero"
-"SOMA Care" = "https://github.com/jeffliulab/soma-care"
-"SOMA Arm" = "https://github.com/jeffliulab/soma-arm"
+"SOMA Zero (body)" = "https://github.com/jeffliulab/soma-zero"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/anima"]
