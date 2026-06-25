@@ -11,8 +11,8 @@ Thanks for thinking about contributing. This is an **alpha solo-maintainer** pro
 ## Development setup
 
 ```bash
-git clone https://github.com/jeffliulab/anima.git
-cd anima
+git clone https://github.com/jeffliulab/anima-zero.git
+cd anima-zero
 uv venv && source .venv/bin/activate
 uv pip install -e ".[dev]"
 ```

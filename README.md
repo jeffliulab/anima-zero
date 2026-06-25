@@ -1,6 +1,11 @@
-# ANIMA
+# ANIMA Zero
 
 **ANIMA** = **A**utonomous **N**atural-language **I**nstruction **M**apping **A**rchitecture.
+
+**ANIMA Zero** is the open-source line of the ANIMA cognitive framework — the *brain* that
+decides what to do, paired with [`soma-zero`](https://github.com/jeffliulab/soma-zero), the
+*body* that senses and acts. This Zero line is fully open source; deeper production work
+continues in private repos.
 
 A domain-agnostic cognitive framework for intent-to-action embodied AI. It turns an upstream signal (BCI, speech, vision, text) into a validated, executable task on any device that implements the adapter protocol.
 
@@ -57,8 +62,8 @@ Most embodied-AI stacks either (a) let an LLM emit motor commands directly, whic
 ## Quick start
 
 ```bash
-git clone https://github.com/jeffliulab/anima.git
-cd anima
+git clone https://github.com/jeffliulab/anima-zero.git
+cd anima-zero
 uv venv && source .venv/bin/activate
 uv pip install -e ".[dev]"
 pytest
@@ -100,7 +105,7 @@ Domain-specific skills (grasp a cup, move a chess piece, wipe a patient) live in
 
 ## Status
 
-**Alpha (0.1.x).** First reference implementation landed 2026-04-21 (absorbed from the `anima-intention-action` BCI application branch). APIs may still change prior to `1.0.0`; breaking changes will be flagged with `!` in the commit message and called out in [`CHANGELOG.md`](./CHANGELOG.md).
+**Alpha (0.1.x).** First reference implementation landed 2026-04-21 (absorbed from the `anima-intention-action` BCI application branch). Renamed from `anima` (internally "ANIMA O1") to **`anima-zero`** on 2026-06-25 — the Zero line continues development from this v0.1 base. APIs may still change prior to `1.0.0`; breaking changes will be flagged with `!` in the commit message and called out in [`CHANGELOG.md`](./CHANGELOG.md).
 
 Design docs live under [`docs/`](./docs/). The original Anima IP (Chinese, more abstract) is preserved verbatim in [`docs/preserved/`](./docs/preserved/) for provenance.
 

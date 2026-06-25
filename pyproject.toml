@@ -42,7 +42,7 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/jeffliulab/anima"
+Homepage = "https://github.com/jeffliulab/anima-zero"
 "SOMA Care" = "https://github.com/jeffliulab/soma-care"
 "SOMA Arm" = "https://github.com/jeffliulab/soma-arm"
 
