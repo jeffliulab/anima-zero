@@ -1,53 +1,30 @@
-# Security Policy
+# 安全说明 / 风险披露
 
-## This project is a research prototype
+> ANIMA Zero 是一个**开源研究原型**,用于求职展示与教学。下面简单披露已知风险,使用前请知悉。
 
-**ANIMA is NOT a safety-certified system.** It is an open-source research prototype of a cognitive framework. Applications that build on ANIMA for safety-critical domains (medical, industrial, automotive) must carry out their own validation and certification; do not deploy ANIMA itself in clinical or production-safety settings.
+## 1. 这是原型,不是安全认证系统
 
-## Reporting a vulnerability
+ANIMA 没有经过任何安全认证,**不要**用于医疗、工业、汽车等安全攸关场景。要在这类场景使用,必须由你
+自己做完整的验证与认证。
 
-If you believe you have found a security issue or a defect with **safety implications** (for example: a way to bypass Test-and-Check gates, inject malicious TaskSpecs, or cause the framework to emit unsafe motor commands), please **do not open a public GitHub issue**.
+## 2. 大脑会犯错(LLM 固有风险)
 
-Instead, email the maintainer privately:
+ANIMA 的决策由大语言模型(云端或本地视觉模型)给出,**可能产生幻觉或错误判断**。因此设计上:大脑只
+"想"、只负责选工具填参数,不持有逻辑真值;真正动手前必须经过安全闸和人工确认。
 
-- **Contact**: the email address listed under `project.authors` in [`pyproject.toml`](./pyproject.toml)
-- **Subject line**: `[SECURITY] anima: <short summary>`
-- **PGP**: not yet available; an encrypted channel can be arranged on request
+## 3. 真机风险(连接真实身体时)
 
-You should receive an acknowledgement within **72 hours**. A triage and remediation plan will follow within **7 days**.
+本版(v0.1)是纯软件(虚拟桌面),没有硬件风险。但 ANIMA 的目标是将来驱动真实机械臂(SOMA):
 
-## What to include
+- 真机运动有物理风险,相关命令必须由**在场操作者**亲手执行。
+- 这是舵机 / 伺服臂,**急停 = 切电**;切电瞬间关节会失力下塌,需人手扶住。
+- 舵机夹爪角度 **≤100°**(超过会因齿轮误差带来危险)。
+- 下发真机前必做自检(合法?看清了?抓取角度安全?),高风险 / 不可逆动作前强制人工确认。
 
-- Description of the issue and its impact
-- Steps to reproduce (a minimal test case is very helpful)
-- Affected version / commit SHA
-- Whether you believe the issue has safety implications for downstream applications, and why
+## 4. 密钥安全
 
-## Disclosure policy
+大脑用的 API key 放在本地 `.env`(已在 `.gitignore`,不会入库),不要把密钥提交到仓库。
 
-- We follow **coordinated disclosure**: we ask reporters to withhold public disclosure until we have a fix available or 90 days have elapsed, whichever comes first.
-- We will credit reporters in the CHANGELOG unless they request anonymity.
-- For issues with downstream safety implications, we may extend the disclosure window if an integrator needs time to patch.
+## 5. 发现问题
 
-## Scope
-
-Security reports welcomed for:
-
-- The framework source code in `src/anima/`
-- LLM provider abstractions and tool-calling paths
-- Test-and-Check validation logic
-- E-stop handling in adapter protocols
-- Dependencies declared in `pyproject.toml`
-
-Out of scope:
-
-- Issues in third-party dependencies that are already publicly known and awaiting upstream patch
-- Social engineering or physical-security scenarios
-- Performance / denial-of-service on reference deployments (not safety-critical)
-
-## Supported versions
-
-| Version | Supported |
-|---------|-----------|
-| 0.1.x (alpha) | ✅ main branch |
-| < 0.1.0 | ❌ |
+发现安全或风险相关问题,欢迎开 issue,或邮件联系维护者(邮箱见 `pyproject.toml` 的 `authors`)。

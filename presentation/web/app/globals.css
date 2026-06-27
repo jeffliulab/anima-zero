@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+/* 可点击的按钮默认显示手型光标;禁用的不显示 */
+button:not(:disabled) {
+  cursor: pointer;
+}

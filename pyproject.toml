@@ -1,11 +1,11 @@
 [build-system]
-requires = ["hatchling>=1.24"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "anima"
 version = "0.1.0"
-description = "ANIMA — cognitive framework for intent-to-action embodied AI. Six-layer stack (signal/parser/planner/skill/adapter/assessment) + five-factor self-assessment."
+description = "ANIMA — the brain of an embodied robot: an object standard + registry + a generic agent loop. Connects to one object at a time and operates it through vision-capable LLMs."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.11"
@@ -13,12 +13,11 @@ authors = [
     { name = "Jeff Liu Lab", email = "contact@jeffliulab.com" },
 ]
 keywords = [
-    "cognitive-architecture",
     "embodied-ai",
-    "behavior-tree",
+    "agent",
     "llm-tool-use",
-    "intent-to-action",
-    "self-assessment",
+    "object-standard",
+    "vision-language-action",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -30,14 +29,17 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "numpy>=1.26",
+    "anthropic>=0.69",
+    "openai>=1.0",
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+    "pillow>=10",
     "pydantic>=2.6",
-    "py_trees>=2.2",
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0",
     "ruff>=0.4",
 ]
 
@@ -45,8 +47,10 @@ dev = [
 Homepage = "https://github.com/jeffliulab/anima-zero"
 "SOMA Zero (body)" = "https://github.com/jeffliulab/soma-zero"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/anima"]
+# 扁平 src/ 映射成 anima 包(不建 src/anima);llm/ 是子包
+[tool.setuptools]
+package-dir = { "anima" = "src" }
+packages = ["anima", "anima.llm"]
 
 [tool.ruff]
 line-length = 100

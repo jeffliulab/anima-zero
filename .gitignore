@@ -181,3 +181,11 @@ ehthumbs.db
 Thumbs.db
 Desktop.ini
 $RECYCLE.BIN/
+
+# Agent working notes (local only — not part of the open-source repo)
+CLAUDE.md
+node_modules/
+.next/
+
+# 本地记忆(会话记录 + 图片;单用户,不入库)
+memory/

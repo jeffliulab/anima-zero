@@ -1,0 +1,3 @@
+[submodule "object/sim-desk"]
+	path = world/sim-desk
+	url = git@github.com:jeffliulab/sim-desk.git
