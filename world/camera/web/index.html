@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>摄像头 · 世界 (AWI)</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; background: #14161a;
+         color: #e6e6e6; padding: 20px; }
+  h1 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+  .hint { font-size: 12px; color: #8a8f98; margin-bottom: 14px; max-width: 640px; line-height: 1.6; }
+  .row { display: flex; gap: 10px; align-items: center; font-size: 13px; color: #8a8f98;
+         flex-wrap: wrap; margin-bottom: 10px; }
+  .row .lbl { color: #6e7681; }
+  select, button { background: #2b3038; color: #fff; border: 1px solid #39404a; border-radius: 7px;
+                   padding: 6px 10px; font-size: 13px; cursor: pointer; }
+  #view { border-radius: 8px; display: block; background: #000; width: 640px; max-width: 100%; }
+  #status { font-size: 12px; color: #9aa0a8; margin-top: 8px; }
+  #params { font-size: 12px; color: #9aa0a8; margin-top: 4px; }
+  #params b { color: #e6e6e6; }
+  select:disabled { opacity: .5; cursor: default; }
+  .off { color: #e06c75; }
+  .on { color: #98c379; }
+</style>
+</head>
+<body>
+  <h1>摄像头 · 一个把真实摄像头画面交给 ANIMA 看的世界 (AWI)</h1>
+  <div class="hint">我只把<b>画面</b>给 ANIMA 看，它在这个世界里<b>没有任何动作</b>——只能看、能聊，不能操作。
+    服务启动不会自动开摄像头；请在下面下拉框选一个摄像头，画面才会出现并传给 ANIMA。插了多个可随时切换。</div>
+
+  <div class="row">
+    <span class="lbl">摄像头</span>
+    <select id="camSel"><option value="">（未选择）</option></select>
+    <button id="refresh">刷新列表</button>
+    <button id="release">松开</button>
+  </div>
+
+  <div class="row">
+    <span class="lbl">分辨率</span>
+    <select id="resSel" disabled><option value="">（先选摄像头）</option></select>
+    <span class="lbl" id="resNote"></span>
+  </div>
+
+  <img id="view" alt="camera" src="/stream" />
+  <div id="status">加载中…</div>
+  <div id="params">摄像头参数：—</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const camSel = $("camSel"), resSel = $("resSel"), view = $("view");
+
+  async function loadCameras() {
+    try {
+      const r = await (await fetch("/cameras")).json();
+      const cur = camSel.value;
+      camSel.innerHTML = '<option value="">（未选择）</option>' +
+        (r.cameras || []).map(c => `<option value="${c.id}">id ${c.id} · ${c.name} (${c.device})</option>`).join("");
+      // 跟随世界真值：当前已选的，下拉框也选上
+      const sel = (r.selected ?? "");
+      camSel.value = (document.activeElement === camSel) ? cur : String(sel);
+    } catch (e) {}
+  }
+
+  // 选中摄像头后，问后端这台设备真支持哪些分辨率，填进分辨率下拉框（只给真支持的档）。
+  async function loadModes() {
+    try {
+      const r = await (await fetch("/modes")).json();
+      const modes = r.modes || [];
+      if (r.selected === null || r.selected === undefined) {
+        resSel.disabled = true;
+        resSel.innerHTML = '<option value="">（先选摄像头）</option>';
+        $("resNote").textContent = "";
+        return;
+      }
+      if (modes.length === 0) {
+        resSel.disabled = true;
+        resSel.innerHTML = '<option value="">（读不到该摄像头支持的分辨率）</option>';
+        $("resNote").textContent = "无法枚举设备能力，沿用当前分辨率";
+        return;
+      }
+      resSel.disabled = false;
+      resSel.innerHTML = modes.map(m => {
+        const top = m.formats[0];   // 已按偏好排序：首选格式 + 该档最高帧率
+        const fps = top.max_fps ? ` · 最高${top.max_fps}fps` : "";
+        return `<option value="${m.width}x${m.height}">${m.width}×${m.height}${fps} · ${top.fourcc}</option>`;
+      }).join("");
+      $("resNote").textContent = `共 ${modes.length} 档可选`;
+    } catch (e) {}
+  }
+
+  camSel.addEventListener("change", async () => {
+    const v = camSel.value;
+    if (v === "") { await fetch("/release", { method: "POST" }); await loadModes(); return; }
+    const r = await (await fetch("/select", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: Number(v) }) })).json();
+    if (!r.ok) $("status").innerHTML = '<span class="off">选摄像头失败：' + (r.message || "") + '</span>';
+    await loadModes();
+  });
+
+  resSel.addEventListener("change", async () => {
+    const v = resSel.value;
+    if (!v) return;
+    const [width, height] = v.split("x").map(Number);
+    const r = await (await fetch("/resolution", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ width, height }) })).json();
+    if (!r.ok) $("status").innerHTML = '<span class="off">设置分辨率失败：' + (r.message || "") + '</span>';
+  });
+
+  $("refresh").onclick = loadCameras;
+  $("release").onclick = async () => { await fetch("/release", { method: "POST" }); await loadModes(); };
+
+  async function refreshStatus() {
+    try {
+      const s = await (await fetch("/status")).json();
+      if (s.online) {
+        $("status").innerHTML =
+          `<span class="on">● 在线</span> · 摄像头 id <b>${s.selected}</b>`;
+        // 摄像头核心参数：真正生效的分辨率 / 帧率 / 像素格式（设备回读值）。
+        const res = (s.actual_width && s.actual_height) ? `${s.actual_width}×${s.actual_height}` : "—";
+        const fps = s.fps ? `${s.fps} fps` : "—";
+        const fmt = s.fourcc || "—";
+        const reqHint = (s.actual_width && (s.actual_width !== s.width || s.actual_height !== s.height))
+          ? `（请求 ${s.width}×${s.height}，设备回退到上面这档）` : "";
+        $("params").innerHTML = `摄像头参数：分辨率 <b>${res}</b> · 帧率 <b>${fps}</b> · 格式 <b>${fmt}</b> ${reqHint}`;
+      } else {
+        $("status").innerHTML = s.error
+          ? `<span class="off">● 离线：${s.error}</span>`
+          : `<span class="off">● 未选择摄像头</span> —— 在上面下拉框里选一个`;
+        $("params").innerHTML = "摄像头参数：—";
+      }
+    } catch (e) {}
+  }
+
+  loadCameras();
+  loadModes();
+  refreshStatus();
+  setInterval(refreshStatus, 1000);
+  setInterval(loadCameras, 3000);
+</script>
+</body>
+</html>

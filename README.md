@@ -234,18 +234,36 @@ ANIMA 的第一个 **skill**:陪你下国际象棋。它示范了几层新概念
 ```bash
 # 终端1:起棋具世界(独立进程)
 cd world/sim-chess && pip install -e . && uvicorn server:app --port 8102
-# 终端2:后端同时注册两个世界 —— ⚠️ 加新世界要追加,别把 sim-desk 写没了
-ANIMA_WORLDS="sim-desk=http://localhost:8100,sim-chess=http://localhost:8102" uvicorn presentation.server:app --port 8000
-# (其实不设 ANIMA_WORLDS 也行:默认清单已含 sim-desk + sim-chess)
+# 终端2:后端同时注册所有世界 —— ⚠️ 加新世界要追加,别把已有的写没了
+ANIMA_WORLDS="sim-desk=http://localhost:8100,sim-chess=http://localhost:8102,camera=http://localhost:8104" uvicorn presentation.server:app --port 8000
+# (其实不设 ANIMA_WORLDS 也行:默认清单已含 sim-desk + sim-chess + camera)
 # 网页新建会话(世界选 sim-chess)→ 说"我们下棋吧,我执黑"→ 自动选边+开局,浮现 Chess Mode 面板
+```
+
+---
+
+## 十、Camera World：让 ANIMA 看真实摄像头(v0.3)
+
+ANIMA 第一次看**真实物理世界**(不再是程序画出来的合成图)。本版很轻:**只能看、能聊、不能操作**——给将来上真机的"眼睛"先把"真摄像头 → 编码 → 喂给视觉大模型"这条链路跑通。
+
+- **world `camera`**(`world/camera/`):把真实 USB 摄像头的实时画面通过 AWI 交给 ANIMA。`capabilities` 的 **tools 是空的** —— ANIMA 在这个世界里**没有任何可执行动作**("只能看、不能操作"是结构上保证的,不是靠提示词)。`perceive` 给当前所选摄像头的真帧 + 极简 state(选了哪个、是否在线);`/invoke` 一律拒绝。
+- **摄像头由人来选、来开**:服务启动**不主动打开任何摄像头**,只枚举有哪些。打开哪个,由人在世界页(`localhost:8104`)下拉框里选,插了多个可随时切。
+- **脑侧零改动**:零动作世界走的就是主循环现成的"看画面→大模型→出文字"纯聊天路径。
+
+```bash
+# 终端1:起摄像头世界(独立进程)
+cd world/camera && pip install -e . && uvicorn server:app --port 8104
+# 打开 localhost:8104 选一个摄像头 → 画面出现
+# 网页新建会话(世界选 camera)→ 问"你看到了什么"→ ANIMA 描述真实画面
 ```
 
 ---
 
 ## 状态
 
-**v0.2(Pre-alpha),持续迭代中。** v0.1 封版了顶层架构(世界独立 + 会话 + 主循环 + 外围 hook + 原生 tool-calling);
-v0.2 在这套框架上长出第一个**技能 = Chess Mode**(技能 + 对弈行为树 + 只给画面的 sim-chess 世界 + 通用运行时 HITL/分级安全闸 + 独立 eval 记分台)。
+**v0.3(Pre-alpha),持续迭代中。** v0.1 封版了顶层架构(世界独立 + 会话 + 主循环 + 外围 hook + 原生 tool-calling);
+v0.2 在这套框架上长出第一个**技能 = Chess Mode**(技能 + 对弈行为树 + 只给画面的 sim-chess 世界 + 通用运行时 HITL/分级安全闸 + 独立 eval 记分台);
+v0.3 接入第一个**真实摄像头世界 camera**(零动作:只能看、能聊、不能操作),让 ANIMA 第一次看真实物理世界,为真机的"眼睛"铺路。
 真机安全硬检查、视觉裁判升级、失败恢复按依赖顺序后做(失败恢复待真机阶段兑现)。`anima-zero` 是完全开源的 Zero 线展示版。
 
 ## License

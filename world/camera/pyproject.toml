@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "camera-world"
+version = "0.3.0"
+description = "camera —— ANIMA 的一个独立『世界』：把真实摄像头画面通过 HTTP(AWI) 交给 ANIMA 看。零动作，只能看、不能操作。"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+    "pydantic>=2.6",
+    "opencv-python>=4.6",
+]
+
+[tool.setuptools]
+py-modules = ["server", "world", "capture", "v4l2_caps"]

@@ -168,7 +168,17 @@ class Orchestrator:
         base = messages.system_prompt()
         if world is None:
             return base + "\n\n当前:未连接任何世界(纯聊天)。"
-        s = base + f"\n\n当前已连接世界「{world.name}」,你能在需要时调用它的工具。"
+        # 这个世界能不能操作,由它的【能力声明】决定(通用,不针对具体世界):
+        #   有工具 → 可在需要时调用;空工具(如 camera 摄像头世界)→ 只能看 + 聊,无任何动作可调。
+        # capabilities() 在 RemoteWorld 侧已缓存,这里再读一次不发 HTTP。
+        try:
+            has_tools = bool(world.capabilities().tools)
+        except Exception:
+            has_tools = True   # 读不到能力时不臆断"不可操作",保持旧行为(由后续真正调用兜底)
+        if has_tools:
+            s = base + f"\n\n当前已连接世界「{world.name}」,你能在需要时调用它的工具。"
+        else:
+            s = base + f"\n\n当前已连接世界「{world.name}」,它没有提供任何可调动作——你只能看画面、和用户聊,无法操作它。"
         if self._launchable(world):
             s += messages.SKILL_AVAILABILITY_HINT
         return s
