@@ -230,7 +230,7 @@ ANIMA 的第一个 **skill**:陪你下国际象棋。它示范了几层新概念
 
 > 概念边界:**world**=物理接口(只看与动)、**行为树**=循环层(怎么转/何时停)、**skill**=说明书(怎么用工具)、**tool**=原子能力(一进一出)、**棋种适配器**=每棋的眼睛+引擎。skill ≠ tool。
 
-**跑法**:先把 sim-chess 世界起起来,后端**同时**注册两个世界(sim-desk + sim-chess),会话连 sim-chess,然后在聊天里说「我们下棋吧」即可:
+**跑法**:先把 sim-chess 世界起起来,后端**同时**注册各世界(sim-desk + sim-chess + camera),会话连 sim-chess,然后在聊天里说「我们下棋吧」即可:
 ```bash
 # 终端1:起棋具世界(独立进程)
 cd world/sim-chess && pip install -e . && uvicorn server:app --port 8102
