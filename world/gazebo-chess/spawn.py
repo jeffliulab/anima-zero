@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 import subprocess
 import tempfile
+import time
 
 import config
 import geometry
@@ -29,8 +30,13 @@ def _run(cmd: list[str], timeout: float = 20.0) -> tuple[bool, str]:
 
 
 def _create(sdf: str, name: str, xyz: tuple[float, float, float],
-            rpy: tuple[float, float, float] = (0.0, 0.0, 0.0)) -> tuple[bool, str]:
-    """用 ros_gz create 把一段 SDF spawn 进世界（写临时文件再 -file，避开 -string 的引号坑）。"""
+            rpy: tuple[float, float, float] = (0.0, 0.0, 0.0), replace: bool = True) -> tuple[bool, str]:
+    """用 ros_gz create 把一段 SDF spawn 进世界（写临时文件再 -file，避开 -string 的引号坑）。
+    replace=True：先删掉同名模型再 spawn——**幂等**，避免反复 spawn 堆出一堆同名重复体污染世界
+    （昨晚就因没删干净，5 个 overhead_cam 叠在一起，错以为 remove 坏了）。"""
+    if replace:
+        remove_model(name)
+        time.sleep(0.3)
     with tempfile.NamedTemporaryFile("w", suffix=".sdf", delete=False) as f:
         f.write(sdf)
         path = f.name
@@ -39,6 +45,17 @@ def _create(sdf: str, name: str, xyz: tuple[float, float, float],
            "-x", f"{xyz[0]:.5f}", "-y", f"{xyz[1]:.5f}", "-z", f"{xyz[2]:.5f}",
            "-R", f"{rpy[0]:.5f}", "-P", f"{rpy[1]:.5f}", "-Y", f"{rpy[2]:.5f}"]
     return _run(cmd)
+
+
+def set_model_pose(name: str, xyz: tuple[float, float, float],
+                   quat: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 1.0)) -> tuple[bool, str]:
+    """直接改一个已有模型的世界位姿（gz set_pose 服务）。调相机朝向时用它，免得 remove+respawn。"""
+    req = (f'name: "{name}" '
+           f'position {{ x: {xyz[0]:.5f} y: {xyz[1]:.5f} z: {xyz[2]:.5f} }} '
+           f'orientation {{ x: {quat[0]:.6f} y: {quat[1]:.6f} z: {quat[2]:.6f} w: {quat[3]:.6f} }}')
+    return _run(["gz", "service", "-s", f"/world/{config.GZ_WORLD_NAME}/set_pose",
+                 "--reqtype", "gz.msgs.Pose", "--reptype", "gz.msgs.Boolean",
+                 "--timeout", "3000", "--req", req])
 
 
 def remove_model(name: str) -> tuple[bool, str]:
