@@ -130,10 +130,12 @@ export default function ChatPanel({
   session,
   brains,
   onSessionsChanged,
+  paused = false,
 }: {
   session: SessionSummary | null;
   brains: Brain[];
   onSessionsChanged: () => void;
+  paused?: boolean; // 查看子页面/主页时：保留头部+历史，输入区换成只读提示（功能后续开放）
 }) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [live, setLive] = useState<Turn | null>(null);
@@ -259,7 +261,9 @@ export default function ChatPanel({
       </header>
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        {!session && <div className="p-4 text-center text-xs text-neutral-500">请在左边新建或选择一个会话</div>}
+        {!session && !paused && (
+          <div className="p-4 text-center text-xs text-neutral-500">请在左边新建或选择一个会话</div>
+        )}
         {turns.map((t, i) => (
           <Fragment key={i}>
             {seps[i] && <Divider text={seps[i]!} />}
@@ -271,7 +275,12 @@ export default function ChatPanel({
         <div ref={bottomRef} />
       </div>
 
-      {session &&
+      {paused ? (
+        <div className="border-t border-neutral-800 p-4 text-center text-xs text-neutral-500">
+          查看子页面中 · 对话暂不可用（后续开放）
+        </div>
+      ) : (
+        session &&
         (frozen ? (
           <div className="border-t border-neutral-800 p-4 text-center text-xs text-neutral-500">
             🔒 这个会话已冻结、只读。新建会话可继续。
@@ -305,7 +314,7 @@ export default function ChatPanel({
               发送
             </button>
           </div>
-        ))}
+        )))}
     </aside>
   );
 }

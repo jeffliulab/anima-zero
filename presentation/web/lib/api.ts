@@ -73,8 +73,8 @@ export type AwiWorld = {
   online: boolean;
   version: string;
   tools: AwiTool[];
-  state: Record<string, unknown> | null; // 调试真值（世界本地 /status，人的上帝视角，ANIMA 看不到，如 FEN）
-  perceive_state: Record<string, unknown> | null; // ANIMA 随画面一起经 perceive 收到的结构化状态（world→脑 唯一结构化通道）
+  state: Record<string, unknown> | null; // ANIMA 随画面一起经 perceive 收到的结构化状态（world→脑 唯一结构化通道，脑能看）
+  status: Record<string, unknown> | null; // 世界自身真实状态，仅人看：走世界本地 /status（人的上帝视角），ANIMA 看不到，如 FEN
 };
 export type AwiOverview = {
   worlds: AwiWorld[];
@@ -97,14 +97,14 @@ export type AnimaLogEntry = {
   ts: string;
   session: string; // 这次调用属于哪个 session（空=非会话场景，如连通自检）
   model: string;
-  system: string; // 系统提示前缀——据此分辨 主循环/意图分类/解说/陪聊
+  system: string; // 系统提示（完整留存）——据此分辨 主循环/意图分类/解说/陪聊
   last_user: string;
   n_history: number;
   n_tools: number;
   has_image: boolean;
   reply: string;
   tool_calls: string[];
-  tokens: number | null;
+  tokens: { input: number; output: number; total: number } | null; // provider 给的用量，没给则 null
   ms: number;
   error: string;
 };

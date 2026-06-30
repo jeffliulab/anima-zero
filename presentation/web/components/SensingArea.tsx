@@ -27,7 +27,7 @@ export default function SensingArea({
   const disconnected = !!worldName && !!streamUrl && failed;
 
   return (
-    <section className="flex flex-col gap-3 p-6">
+    <section className="flex min-w-0 flex-col gap-3 overflow-hidden p-6">
       <h2 className="text-sm font-medium text-neutral-400">
         传感区 · ANIMA 看到的画面{worldName ? `（${worldName} · 实时）` : ""}
       </h2>

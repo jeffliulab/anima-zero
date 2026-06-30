@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { createSession, deleteSession, type Brain, type World, type SessionSummary } from "@/lib/api";
+import ThemeToggle from "./ThemeToggle";
 
 export default function SessionSidebar({
   sessions,
@@ -9,6 +10,8 @@ export default function SessionSidebar({
   currentId,
   onSelect,
   onChanged,
+  onHome,
+  onOpenPanel,
 }: {
   sessions: SessionSummary[];
   worlds: World[];
@@ -16,6 +19,8 @@ export default function SessionSidebar({
   currentId: string;
   onSelect: (id: string) => void;
   onChanged: (id?: string) => void;
+  onHome: () => void;                          // 点 🏠 主页 → 主页留白视图
+  onOpenPanel: (p: "awi" | "logs") => void;    // 点底栏导航 → 在主界面中间内嵌该子页
 }) {
   const [creating, setCreating] = useState(false);
   const [world, setWorld] = useState(""); // "" = 纯聊天
@@ -48,6 +53,15 @@ export default function SessionSidebar({
 
   return (
     <aside className="flex h-screen flex-col border-r border-neutral-800 bg-neutral-900">
+      <button
+        onClick={onHome}
+        title="回到主页（留白）"
+        className="flex items-center gap-2 border-b border-neutral-800 px-3 py-2.5 text-sm font-semibold text-neutral-200 transition-colors hover:bg-neutral-800"
+      >
+        <HomeIcon />
+        <span>ANIMA</span>
+        <span className="ml-auto text-[11px] font-normal text-neutral-500">主页</span>
+      </button>
       <div className="border-b border-neutral-800 p-3">
         <button onClick={openForm} className="w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium">
           + 新建会话
@@ -132,10 +146,63 @@ export default function SessionSidebar({
         ))}
       </div>
 
-      <div className="flex items-center gap-3 border-t border-neutral-800 p-3">
-        <a href="/awi" className="text-xs text-blue-400 hover:underline">AWI 仪表盘 →</a>
-        <a href="/anima-logs" className="text-xs text-blue-400 hover:underline">anima-logs →</a>
+      <div className="space-y-0.5 border-t border-neutral-800 p-2">
+        <button
+          onClick={() => onOpenPanel("awi")}
+          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-neutral-300 transition-colors hover:bg-neutral-800 hover:text-neutral-100"
+        >
+          <DashboardIcon />
+          <span>AWI 仪表盘</span>
+          <span className="ml-auto text-neutral-600">›</span>
+        </button>
+        <button
+          onClick={() => onOpenPanel("logs")}
+          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-neutral-300 transition-colors hover:bg-neutral-800 hover:text-neutral-100"
+        >
+          <LogsIcon />
+          <span>anima-logs</span>
+          <span className="ml-auto text-neutral-600">›</span>
+        </button>
+        <div className="mt-1 flex items-center gap-2 border-t border-neutral-800 px-2 pt-2 text-xs text-neutral-500">
+          <span>外观</span>
+          <span className="ml-auto">
+            <ThemeToggle />
+          </span>
+        </div>
       </div>
     </aside>
+  );
+}
+
+// 顶部主页图标
+function HomeIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 10.5 12 3l9 7.5" />
+      <path d="M5 9.5V20h14V9.5" />
+    </svg>
+  );
+}
+
+// 底栏导航小图标（描边风格与 ThemeToggle 一致，随主题变色）
+function DashboardIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="3" width="7" height="9" rx="1" />
+      <rect x="14" y="3" width="7" height="5" rx="1" />
+      <rect x="14" y="12" width="7" height="9" rx="1" />
+      <rect x="3" y="16" width="7" height="5" rx="1" />
+    </svg>
+  );
+}
+
+function LogsIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 6h16M4 12h16M4 18h10" />
+    </svg>
   );
 }
