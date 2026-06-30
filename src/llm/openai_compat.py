@@ -64,7 +64,9 @@ def _messages(system, history, image_png):
         if it["role"] == "user":
             msgs.append({"role": "user", "content": it["text"]})
         elif it["role"] == "assistant":
-            m: dict = {"role": "assistant", "content": it.get("text") or None}
+            # content 必须是字符串：哪怕这一回合只调了工具、没有文字，也给空串而非 None。
+            # OpenAI 协议不接受 content=null（即便带 tool_calls），qwen3-vl / gpt-5.5 都会 400。
+            m: dict = {"role": "assistant", "content": it.get("text") or ""}
             if it.get("tool_calls"):
                 m["tool_calls"] = [
                     {
