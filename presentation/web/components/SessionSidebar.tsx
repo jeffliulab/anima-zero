@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { createSession, type Brain, type World, type SessionSummary } from "@/lib/api";
+import { createSession, deleteSession, type Brain, type World, type SessionSummary } from "@/lib/api";
 
 export default function SessionSidebar({
   sessions,
@@ -32,6 +32,11 @@ export default function SessionSidebar({
     const created = await createSession(world || null, brain || firstAvailBrain);
     setCreating(false);
     onChanged(created.id);
+  }
+  async function doDelete(id: string) {
+    if (!confirm("删除这个会话?(不可恢复)")) return;
+    await deleteSession(id);
+    onChanged(); // 不指定 id:父组件刷新后若当前会话已被删则自动重选(见 page.tsx)
   }
 
   const pill = (active: boolean, dim = false) =>
@@ -96,28 +101,40 @@ export default function SessionSidebar({
           <div className="p-3 text-xs text-neutral-500">还没有会话,点上面新建。</div>
         )}
         {sessions.map((s) => (
-          <button
+          <div
             key={s.id}
-            onClick={() => onSelect(s.id)}
-            className={`mb-1 w-full rounded-lg p-2 text-left text-xs ${
+            className={`group mb-1 flex items-start rounded-lg ${
               s.id === currentId ? "bg-neutral-800" : "hover:bg-neutral-800/50"
             }`}
           >
-            <div className="flex items-center justify-between">
-              <span className="truncate font-medium">{s.title}</span>
-              {s.status === "frozen" && (
-                <span className="ml-1 shrink-0 text-[10px] text-amber-500">🔒只读</span>
-              )}
-            </div>
-            <div className="mt-0.5 text-[10px] text-neutral-500">
-              {s.world ?? "纯聊天"} · {s.brain}
-            </div>
-          </button>
+            <button
+              onClick={() => onSelect(s.id)}
+              className="min-w-0 flex-1 rounded-lg p-2 text-left text-xs"
+            >
+              <div className="flex items-center justify-between">
+                <span className="truncate font-medium">{s.title}</span>
+                {s.status === "frozen" && (
+                  <span className="ml-1 shrink-0 text-[10px] text-amber-500">🔒只读</span>
+                )}
+              </div>
+              <div className="mt-0.5 text-[10px] text-neutral-500">
+                {s.world ?? "纯聊天"} · {s.brain}
+              </div>
+            </button>
+            <button
+              onClick={() => doDelete(s.id)}
+              title="删除会话"
+              className="mr-1 mt-1 shrink-0 rounded px-1.5 py-1 text-[11px] text-neutral-600 opacity-0 hover:bg-neutral-700 hover:text-red-400 group-hover:opacity-100"
+            >
+              ✕
+            </button>
+          </div>
         ))}
       </div>
 
-      <div className="border-t border-neutral-800 p-3">
+      <div className="flex items-center gap-3 border-t border-neutral-800 p-3">
         <a href="/awi" className="text-xs text-blue-400 hover:underline">AWI 仪表盘 →</a>
+        <a href="/anima-logs" className="text-xs text-blue-400 hover:underline">anima-logs →</a>
       </div>
     </aside>
   );

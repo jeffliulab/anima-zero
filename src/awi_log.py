@@ -9,9 +9,10 @@ import os
 import time
 from collections import deque
 
-# 脑端保留多少条 AWI 流量历史。世界端(world/sim-desk)有自己的同名常量,数值需对齐;
-# 前端 terminal 显示数(AWI_LOG_SHOWN)必须 ≤ 这个值,否则永远凑不满。
-AWI_LOG_MAXLEN = 400
+from . import config
+
+# 脑端保留多少条 AWI 流量历史（config，env 可覆盖）。世界端有自己的同名 env;前端显示数须 ≤ 此值。
+AWI_LOG_MAXLEN = config.AWI_LOG_MAXLEN
 _LOG: deque = deque(maxlen=AWI_LOG_MAXLEN)
 _SEQ = 0
 
@@ -30,7 +31,12 @@ def _persist(entry: dict) -> None:
         pass  # 落盘失败绝不能影响主流程
 
 
-def record(world: str, method: str, summary: str, ms: float) -> None:
+def record(world: str, method: str, summary: str, ms: float, resp: dict | None = None) -> None:
+    """记一笔脑↔世界的往返。
+    - summary：出方向(ANIMA→世界)发了什么(方法+参数)。
+    - resp：回方向(世界→ANIMA)返回的【结构化】信息(图片字节数、ok/message、回程 state…)。
+      给 /awi 仪表盘双向展示用，也是审计点：世界违约偷传棋盘真值(FEN/legal_moves)在这能看出来。
+    """
     global _SEQ
     _SEQ += 1
     entry = {
@@ -38,7 +44,8 @@ def record(world: str, method: str, summary: str, ms: float) -> None:
         "ts": time.strftime("%H:%M:%S"),
         "world": world,
         "method": method,
-        "summary": summary,
+        "summary": summary,        # 出方向(ANIMA→世界)
+        "resp": resp or {},        # 回方向(世界→ANIMA)结构化
         "ms": round(ms, 1),
     }
     _LOG.append(entry)

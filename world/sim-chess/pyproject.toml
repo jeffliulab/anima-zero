@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sim-chess"
+version = "0.1.0"
+description = "sim-chess —— ANIMA 的一个独立『世界』：仿真棋盘 + 内置棋手，通过 HTTP(AWI) 被观测和操作；只给画面+命令成败，不给真值"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+    "pillow>=10",
+    "pydantic>=2.6",
+    "chess>=1.10",
+]
+
+[tool.setuptools]
+py-modules = ["server", "world", "render"]

@@ -12,11 +12,11 @@ from typing import Any
 
 import httpx
 
-from . import awi_log
+from . import awi_log, config
 from .awi import ActionResult, Capabilities, Observation, ToolSpec
 
-DEFAULT_TIMEOUT = 30.0  # 正常调用世界(capabilities / perceive / invoke)的超时(秒)
-ONLINE_PROBE_TIMEOUT = 1.5  # 探「世界在不在线」的短超时(秒);只为快速反馈,不必等满
+DEFAULT_TIMEOUT = config.WORLD_TIMEOUT       # 正常调用世界的超时（config，env 可覆盖）
+ONLINE_PROBE_TIMEOUT = config.WORLD_PROBE_TIMEOUT  # 探在线的短超时
 
 
 class RemoteWorld:  # 实现 World 协议(AWI 客户端)
@@ -38,7 +38,8 @@ class RemoteWorld:  # 实现 World 协议(AWI 客户端)
             ToolSpec(t["name"], t["description"], t["parameters"], t.get("kind", "tool"))
             for t in r.get("tools", [])
         ]
-        awi_log.record(self.name, "capabilities", f"→ {len(tools)} 个能力(握手)", (time.perf_counter() - t0) * 1000)
+        awi_log.record(self.name, "capabilities", "capabilities() 握手", (time.perf_counter() - t0) * 1000,
+                       resp={"n_tools": len(tools), "tools": [t.name for t in tools]})
         self._caps = Capabilities(name=r["name"], version=r.get("version", ""), tools=tools)
         return self._caps
 
@@ -51,7 +52,9 @@ class RemoteWorld:  # 实现 World 协议(AWI 客户端)
         r = self._client.get(self.base + "/perceive").json()
         img = base64.b64decode(r["image_b64"]) if r.get("image_b64") else None
         state = r.get("state", {})
-        awi_log.record(self.name, "perceive", f"→ state={state}", (time.perf_counter() - t0) * 1000)
+        # 回方向结构化:图片字节数 + 回程 state(协议上应为空{};这正是审计点——世界若偷传棋盘真值,这里会暴露)
+        awi_log.record(self.name, "perceive", "perceive()", (time.perf_counter() - t0) * 1000,
+                       resp={"img_bytes": len(img) if img else 0, "state": state})
         self._last_state = state    # 顺手记住,给仪表盘显示(免得仪表盘为了看状态又 perceive 一次)
         return Observation(image_png=img, state=state)
 
@@ -62,8 +65,23 @@ class RemoteWorld:  # 实现 World 协议(AWI 客户端)
     def invoke(self, name: str, **kwargs: Any) -> ActionResult:
         t0 = time.perf_counter()
         r = self._client.post(self.base + "/invoke", json={"name": name, "args": kwargs}).json()
-        awi_log.record(self.name, "invoke", f"{name}({kwargs}) → {r.get('message', '')}", (time.perf_counter() - t0) * 1000)
+        # 出方向:命令+参数;回方向:ok/message(以及 data 是否有内容——监到世界回了结构化数据)
+        awi_log.record(self.name, "invoke", f"{name}({kwargs})", (time.perf_counter() - t0) * 1000,
+                       resp={"ok": bool(r.get("ok", False)), "message": r.get("message", ""),
+                             "has_data": bool(r.get("data"))})
         return ActionResult(ok=r.get("ok", False), message=r.get("message", ""), data=r.get("data", {}))
+
+    def debug_state(self) -> dict | None:
+        """【人类调试台专用·世界真值】给 /awi 仪表盘看的世界真实状态——走世界本地 `/status`（非 AWI 通道，
+        **绝不给 ANIMA**）。这正好跟 ANIMA 的 perceive（受限、可能故意藏真值）分开：调试台是人的上帝视角。
+        世界没有 /status（如 sim-desk）→ 回 None，调用方回退到 perceive 的 state。不记 AWI 流量。"""
+        try:
+            r = self._client.get(self.base + "/status", timeout=ONLINE_PROBE_TIMEOUT)
+            if r.status_code == 200:
+                return r.json()
+        except Exception:
+            pass
+        return None
 
     def online(self) -> bool:
         """世界在不在线(给 /api/worlds、/api/awi 用),短超时探一下。
@@ -73,3 +91,11 @@ class RemoteWorld:  # 实现 World 协议(AWI 客户端)
             return True
         except Exception:
             return False
+
+    def close(self) -> None:
+        """关掉底层 httpx 连接(对弈 loop 退出时清理它【自己那个短超时】client 用;
+        共享世界 client 别关——会断了仪表盘/别的会话)。"""
+        try:
+            self._client.close()
+        except Exception:
+            pass

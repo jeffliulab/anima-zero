@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+from . import config
 from .llm import ToolCall
 
 
@@ -26,7 +27,9 @@ def _entry_text(m: dict) -> str:
     return ""
 
 
-def build(messages: list[dict], token_budget: int = 6000) -> list[dict]:
+def build(messages: list[dict], token_budget: int | None = None) -> list[dict]:
+    if token_budget is None:
+        token_budget = config.CONTEXT_TOKEN_BUDGET
     convo = [m for m in messages if m.get("role") != "perception"]  # 图不重发
 
     # 滑动窗口:从最近往前累计到预算

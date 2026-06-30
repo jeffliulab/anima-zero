@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>棋桌 · 世界 (AWI)</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; background: #14161a;
+         color: #e6e6e6; padding: 20px; }
+  h1 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+  .hint { font-size: 12px; color: #8a8f98; margin-bottom: 14px; }
+  .wrap { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+  .left { display: flex; flex-direction: column; gap: 10px; }
+  #view { border-radius: 8px; cursor: pointer; display: block; background: #000; }
+  .row { display: flex; gap: 10px; align-items: center; font-size: 13px; color: #8a8f98; flex-wrap: wrap; }
+  .row .lbl { color: #6e7681; }
+  select, button { background: #2b3038; color: #fff; border: 1px solid #39404a; border-radius: 7px;
+                   padding: 6px 10px; font-size: 13px; cursor: pointer; }
+  select:disabled, button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: #2b6cb0; border-color: #2b6cb0; }
+  button.danger { background: #7a2b2b; border-color: #7a2b2b; }
+  button.hidden { display: none; }
+  .panel { flex: 1; min-width: 340px; }
+  .statusbar { background: #1c1f26; border: 1px solid #2a2e37; border-radius: 8px; padding: 10px 12px;
+               font-size: 12px; color: #b8bdc7; margin-bottom: 10px; line-height: 1.7; }
+  .statusbar b { color: #e6e6e6; }
+  .phase { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; margin-right: 6px; }
+  .p-not_start { background: #30363d; color: #adbac7; }
+  .p-in_game { background: #1f6f43; color: #aef0c8; }
+  .p-game_over { background: #5a2330; color: #ffb3c1; }
+  .term-title { font-size: 12px; color: #8a8f98; margin-bottom: 6px; }
+  #term { background: #0b0d10; border: 1px solid #2a2e37; border-radius: 8px; padding: 10px;
+          height: 380px; overflow-y: auto; font-family: ui-monospace, Menlo, monospace;
+          font-size: 12px; line-height: 1.6; }
+  .ln { white-space: pre-wrap; word-break: break-all; }
+  .t-ts { color: #5c6370; }
+  .m-perceive { color: #56b6c2; } .m-invoke { color: #98c379; } .m-capabilities { color: #c678dd; }
+  .m-bot { color: #e5c07b; } .m-click { color: #61afef; } .m-setup, .m-reset { color: #e06c75; }
+  #sel { font-size: 12px; color: #9aa0a8; }
+</style>
+</head>
+<body>
+  <h1>棋桌 · 一张能托管象棋/五子棋/围棋的世界 (AWI)</h1>
+  <div class="hint">我握着真棋盘，只给 ANIMA <b>看画面</b> + <b>一组角色 meta(谁坐哪方) + 阶段(phase)</b>，不告诉它局面坐标。
+    配好双方（人 / ANIMA / 电脑）→ 开始。所有「切换类」操作要先暂停。轮到"人"那方：点起子格→点目标格走子。</div>
+
+  <div class="wrap">
+    <div class="left">
+      <div class="row">
+        <span class="lbl">棋种</span>
+        <select id="gameSel">
+          <option value="chess">国际象棋</option>
+          <option value="gomoku">五子棋</option>
+          <option value="go">围棋（占位）</option>
+        </select>
+      </div>
+      <div class="row">
+        <span class="lbl">白方</span>
+        <select id="white" class="seat"><option value="">空</option><option value="human">人</option><option value="anima">ANIMA</option><option value="bot">电脑</option></select>
+        <span class="lbl">黑方</span>
+        <select id="black" class="seat"><option value="">空</option><option value="human">人</option><option value="anima">ANIMA</option><option value="bot">电脑</option></select>
+      </div>
+      <div class="row">
+        <button class="primary" id="start">开始</button>
+        <button class="primary" id="newgame">开新局</button>
+        <button class="danger" id="resign">认输</button>
+        <button id="reset">复位</button>
+      </div>
+      <img id="view" width="512" height="512" alt="board" src="/stream" />
+      <div id="sel">配好双方后点「开始」。</div>
+    </div>
+
+    <div class="panel">
+      <div class="statusbar" id="status">状态加载中…</div>
+      <div class="term-title">AWI 实时流量（谁在调我的接口 · 命令回 success/fail）</div>
+      <div id="term"></div>
+    </div>
+  </div>
+
+<script>
+  const view = document.getElementById("view");
+  const selInfo = document.getElementById("sel");
+  const $ = (id) => document.getElementById(id);
+  let fromSq = null;
+  let game = "chess", phase = "not_start";
+  const GRID = { gomoku: 15, go: 19 };   // 落子类棋种的格数（世界自己的 UI，可写死）
+
+  // ---------- 棋种选择：切桌（要在非比赛中）----------
+  $("gameSel").addEventListener("change", async () => {
+    fromSq = null;
+    const r = await (await fetch("/switch", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ game: $("gameSel").value }) })).json();
+    if (!r.ok) selInfo.textContent = "切棋种失败：" + (r.message || "");
+  });
+
+  // ---------- 配座 / 换人：改下拉即生效（空/人/ANIMA/电脑）----------
+  function setSeat(seat) {
+    const v = $(seat).value;   // "" = 空
+    fetch("/set_controller", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ seat, controller: v || null }) })
+      .then(r => r.json()).then(r => { if (!r.ok) selInfo.textContent = "配座失败：" + (r.message || ""); });
+  }
+  $("white").addEventListener("change", () => setSeat("white"));
+  $("black").addEventListener("change", () => setSeat("black"));
+
+  // ---------- 生命周期按钮 ----------
+  const post = (url, body) => fetch(url, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : { method: "POST" });
+  $("start").onclick = async () => { const r = await (await post("/start")).json(); if (!r.ok) selInfo.textContent = "开始失败：" + (r.message || ""); };
+  $("newgame").onclick = $("start").onclick;
+  $("reset").onclick = () => { fromSq = null; post("/reset"); };
+  $("resign").onclick = () => {
+    // 认输哪方：认输那个由"人"控制的一方（人 vs ANIMA/电脑 的常见情形）
+    const c = window._ctrl || {};
+    const side = c.white === "human" ? "white" : (c.black === "human" ? "black" : null);
+    if (!side) { selInfo.textContent = "没有「人」坐着，认输按钮无效。"; return; }
+    post("/resign", { side });
+  };
+
+  // ---------- 点棋盘走子（按棋种 + 阶段解读）----------
+  function rc(ev, n) {
+    const r = view.getBoundingClientRect();
+    const col = Math.max(0, Math.min(n - 1, Math.floor((ev.clientX - r.left) / (r.width / n))));
+    const row = Math.max(0, Math.min(n - 1, Math.floor((ev.clientY - r.top) / (r.height / n))));
+    return { row, col };
+  }
+  function sqName(ev) {
+    const { row, col } = rc(ev, 8);
+    return "abcdefgh"[col] + (8 - row);   // 白方在下
+  }
+  view.addEventListener("click", async (e) => {
+    if (phase !== "in_game") { selInfo.textContent = "现在不在比赛中（先配好双方点开始）。"; return; }
+    if (game === "gomoku" || game === "go") {
+      const { row, col } = rc(e, GRID[game]);
+      const res = await (await post("/place", { row, col })).json();
+      selInfo.textContent = res.ok ? "落子" : ("落子失败：" + (res.message || ""));
+      return;
+    }
+    const sq = sqName(e);
+    if (!fromSq) {   // 第一次点击=选起子格 → 画高亮圈（这圈也进给 ANIMA 的画面，有意）
+      fromSq = sq; selInfo.textContent = "起子格 " + sq + " → 再点目标格";
+      post("/select", { sq });
+      return;
+    }
+    const to = sq, frm = fromSq; fromSq = null;
+    const res = await (await post("/click", { from_sq: frm, to_sq: to })).json();
+    // 无效步 → 世界已清掉选中高亮；提示重新点（rule 9）
+    selInfo.textContent = res.ok ? "点一下选起子格…" : ("走子无效，圈已消失，请重新点起子格。（" + (res.message || "") + "）");
+  });
+
+  // ---------- 按阶段显隐/禁用控件 ----------
+  function applyPhase(s) {
+    const both = s.controllers && s.controllers.white && s.controllers.black;
+    const inGame = s.phase === "in_game";
+    // 切换类（棋种/配座）只在非比赛中可用
+    $("gameSel").disabled = inGame;
+    $("white").disabled = inGame; $("black").disabled = inGame;
+    // 生命周期按钮按阶段显隐
+    const show = (id, on) => $(id).classList.toggle("hidden", !on);
+    show("start", s.phase === "not_start");
+    show("newgame", s.phase === "game_over");
+    show("resign", s.phase === "in_game");
+    $("start").disabled = !both;   // 双方配齐才能开始
+  }
+
+  const PHASE_CN = { not_start: "未开始", in_game: "比赛中", game_over: "对弈结束" };
+  const CTRL_CN = { human: "人", anima: "ANIMA", bot: "电脑", null: "空", "": "空" };
+  async function refreshStatus() {
+    try {
+      const s = await (await fetch("/status")).json();
+      game = s.game || "chess"; phase = s.phase || "not_start";
+      window._ctrl = s.controllers || {};
+      const c = s.controllers || {};
+      if ($("gameSel").value !== game && document.activeElement !== $("gameSel")) $("gameSel").value = game;
+      // 席位下拉跟随世界真值（ANIMA take_seat、别处换人都会反映）——不打断正在操作的那个
+      for (const seat of ["white", "black"]) {
+        const el = $(seat), v = c[seat] || "";
+        if (el.value !== v && document.activeElement !== el) el.value = v;
+      }
+      const over = s.phase === "game_over" ? `· 结果 ${s.result || "—"}（可「开新局」或在此复盘）` : "";
+      $("status").innerHTML =
+        `<span class="phase p-${phase}">${PHASE_CN[phase] || phase}</span>` +
+        `棋种:<b>${game}</b> · 白:<b>${CTRL_CN[c.white] ?? c.white}</b> 黑:<b>${CTRL_CN[c.black] ?? c.black}</b>` +
+        ` · 轮到 <b>${s.turn}</b> · 第 ${s.fullmove} 手 ${over}<br>最近：${s.last || "—"}`;
+      applyPhase(s);
+    } catch (e) {}
+  }
+  refreshStatus(); setInterval(refreshStatus, 1000);
+
+  const term = $("term");
+  const es = new EventSource("/awi-events");
+  es.onmessage = (ev) => {
+    const e = JSON.parse(ev.data);
+    const line = document.createElement("div");
+    line.className = "ln";
+    line.innerHTML = `<span class="t-ts">[${e.ts}]</span> <span class="m-${e.method}">${(e.method+"").padEnd(12)}</span> ${esc(e.summary)}`;
+    term.appendChild(line);
+    while (term.childNodes.length > 300) term.removeChild(term.firstChild);
+    term.scrollTop = term.scrollHeight;
+  };
+  function esc(s) { return (s+"").replace(/[&<>]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;" }[c])); }
+</script>
+</body>
+</html>

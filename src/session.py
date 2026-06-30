@@ -10,12 +10,15 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import time
 from dataclasses import asdict, dataclass, field
 
+from . import config
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_ROOT = os.path.join(_HERE, "..", "memory", "sessions")  # anima-zero/memory/sessions
-TITLE_MAX_LEN = 24  # 会话标题取用户首句的前几个字
+_ROOT = os.getenv("ANIMA_SESSION_ROOT", os.path.join(_HERE, "..", "memory", "sessions"))
+TITLE_MAX_LEN = config.TITLE_MAX_LEN  # 会话标题取用户首句的前几个字（config）
 
 
 def _now() -> str:
@@ -81,18 +84,35 @@ class SessionStore:
         out.sort(key=lambda s: s.created_at, reverse=True)
         return out
 
-    def new(self, world: str | None, brain: str) -> Session:
+    def new(self, world: str | None, brain: str) -> tuple[Session, list[str]]:
+        """新建会话。返回 (新会话, 本次被冻结的旧 active 同世界会话 id 列表)——
+        调用方据 frozen_ids 联动停掉它们正在跑的对弈树（单活跃会话也意味单活跃对弈树，安全红线）。"""
+        frozen_ids: list[str] = []
         if world:  # 同一个世界的活跃会话先冻结(安全)
             for s in self.all():
                 if s.world == world and s.status == "active":
                     s.status = "frozen"
                     self.save(s)
+                    frozen_ids.append(s.id)
         s = Session(
             id=_gen_id(), world=world, brain=brain, status="active",
             created_at=_now(), title="(新会话)", messages=[],
         )
         self.save(s)
-        return s
+        return s, frozen_ids
+
+    def delete(self, sid: str) -> bool:
+        """删除一个会话(json + 该会话的图片目录)。返回是否真的删了。
+        调用方负责先停掉它正在跑的对弈树(若有)。"""
+        existed = self.exists(sid)
+        try:
+            os.remove(self._path(sid))
+        except FileNotFoundError:
+            pass
+        imgs_root = os.path.join(self.root, sid)
+        if os.path.isdir(imgs_root):
+            shutil.rmtree(imgs_root, ignore_errors=True)
+        return existed
 
     def get(self, sid: str) -> Session:
         return self.load(sid)

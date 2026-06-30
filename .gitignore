@@ -184,6 +184,7 @@ $RECYCLE.BIN/
 
 # Agent working notes (local only — not part of the open-source repo)
 CLAUDE.md
+ANIMA开发指南.md
 node_modules/
 .next/
 

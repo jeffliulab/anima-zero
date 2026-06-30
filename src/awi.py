@@ -29,12 +29,14 @@ class ActionResult:
 
 @dataclass
 class ToolSpec:
-    """一个能力(tool 或 skill)的标准声明,带 JSON Schema,大脑据此知道怎么调。"""
+    """一个 tool（世界能力）的标准声明,带 JSON Schema,大脑据此知道怎么调。
+
+    注:「skill / 行为树」是**脑内**结构、不上 AWI 线,与这里的 tool 是两回事(别再用 kind="skill")。"""
 
     name: str
     description: str
     parameters: dict[str, Any]  # JSON Schema(object 型)
-    # "tool"(原子)/ "skill"(多步)/ "judge"(裁判,确定性)/ "read"(只读感知)。
+    # kind 取值:"tool"(原子)/ "judge"(裁判,确定性)/ "read"(只读感知)。
     # 其中 judge / read 属于 NON_MUTATING_KINDS:框架视为「不改世界」,动作下发时不过安全闸。
     kind: str = "tool"
 
@@ -51,6 +53,9 @@ class Capabilities:
     name: str
     version: str
     tools: list[ToolSpec]
+    # 注：「角色/席位」不另设一套声明——世界若有可担任的角色，就在 tools 里声明一个就座类工具
+    #   （如 sim-chess 的 take_seat，枚举里列出可选角色），ANIMA 调它来就座；"当前谁坐哪一席" 经 perceive
+    #   的 state.controllers 读。（曾经的 Seat/seats/claim 声明已删——和 take_seat 工具重复，没接线、是死的。）
 
 
 @runtime_checkable

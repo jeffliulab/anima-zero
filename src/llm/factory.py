@@ -15,14 +15,14 @@ import json
 import os
 import urllib.request
 
+from .. import config
 from .base import LLM
 from .claude import ClaudeLLM
 from .openai_compat import OpenAICompatLLM
 
-# 没指定大脑时用哪个(可用 ANIMA_DEFAULT_BRAIN 覆盖);单一来源,presentation/server.py 也引用它。
-DEFAULT_BRAIN = os.getenv("ANIMA_DEFAULT_BRAIN", "gpt-4.1-nano")
-# 探测本地 Ollama 是否在线的超时(秒):要短(别拖慢前端选择器),又别太短误判慢启动 / 远程 Ollama。
-OLLAMA_PROBE_TIMEOUT = 0.6
+# 默认大脑 / Ollama 探活超时 → 中央 config（env 可覆盖）。
+DEFAULT_BRAIN = config.DEFAULT_BRAIN
+OLLAMA_PROBE_TIMEOUT = config.OLLAMA_PROBE_TIMEOUT
 
 
 def _ollama_tags(base_url: str) -> set[str]:
@@ -38,13 +38,15 @@ def _ollama_tags(base_url: str) -> set[str]:
 def _registry() -> dict[str, dict]:
     """五个大脑的单一登记表。每项:
         label  显示名      model  版本号(调 API 用的字符串)
-        kind   api / local  build() 创建大脑   ready() 是否配置好(有 key / 模型已 pull)
+        hosting  api / local  build() 创建大脑   ready() 是否配置好(有 key / 模型已 pull)
     要加新大脑,往这张表里加一项即可(详见同目录 README.md)。
     """
     okey = os.getenv("OPENAI_API_KEY", "")
-    ollama = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
-    qwen_model = os.getenv("ANIMA_QWEN3VL_MODEL", "qwen3-vl:8b")
-    opus_model, haiku_model = "claude-opus-4-8", "claude-haiku-4-5"  # 版本号各写一处,显示名和 build 共用
+    ollama = config.OLLAMA_BASE_URL
+    # 模型 id 全部来自中央 config（单一来源，每个 env 可覆盖）
+    qwen_model = config.MODEL_QWEN
+    opus_model, haiku_model = config.MODEL_OPUS, config.MODEL_HAIKU
+    gpt_model, nano_model = config.MODEL_GPT, config.MODEL_GPT_NANO
     has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
     has_openai = bool(okey)
     tags: set[str] | None = None  # 本地脑可用性才需查 Ollama,惰性求值
@@ -57,20 +59,20 @@ def _registry() -> dict[str, dict]:
 
     return {
         # —— 在线大脑(key 在各自的类里读环境变量)——
-        "opus": {"vendor": "Anthropic", "label": "Claude Opus 4.8", "model": opus_model, "kind": "api",
+        "opus": {"vendor": "Anthropic", "label": "Claude Opus 4.8", "model": opus_model, "hosting": "api",
                  "build": lambda: ClaudeLLM(opus_model),
                  "ready": lambda: has_anthropic},
-        "haiku": {"vendor": "Anthropic", "label": "Claude Haiku 4.5", "model": haiku_model, "kind": "api",
+        "haiku": {"vendor": "Anthropic", "label": "Claude Haiku 4.5", "model": haiku_model, "hosting": "api",
                   "build": lambda: ClaudeLLM(haiku_model),
                   "ready": lambda: has_anthropic},
-        "gpt-5.5": {"vendor": "OpenAI", "label": "GPT-5.5", "model": "gpt-5.5", "kind": "api",
-                    "build": lambda: OpenAICompatLLM("gpt-5.5", None, okey),
+        "gpt-5.5": {"vendor": "OpenAI", "label": "GPT-5.5", "model": gpt_model, "hosting": "api",
+                    "build": lambda: OpenAICompatLLM(gpt_model, None, okey),
                     "ready": lambda: has_openai},
-        "gpt-4.1-nano": {"vendor": "OpenAI", "label": "GPT-4.1-nano", "model": "gpt-4.1-nano", "kind": "api",
-                         "build": lambda: OpenAICompatLLM("gpt-4.1-nano", None, okey),
+        "gpt-4.1-nano": {"vendor": "OpenAI", "label": "GPT-4.1-nano", "model": nano_model, "hosting": "api",
+                         "build": lambda: OpenAICompatLLM(nano_model, None, okey),
                          "ready": lambda: has_openai},
         # —— 本地大脑(经 Ollama,免费离线;版本号可在 .env 改)——
-        "qwen3-vl": {"vendor": "Ollama·本地", "label": "Qwen3-VL 8B", "model": qwen_model, "kind": "local",
+        "qwen3-vl": {"vendor": "Ollama·本地", "label": "Qwen3-VL 8B", "model": qwen_model, "hosting": "local",
                      "build": lambda: OpenAICompatLLM(qwen_model, ollama, "ollama"),
                      "ready": lambda: ollama_ready(qwen_model)},
     }
@@ -80,7 +82,7 @@ def list_brains() -> list[dict]:
     """五个大脑清单:名字 + 厂商 + 显示名 + 版本号 + 类型 + 是否配置好(给前端选择器 / 连通自检用)。"""
     return [
         {"name": name, "vendor": spec["vendor"], "label": spec["label"], "model": spec["model"],
-         "kind": spec["kind"], "available": spec["ready"]()}
+         "hosting": spec["hosting"], "available": spec["ready"]()}
         for name, spec in _registry().items()
     ]
 

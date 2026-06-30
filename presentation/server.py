@@ -15,11 +15,14 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
-from anima import awi_log
+from anima import awi_log, config
+from anima.behavior.manager import RunnerManager
 from anima.llm import LLM, DEFAULT_BRAIN, list_brains, make_llm
+from anima.llm_log import LoggingLLM, recent as _llm_recent, sessions as _llm_sessions, session_scope
 from anima.orchestrator import Orchestrator
 from anima.registry import WorldRegistry
 from anima.session import SessionStore
+from anima.skills.boardgame import build_registry as _build_skills
 
 # 从 anima-zero/.env 读配置(选脑 / API key / Ollama 地址 / 世界 URL);.env 不入库,模板见 .env.example
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
@@ -27,11 +30,21 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 # 世界是独立进程,anima 按 URL 连它;注册时不握手(不硬依赖世界先起)。
 # 配置驱动:ANIMA_WORLDS="name=url,name2=url2" 声明世界清单(加世界=加一行配置);
 # DEFAULT_WORLD 指定启动默认绑哪个(没设 / 无效就绑清单第一个)。
-# 兼容老配置:没设 ANIMA_WORLDS 时,回退用 SIM_DESK_URL 注册并绑定 sim-desk。
+#
+# ⛔ 回归教训(2026-06-28):加新世界 sim-chess 时,曾把启动命令写成只 ANIMA_WORLDS="sim-chess=..."
+#    → 把旧世界 sim-desk 从清单里挤掉了。从此:**默认清单必须含所有已知世界,加世界=往这份默认里追加,
+#    绝不替换**;改 ANIMA_WORLDS / README / .env.example 时同理,保留所有既有世界。
+# 各世界默认地址(env 可覆盖,不写死散落):sim-desk 桌面世界 :8100、sim-chess 棋具世界 :8102。
+SIM_DESK_URL = os.getenv("SIM_DESK_URL", "http://localhost:8100")
+SIM_CHESS_URL = os.getenv("SIM_CHESS_URL", "http://localhost:8102")
+# 没设 ANIMA_WORLDS 时的默认清单 = 所有已知世界(都注册,在线与否由前端按 online() 标注)
+_DEFAULT_WORLDS: list[tuple[str, str]] = [("sim-desk", SIM_DESK_URL), ("sim-chess", SIM_CHESS_URL)]
+
+
 def _parse_worlds() -> list[tuple[str, str]]:
     raw = os.getenv("ANIMA_WORLDS", "").strip()
     if not raw:
-        return [("sim-desk", os.getenv("SIM_DESK_URL", "http://localhost:8100"))]
+        return list(_DEFAULT_WORLDS)
     pairs: list[tuple[str, str]] = []
     for item in raw.split(","):
         item = item.strip()
@@ -59,7 +72,8 @@ _llm_cache: dict[str, LLM] = {}
 
 def get_llm(name: str) -> LLM:
     if name not in _llm_cache:
-        _llm_cache[name] = make_llm(name)
+        # 收口：所有 LLM 调用都经这里构造 → 包一层 LoggingLLM，把脑↔大模型流量留痕到 logs/anima（anima-logs 页看）
+        _llm_cache[name] = LoggingLLM(make_llm(name), name)
     return _llm_cache[name]
 
 
@@ -68,9 +82,12 @@ _DEFAULT_BRAIN = DEFAULT_BRAIN
 
 # 会话 + 本地记忆;编排器按会话运行(大脑从会话上取)
 store = SessionStore()
-orchestrator = Orchestrator(registry, store)
+_skills = _build_skills()                       # 脑内技能注册表（对弈…）
+_runs = RunnerManager()                         # 多棵行为树的通用运行时管理员（开新前停旧 + 单写者 + 清理）
+# 编排器 = 元控制器：进入/退出/暂停/恢复/路由意图都在它那层；server.py 只剩 HTTP 门面
+orchestrator = Orchestrator(registry, store, skills=_skills, runs=_runs)
 
-SSE_POLL_INTERVAL_S = 0.25  # AWI 流量 SSE 多久查一次新事件;与世界端 world/sim-desk 对齐
+SSE_POLL_INTERVAL_S = config.AWI_POLL_INTERVAL_S  # AWI 流量 SSE 多久查一次新事件(config 单一来源,删 inline 魔法数)
 
 # 允许哪些网页源跨域访问;默认只放本机 :3000,设 ANIMA_CORS_ORIGINS=* 可全开(demo 方便)
 _CORS = [o.strip() for o in os.getenv("ANIMA_CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()]
@@ -124,7 +141,7 @@ def check(brain: str) -> dict:
         return {"ok": False, "reason": "unknown", "model": "", "label": brain,
                 "message": f"未知大脑:{brain}"}
     if not info["available"]:  # 没配好 → 不发请求,直接说清楚
-        msg = "未设置 API key" if info["kind"] == "api" else "Ollama 未就绪或模型未拉取"
+        msg = "未设置 API key" if info["hosting"] == "api" else "Ollama 未就绪或模型未拉取"
         return {"ok": False, "reason": "no_key", "model": info["model"],
                 "label": info["label"], "message": msg}
     try:
@@ -145,7 +162,10 @@ class NewSessionIn(BaseModel):
 
 @app.post("/api/sessions")  # 新建会话(同一个世界的活跃会话会被冻结)
 def new_session(inp: NewSessionIn) -> dict:
-    return store.new(inp.world, inp.brain).summary()
+    s, frozen_ids = store.new(inp.world, inp.brain)
+    for fid in frozen_ids:          # 联动：被冻结的旧会话若在对弈，停掉它的对弈树（单活跃会话=单活跃对弈树）
+        orchestrator.stop_run(fid)
+    return s.summary()
 
 
 @app.get("/api/sessions")  # 会话列表 + 状态
@@ -159,6 +179,13 @@ def get_session(sid: str) -> dict:
         return {"error": "not found"}
     s = store.get(sid)
     return {**s.summary(), "messages": s.messages}
+
+
+@app.delete("/api/sessions/{sid}")  # 删一个会话(先停其对弈树,再删磁盘记录)
+def delete_session(sid: str) -> dict:
+    orchestrator.stop_run(sid)      # 若该会话在对弈,先把对弈树干净停掉
+    deleted = store.delete(sid)
+    return {"ok": deleted}
 
 
 @app.get("/api/imgfile")  # 取历史感知图(记录里只存路径,前端按 image_ref 来取)
@@ -193,6 +220,7 @@ def chat(inp: ChatIn) -> dict:
     session = store.get(inp.session_id)
     if session.status != "active":  # 冻结会话只读
         return {"reply": "(这个会话已冻结、只读;请新建一个会话继续。)", "trace": None}
+    # 进入/退出/暂停对弈的判断都已收口到 orchestrator（元控制器），这里不再拦截。
     info = {b["name"]: b for b in list_brains()}.get(session.brain)
     if info is None:
         return {"reply": f"(未知大脑:{session.brain})", "trace": None}
@@ -200,7 +228,8 @@ def chat(inp: ChatIn) -> dict:
         return {"reply": f"(大脑「{info['label']}」还没配置好,请在 anima-zero/.env 配置后重启后端再用。)",
                 "trace": None}
     try:
-        return orchestrator.handle(session, inp.message, get_llm(session.brain))
+        with session_scope(inp.session_id):   # 这次请求里的所有 LLM 调用都标上 session（anima-logs 可筛）
+            return orchestrator.handle(session, inp.message, get_llm(session.brain))
     except Exception as e:  # 大脑调用出错 → 在聊天里如实显示,不让 demo 崩
         return {"reply": f"(大脑调用出错:{type(e).__name__}: {e})", "trace": None}
 
@@ -228,8 +257,9 @@ def chat_stream(inp: ChatIn) -> StreamingResponse:
             yield _sse({"type": "done"})
             return
         try:
-            for ev in orchestrator.handle_stream(session, inp.message, get_llm(session.brain)):
-                yield _sse(ev)
+            with session_scope(inp.session_id):   # 流式期间 LLM 调用同样标 session
+                for ev in orchestrator.handle_stream(session, inp.message, get_llm(session.brain)):
+                    yield _sse(ev)
         except Exception as e:
             yield _sse({"type": "reply", "text": f"(大脑调用出错:{type(e).__name__}: {e})"})
             yield _sse({"type": "done"})
@@ -250,7 +280,7 @@ def awi_overview() -> dict:
         w = registry.get(name)
         online = w.online() if hasattr(w, "online") else True
         info = {"name": name, "url": getattr(w, "base", ""), "online": online,
-                "version": "", "tools": [], "state": None}
+                "version": "", "tools": [], "state": None, "perceive_state": None}
         if online:
             try:
                 caps = w.capabilities()  # 命中握手缓存,不再问世界(见 RemoteWorld.capabilities)
@@ -259,11 +289,18 @@ def awi_overview() -> dict:
                     {"name": t.name, "description": t.description, "kind": t.kind, "parameters": t.parameters}
                     for t in caps.tools
                 ]
-                # 状态用「最近一次感知」的缓存,别为了显示又 perceive 一次;从没感知过才播种一次
-                st = w.last_state() if hasattr(w, "last_state") else None
-                if st is None:
-                    st = w.perceive().state
-                info["state"] = st
+                # 仪表盘=给人看的调试台 → 展示【世界真值】(走世界本地 /status,人的上帝视角),而不是 ANIMA 受限的 perceive。
+                # 这跟 ANIMA 的 perceive 明确分开:sim-chess 的真值(局面/轮次/胜负)藏在 /status、绝不给 ANIMA。
+                # 没有 /status 的世界(如 sim-desk,它的 perceive 本就是真值)→ 回退到 perceive 的 state。
+                truth = w.debug_state() if hasattr(w, "debug_state") else None
+                if truth is None:
+                    truth = w.last_state() if hasattr(w, "last_state") else None
+                    if truth is None:
+                        truth = w.perceive().state
+                info["state"] = truth
+                # perceive_state = ANIMA 上一次 perceive 真正收到的 state(用缓存,不额外 perceive、不刷流量)。
+                # 这是「world 向 ANIMA 传输的唯一结构化东西」——卡片里单独、显眼地展示它。
+                info["perceive_state"] = w.last_state() if hasattr(w, "last_state") else None
             except Exception:
                 info["online"] = False
         worlds_info.append(info)
@@ -284,3 +321,64 @@ async def awi_events_stream() -> StreamingResponse:
                 yield _sse(e)
 
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+@app.get("/api/anima-logs")  # 脑↔大模型流量（anima-logs 调试页用）：读 logs/anima 文件夹的最新一天
+def anima_logs(limit: int = 300, session: str = "") -> dict:
+    # session 非空 → 只看那一盘/那个会话的全部 LLM 调用；sessions = 今天出现过的会话列表（给下拉）
+    return {"entries": _llm_recent(limit, session), "sessions": _llm_sessions()}
+
+
+# ===================== 对弈（skill / 行为树）HTTP 端点 =====================
+# 业务编排（进入/退出/暂停/恢复/路由意图）已收口到 orchestrator（元控制器）+ 通用运行时；
+# 这里只剩**薄 HTTP 端点**：转发给 orchestrator / 读 runs 状态，自己不做任何意图判断或起局逻辑。
+
+
+class GameStartIn(BaseModel):
+    session_id: str
+    skill: str | None = None        # 进入哪个 skill（默认注册表里第一个）
+
+
+@app.post("/api/game/start")  # 显式进入（前端按钮可用；聊天里说"下棋"由 LLM 调 enter_skill 自动进入）
+def game_start(inp: GameStartIn) -> dict:
+    if not store.exists(inp.session_id):
+        return {"ok": False, "message": "会话不存在"}
+    g = _runs.get(inp.session_id)
+    if g and not g.finished:
+        return {"ok": True, "display_name": g.bb.display_name, "message": "已在对弈中"}
+    session = store.get(inp.session_id)
+    sid = inp.skill or (_skills.list()[0].id if _skills.list() else None)
+    # 在 session 上下文里进入：enter→runs.start→runner.start 会 copy_context()，后台解说线程据此继承 session 标签
+    with session_scope(inp.session_id):
+        r = orchestrator.enter(session, sid, get_llm(session.brain))
+    return {"ok": r.get("ok", False), "message": r.get("reply", ""), "display_name": r.get("display_name", "")}
+
+
+@app.get("/api/game/{sid}")  # 前端对弈面板轮询：是否对弈中 + 状态 + 事件
+def game_state(sid: str, since: int = 0) -> dict:
+    g = _runs.get(sid)
+    if g is None:
+        return {"active": False}
+    if g.finished:
+        orchestrator.finalize_if_done(sid)   # 结束即把整盘记录折进主聊天（幂等）
+    return {"active": not g.finished, "status": g.status(), "events": g.events_since(since)}
+
+
+@app.post("/api/game/{sid}/stop")  # 退出对弈
+def game_stop(sid: str) -> dict:
+    orchestrator.stop_run(sid)       # 取消 + 限时 join + 移除 + 清 _active_skill
+    return {"ok": True}
+
+
+class GameSayIn(BaseModel):
+    message: str
+
+
+@app.post("/api/game/{sid}/say")  # 对弈面板输入框：把话路由进对弈循环（退出/暂停/恢复/回答/闲聊，全由 orchestrator 判断）
+def game_say(sid: str, inp: GameSayIn) -> dict:
+    if not store.exists(sid):
+        return {"ok": False, "message": "会话不存在"}
+    session = store.get(sid)
+    with session_scope(sid):
+        r = orchestrator.route_in_skill(session, inp.message, get_llm(session.brain))
+    return {"ok": r.get("ok", False), "reply": r.get("reply", "")}

@@ -32,7 +32,17 @@ class ClaudeLLM:
                 text = b.text
             elif b.type == "tool_use":
                 calls.append(ToolCall(b.id, b.name, dict(b.input)))
-        return LLMReply(text=text, tool_calls=calls)
+        return LLMReply(text=text, tool_calls=calls, usage=_usage(getattr(resp, "usage", None)))
+
+
+def _usage(u) -> dict | None:
+    """Anthropic 用量 → 归一 {input, output, total}（含缓存命中也算进 input）。拿不到则 None。"""
+    if u is None:
+        return None
+    inp = (getattr(u, "input_tokens", 0) or 0) + (getattr(u, "cache_read_input_tokens", 0) or 0) \
+        + (getattr(u, "cache_creation_input_tokens", 0) or 0)
+    out = getattr(u, "output_tokens", 0) or 0
+    return {"input": inp, "output": out, "total": inp + out}
 
 
 def _tools(tools: list[ToolSpec]):

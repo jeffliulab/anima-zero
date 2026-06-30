@@ -32,7 +32,16 @@ class OpenAICompatLLM:
             ToolCall(c.id, c.function.name, json.loads(c.function.arguments or "{}"))
             for c in (msg.tool_calls or [])
         ]
-        return LLMReply(text=msg.content, tool_calls=calls)
+        return LLMReply(text=msg.content, tool_calls=calls, usage=_usage(getattr(resp, "usage", None)))
+
+
+def _usage(u) -> dict | None:
+    """OpenAI 用量 → 归一 {input, output, total}。拿不到则 None。"""
+    if u is None:
+        return None
+    inp = getattr(u, "prompt_tokens", 0) or 0
+    out = getattr(u, "completion_tokens", 0) or 0
+    return {"input": inp, "output": out, "total": getattr(u, "total_tokens", inp + out) or (inp + out)}
 
 
 def _tools(tools: list[ToolSpec]):
