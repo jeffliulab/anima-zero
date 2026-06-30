@@ -2,7 +2,7 @@
 
 ⚠️ 对大脑(ANIMA)只有【双流】：GET /perceive(画面 + 极简 state:{controllers, phase}) 和 GET /stream(MJPEG)；命令结果用 /invoke 的 ok 表达。
   perceive 的 state 只放 controllers + phase，绝不给棋盘结构化真值(局面/FEN/轮次/胜负/棋种)。
-AWI(脑↔世界): GET /capabilities  GET /perceive  POST /invoke(take_seat/start_game/move/resign)  GET /health
+AWI(脑↔世界): GET /capabilities  GET /perceive  POST /invoke(take_seat/seat_opponent/start_game/move/resign)  GET /health
 人类页/可视化(世界本地，不进 AWI、不动双流): GET /stream  POST /set_controller  POST /start
   POST /resign  POST /click  POST /place  POST /select  POST /reset  POST /switch(切棋种)  GET /status  GET /awi-events  GET /awi-stats  GET /
 内置 bot: 后台每拍，只在「比赛中」且当前一方由 bot 控制才自动走。

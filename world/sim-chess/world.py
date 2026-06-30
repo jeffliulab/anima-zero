@@ -60,7 +60,8 @@ TAKE_SEAT_TOOL = {
     "description": (
         "开始对弈前，你**必须先选你执哪一方**（坐到一个空席位上）。seat 填 white 或 black。"
         "世界会判：该席位空着、且 anima 还没占别的席位，才让你坐；坐下后返回 {ok, seat, controllers}，"
-        "你就知道自己执哪方了。两方都有人后才能 start_game。"
+        "你就知道自己执哪方了。坐下后，你可以用 seat_opponent 给对手那一席配人/电脑（也可由人在世界页配）；"
+        "两方都有人后才能 start_game。"
     ),
     "parameters": {"type": "object",
                    "properties": {"seat": {"type": "string", "enum": list(SEATS),
@@ -68,11 +69,27 @@ TAKE_SEAT_TOOL = {
                    "required": ["seat"]},
     "kind": "tool",
 }
+# 对手可选控制者 = 除 anima（那是你自己）外的控制者；空席（None）不算"配对手"，故排除。
+OPPONENT_OPTIONS = [c for c in CONTROLLERS if c != "anima"]   # ["human", "bot"]
+SEAT_OPPONENT_TOOL = {
+    "name": "seat_opponent",
+    "description": (
+        "你已 take_seat 选好自己那方后，用它**给对手那一席配上人或电脑**：who 填 human（真人陪你下）"
+        "或 bot（世界内置引擎陪你下）。世界会把【你没坐的那一席】配成 who（你不用指定是哪一席）。"
+        "得先 take_seat 才能用（否则世界不知道哪席是对手）；比赛中不能改。配好对手后就可以 start_game 开下。"
+    ),
+    "parameters": {"type": "object",
+                   "properties": {"who": {"type": "string", "enum": list(OPPONENT_OPTIONS),
+                                          "description": "对手是谁：human（真人）或 bot（电脑）"}},
+                   "required": ["who"]},
+    "kind": "tool",
+}
 START_GAME_TOOL = {
     "name": "start_game",
     "description": (
-        "双方都就座后，开始这盘对弈。世界会判：两个席位都已配人（你已 take_seat、对手也在世界页配好）才开始；"
-        "缺人则失败并告诉你缺谁。开始后进入「比赛中」，你才能走子。"
+        "双方都就座后，开始这盘对弈。世界会判：两个席位都已配人（你已 take_seat、对手也已配上"
+        "——你用 seat_opponent 配，或人在世界页配）才开始；缺人则失败并告诉你缺谁。"
+        "开始后进入「比赛中」，你才能走子。"
     ),
     "parameters": {"type": "object", "properties": {}, "required": []},
     "kind": "tool",
@@ -98,7 +115,7 @@ RESIGN_TOOL = {
     "parameters": {"type": "object", "properties": {}, "required": []},
     "kind": "tool",
 }
-_TOOLS = [TAKE_SEAT_TOOL, START_GAME_TOOL, MOVE_TOOL, RESIGN_TOOL]
+_TOOLS = [TAKE_SEAT_TOOL, SEAT_OPPONENT_TOOL, START_GAME_TOOL, MOVE_TOOL, RESIGN_TOOL]
 
 
 def _other(seat: str) -> str:
@@ -259,6 +276,8 @@ class SimChessWorld:
             return self._move(args, by="anima")
         if name == "take_seat":
             return self.take_seat(args.get("seat", ""))
+        if name == "seat_opponent":
+            return self.seat_opponent(args.get("who", ""))
         if name == "start_game":
             return self.start_game()
         if name == "resign":
@@ -286,6 +305,18 @@ class SimChessWorld:
             self.controllers[seat] = "anima"
             self.last = f"anima 就座 {seat}"
             return {"ok": True, "seat": seat, "controllers": dict(self.controllers)}
+
+    def seat_opponent(self, who: str) -> dict:
+        """ANIMA 给【对手那一席】配人/电脑：找到 anima 自己坐的席 → 把另一席配成 who。
+        必须先 take_seat（否则不知道哪席是对手）；who 只能是 human/bot（不能配 anima/空）。
+        校验/落座全交给 set_controller（比赛中不许、席位冲突等），这里只负责"算出对手是哪一席"。"""
+        if who not in OPPONENT_OPTIONS:
+            return {"ok": False, "message": f"对手只能是 {'/'.join(OPPONENT_OPTIONS)}（human=真人、bot=电脑）"}
+        with self.lock:                                   # 只在锁内读"我坐哪席"，随即释放——set_controller 自带锁
+            mine = self._anima_seat()
+        if mine is None:
+            return {"ok": False, "message": "你还没就座——请先 take_seat 选你执哪方，我才知道哪一席是对手。"}
+        return self.set_controller(_other(mine), who)
 
     def set_controller(self, seat: str, controller: str | None) -> dict:
         """配/换某一席控制者（人/anima/bot/空）。比赛中不许（要先复位/开新局）。不动棋盘局面。"""

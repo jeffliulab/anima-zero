@@ -19,7 +19,32 @@ def test_capabilities_declares_seat_verbs_only():
     caps = SimChessWorld().capabilities()
     assert "seats" not in caps, "不再单独声明 seats（claim 机制已删，座位靠 take_seat 工具）"
     names = {t["name"] for t in caps["tools"]}
-    assert names == {"take_seat", "start_game", "move", "resign"}, "三阶段工具集（无 pause/resume）"
+    assert names == {"take_seat", "seat_opponent", "start_game", "move", "resign"}, \
+        "三阶段工具集（无 pause/resume）；seat_opponent = ANIMA 给对手配座"
+
+
+def test_seat_opponent_seats_the_other_side():
+    """ANIMA take_seat 后，seat_opponent(human) 把另一席配成人；接着能 start_game 进比赛中。"""
+    w = SimChessWorld()
+    w.take_seat("black")
+    r = w.seat_opponent("human")
+    assert r["ok"] and w.controllers["white"] == "human", "对手配到 anima 没坐的那一席（白）"
+    assert w.controllers["black"] == "anima", "自己那席不动"
+    assert w.start_game()["ok"] and w.phase == "in_game", "双方配齐 → 可开局"
+
+
+def test_seat_opponent_requires_taking_seat_first():
+    w = SimChessWorld()
+    r = w.seat_opponent("bot")
+    assert r["ok"] is False and "take_seat" in r["message"], "没就座就配对手 → 拒绝并提示先就座"
+    assert w.controllers == {"white": None, "black": None}, "拒绝时不动任何席位"
+
+
+def test_seat_opponent_rejects_invalid_who():
+    w = SimChessWorld()
+    w.take_seat("white")
+    assert w.seat_opponent("anima")["ok"] is False, "对手不能配成 anima（那是自己）"
+    assert w.seat_opponent("空")["ok"] is False, "对手不能配成空"
 
 
 def test_take_seat_picks_side_and_anima_only_once():
