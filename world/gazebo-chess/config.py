@@ -57,7 +57,9 @@ PIECE_GRASP_WAIST_M = _f("GZCHESS_PIECE_GRASP_WAIST_M", "0.020")  # 抓取点离
 PIECE_GRASP_WIDTH_M = _f("GZCHESS_PIECE_GRASP_WIDTH_M", "0.035")  # 抓取点处棋子宽度（要落在夹爪可夹区间）
 
 # ---- 相机（俯视）----
-CAM_HEIGHT_M = _f("GZCHESS_CAM_HEIGHT_M", "0.55")  # 棋盘上方高度（按"拍全盘+留边"反算，见 geometry 注释）
+# 棋盘上方高度。⚠️ 约束是**竖直** FOV（16:9 下 vfov≈0.6rad < hfov 1.0）：board 0.40m 要全进画面、
+# 竖直视野 2*h*tan(vfov/2) 得 ≥ 0.40+留边，故 h≈0.85m（0.55m 时竖直只看到 ~0.34m、远端会被裁）。
+CAM_HEIGHT_M = _f("GZCHESS_CAM_HEIGHT_M", "0.85")
 CAM_FOV_RAD = _f("GZCHESS_CAM_FOV_RAD", "1.0")     # 垂直视野（约 57°）
 CAM_W = _i("GZCHESS_CAM_W", "1280")
 CAM_H = _i("GZCHESS_CAM_H", "720")
