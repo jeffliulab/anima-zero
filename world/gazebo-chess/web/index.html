@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>gazebo-chess 世界</title>
+  <style>
+    body { margin: 0; background: #14161a; color: #d6d9de; font: 14px/1.6 system-ui, sans-serif; }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 20px; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    .sub { color: #8a909a; margin-bottom: 16px; }
+    .view { background: #000; border: 1px solid #2a2e35; border-radius: 8px; overflow: hidden; }
+    .view img { width: 100%; display: block; }
+    .note { color: #8a909a; margin-top: 12px; font-size: 13px; }
+    code { background: #20242b; padding: 1px 5px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>gazebo-chess · 俯视相机</h1>
+    <div class="sub">sim-chess 的 Gazebo 物理版：机械臂用真实夹爪抓放棋子。下面是 Gazebo 俯视相机的实时画面（和 ANIMA 看到的是同一路）。</div>
+    <div class="view"><img src="/stream" alt="overhead camera stream" /></div>
+    <div class="note">
+      对外工具（AWI）：<code>take_seat</code> / <code>start_game</code> / <code>move</code> / <code>resign</code>。
+      <code>move</code> 让机械臂真夹真放（v0.4：盘上一个子，从 from 格搬到 to 格）。
+      画面没出来？确认 episode 仿真栈在跑、且 <code>ros_gz_image image_bridge</code> 在桥相机图。
+    </div>
+  </div>
+</body>
+</html>

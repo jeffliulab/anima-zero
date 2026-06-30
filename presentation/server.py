@@ -34,16 +34,18 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 # ⛔ 回归教训(2026-06-28):加新世界 sim-chess 时,曾把启动命令写成只 ANIMA_WORLDS="sim-chess=..."
 #    → 把旧世界 sim-desk 从清单里挤掉了。从此:**默认清单必须含所有已知世界,加世界=往这份默认里追加,
 #    绝不替换**;改 ANIMA_WORLDS / README / .env.example 时同理,保留所有既有世界。
-# 各世界默认地址(env 可覆盖,不写死散落):sim-desk 桌面世界 :8100、sim-chess 棋具世界 :8102、camera 摄像头世界 :8104。
+# 各世界默认地址(env 可覆盖,不写死散落):sim-desk :8100、sim-chess :8102、camera :8104、gazebo-chess :8106。
 SIM_DESK_URL = os.getenv("SIM_DESK_URL", "http://localhost:8100")
 SIM_CHESS_URL = os.getenv("SIM_CHESS_URL", "http://localhost:8102")
 CAMERA_URL = os.getenv("CAMERA_URL", "http://localhost:8104")
+GAZEBO_CHESS_URL = os.getenv("GAZEBO_CHESS_URL", "http://localhost:8106")
 # 没设 ANIMA_WORLDS 时的默认清单 = 所有已知世界(都注册,在线与否由前端按 online() 标注)
-# ⚠️ T0:加世界=往这份默认里【追加】,绝不替换(camera 是 v0.3 新增,sim-desk/sim-chess 必须保留)。
+# ⚠️ T0:加世界=往这份默认里【追加】,绝不替换(gazebo-chess 是 v0.4 新增,前三个必须保留)。
 _DEFAULT_WORLDS: list[tuple[str, str]] = [
     ("sim-desk", SIM_DESK_URL),
     ("sim-chess", SIM_CHESS_URL),
     ("camera", CAMERA_URL),
+    ("gazebo-chess", GAZEBO_CHESS_URL),
 ]
 
 
