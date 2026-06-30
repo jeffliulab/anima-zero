@@ -1,80 +1,236 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>棋桌 · 世界 (AWI)</title>
 <style>
-  :root { color-scheme: dark; }
-  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; background: #14161a;
-         color: #e6e6e6; padding: 20px; }
-  h1 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
-  .hint { font-size: 12px; color: #8a8f98; margin-bottom: 14px; }
-  .wrap { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
-  .left { display: flex; flex-direction: column; gap: 10px; }
-  #view { border-radius: 8px; cursor: pointer; display: block; background: #000; }
-  .row { display: flex; gap: 10px; align-items: center; font-size: 13px; color: #8a8f98; flex-wrap: wrap; }
-  .row .lbl { color: #6e7681; }
-  select, button { background: #2b3038; color: #fff; border: 1px solid #39404a; border-radius: 7px;
-                   padding: 6px 10px; font-size: 13px; cursor: pointer; }
-  select:disabled, button:disabled { opacity: .4; cursor: not-allowed; }
-  button.primary { background: #2b6cb0; border-color: #2b6cb0; }
-  button.danger { background: #7a2b2b; border-color: #7a2b2b; }
+  /* ============ 主题调色板（两套：暗色 / 明亮木纹）============ */
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0e1014;            /* 页面底 */
+    --bg-grad: radial-gradient(1200px 600px at 50% -10%, #1a1f29 0%, #0e1014 60%);
+    --card: #161a21;          /* 卡片面 */
+    --card-2: #1c212b;        /* 次级面（状态栏） */
+    --line: #2a313d;          /* 描边 */
+    --line-soft: #222834;
+    --ink: #e8eaf0;           /* 主文字 */
+    --ink-dim: #9aa1ad;       /* 次文字 */
+    --ink-faint: #6b7280;     /* 弱文字/标签 */
+    --accent: #4f8cff;        /* 主色 */
+    --accent-ink: #ffffff;
+    --danger: #e0556b;
+    --term-bg: #0a0c10;       /* 终端底 */
+    --board-frame: linear-gradient(145deg, #2b323d, #171b22);  /* 暗色琴键边 */
+    --board-bezel: #0a0c10;
+    --shadow: 0 18px 50px -18px rgba(0,0,0,.75), 0 6px 18px -10px rgba(0,0,0,.6);
+    --shadow-soft: 0 8px 24px -14px rgba(0,0,0,.6);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #f1e9db;
+    --bg-grad: radial-gradient(1200px 600px at 50% -10%, #fbf6ec 0%, #ece0cd 70%);
+    --card: #fffaf2;
+    --card-2: #f6efe2;
+    --line: #e2d4bd;
+    --line-soft: #ece0cd;
+    --ink: #3a322a;
+    --ink-dim: #7a6e5e;
+    --ink-faint: #a3917a;
+    --accent: #b5732e;        /* 暖木褐 */
+    --accent-ink: #fffaf2;
+    --danger: #b4452f;
+    --term-bg: #2a241c;       /* 终端仍偏深，等宽日志更清晰 */
+    --board-frame: linear-gradient(145deg, #b98a4e, #7c5326);  /* 木纹边 */
+    --board-bezel: #5c3d1c;
+    --shadow: 0 18px 44px -20px rgba(92,61,28,.45), 0 6px 16px -10px rgba(92,61,28,.35);
+    --shadow-soft: 0 8px 22px -14px rgba(92,61,28,.35);
+  }
+  :root[data-theme="light"] .term .t-ts { color: #b9a98f; }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    background-image: var(--bg-grad);
+    color: var(--ink);
+    padding: 22px clamp(16px, 4vw, 48px) 40px;
+    transition: background-color .25s, color .25s;
+  }
+
+  /* ============ 顶栏 ============ */
+  .topbar {
+    max-width: 1180px; margin: 0 auto 22px;
+    display: flex; align-items: flex-start; gap: 16px;
+  }
+  .topbar .title { flex: 1; min-width: 0; }
+  h1 { font-size: 19px; font-weight: 650; margin: 0 0 6px; letter-spacing: .2px; }
+  .hint { font-size: 12.5px; color: var(--ink-dim); line-height: 1.6; max-width: 760px; }
+  .hint b { color: var(--ink); font-weight: 600; }
+  .theme-btn {
+    flex: none; background: var(--card); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 9px 13px; font-size: 14px; cursor: pointer; line-height: 1;
+    display: inline-flex; align-items: center; gap: 7px;
+    box-shadow: var(--shadow-soft); transition: transform .12s, border-color .2s;
+  }
+  .theme-btn:hover { transform: translateY(-1px); border-color: var(--accent); }
+  .theme-btn .lbl { font-size: 12.5px; color: var(--ink-dim); }
+
+  /* ============ 主布局：棋盘居中为核心，日志为次要侧栏 ============ */
+  .stage {
+    max-width: 1180px; margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+    gap: 22px; align-items: start;
+  }
+  @media (max-width: 920px) {
+    .stage { grid-template-columns: 1fr; }
+  }
+
+  /* —— 中央棋盘卡 —— */
+  .board-card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: var(--shadow); padding: 18px clamp(14px, 3vw, 26px) 20px;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+  }
+
+  /* 控制小框（右侧栏顶部：棋种 / 配座 / 动作按钮） */
+  .control-card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px 16px; box-shadow: var(--shadow-soft);
+    display: flex; flex-direction: column; gap: 11px;
+  }
+  .ctl-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .ctl-row .lbl { color: var(--ink-faint); font-size: 12px; }
+  .seat-group { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px;
+                background: var(--card-2); border: 1px solid var(--line-soft); border-radius: 10px; }
+  select, button {
+    background: var(--card-2); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 9px; padding: 7px 12px; font-size: 13px; cursor: pointer;
+    transition: border-color .15s, background .15s, transform .1s, opacity .15s;
+  }
+  select:hover, button:hover { border-color: var(--accent); }
+  button:active { transform: translateY(1px); }
+  select:disabled, button:disabled { opacity: .42; cursor: not-allowed; }
+  select:disabled:hover, button:disabled:hover { border-color: var(--line); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  button.primary:hover { filter: brightness(1.08); }
+  button.danger  { background: transparent; border-color: var(--danger); color: var(--danger); font-weight: 600; }
+  button.danger:hover  { background: var(--danger); color: #fff; }
   button.hidden { display: none; }
-  .panel { flex: 1; min-width: 340px; }
-  .statusbar { background: #1c1f26; border: 1px solid #2a2e37; border-radius: 8px; padding: 10px 12px;
-               font-size: 12px; color: #b8bdc7; margin-bottom: 10px; line-height: 1.7; }
-  .statusbar b { color: #e6e6e6; }
-  .phase { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; margin-right: 6px; }
-  .p-not_start { background: #30363d; color: #adbac7; }
-  .p-in_game { background: #1f6f43; color: #aef0c8; }
-  .p-game_over { background: #5a2330; color: #ffb3c1; }
-  .term-title { font-size: 12px; color: #8a8f98; margin-bottom: 6px; }
-  #term { background: #0b0d10; border: 1px solid #2a2e37; border-radius: 8px; padding: 10px;
-          height: 380px; overflow-y: auto; font-family: ui-monospace, Menlo, monospace;
-          font-size: 12px; line-height: 1.6; }
+  /* 动作按钮：在小框里平铺一行，自动等宽 */
+  .actions { display: flex; gap: 9px; flex-wrap: wrap; }
+  .actions button { flex: 1 1 auto; min-width: 84px; }
+
+  /* 棋桌：棋盘被框进带边的容器，居中、为视觉焦点 */
+  .table {
+    padding: 14px; border-radius: 18px; background: var(--board-frame);
+    box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,.08);
+  }
+  .bezel { padding: 6px; border-radius: 10px; background: var(--board-bezel); line-height: 0; }
+  #view {
+    display: block; width: min(560px, 78vw); height: auto; aspect-ratio: 1 / 1;
+    border-radius: 6px; cursor: pointer; background: #000;
+  }
+
+  /* 选子/提示行 */
+  #sel { font-size: 12.5px; color: var(--ink-dim); text-align: center; min-height: 18px; }
+  #sel b { color: var(--accent); }
+
+  /* —— 侧栏：状态 + AWI 终端 —— */
+  .side { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 22px; }
+  @media (max-width: 920px) { .side { position: static; } }
+
+  .statusbar {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px 16px; font-size: 12.5px; color: var(--ink-dim); line-height: 1.9;
+    box-shadow: var(--shadow-soft);
+  }
+  .statusbar b { color: var(--ink); }
+  .phase { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11px;
+           font-weight: 600; margin-right: 8px; letter-spacing: .3px; }
+  .p-not_start { background: rgba(154,161,173,.18); color: var(--ink-dim); }
+  .p-in_game   { background: rgba(64,180,116,.20); color: #4fc285; }
+  .p-game_over { background: rgba(224,85,107,.18); color: var(--danger); }
+
+  .term-wrap {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 12px 8px; box-shadow: var(--shadow-soft);
+  }
+  .term-title { font-size: 11.5px; color: var(--ink-faint); margin: 2px 4px 9px; letter-spacing: .2px; }
+  .term {
+    background: var(--term-bg); border: 1px solid var(--line-soft); border-radius: 10px;
+    padding: 10px 12px; height: 420px; overflow-y: auto;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px; line-height: 1.65; color: #cdd3df;
+  }
+  .term::-webkit-scrollbar { width: 8px; }
+  .term::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
   .ln { white-space: pre-wrap; word-break: break-all; }
   .t-ts { color: #5c6370; }
   .m-perceive { color: #56b6c2; } .m-invoke { color: #98c379; } .m-capabilities { color: #c678dd; }
   .m-bot { color: #e5c07b; } .m-click { color: #61afef; } .m-setup, .m-reset { color: #e06c75; }
-  #sel { font-size: 12px; color: #9aa0a8; }
 </style>
 </head>
 <body>
-  <h1>棋桌 · 一张能托管象棋/五子棋/围棋的世界 (AWI)</h1>
-  <div class="hint">我握着真棋盘，只给 ANIMA <b>看画面</b> + <b>一组角色 meta(谁坐哪方) + 阶段(phase)</b>，不告诉它局面坐标。
-    配好双方（人 / ANIMA / 电脑）→ 开始。所有「切换类」操作要先暂停。轮到"人"那方：点起子格→点目标格走子。</div>
+  <div class="topbar">
+    <div class="title">
+      <h1>棋桌 · 一张能托管象棋 / 五子棋 / 围棋的世界 (AWI)</h1>
+      <div class="hint">我握着真棋盘，只给 ANIMA <b>看画面</b> + <b>一组角色 meta（谁坐哪方）+ 阶段（phase）</b>，不告诉它局面坐标。
+        配好双方（人 / ANIMA / 电脑）→ 开始。所有「切换类」操作要先暂停。轮到"人"那方：点起子格 → 点目标格走子。</div>
+    </div>
+    <button class="theme-btn" id="themeToggle" title="切换主题">
+      <span id="themeIcon">🌙</span><span class="lbl" id="themeLbl">暗色</span>
+    </button>
+  </div>
 
-  <div class="wrap">
-    <div class="left">
-      <div class="row">
-        <span class="lbl">棋种</span>
-        <select id="gameSel">
-          <option value="chess">国际象棋</option>
-          <option value="gomoku">五子棋</option>
-          <option value="go">围棋（占位）</option>
-        </select>
+  <div class="stage">
+    <!-- 中央：棋盘为视觉焦点 -->
+    <div class="board-card">
+      <div class="table">
+        <div class="bezel">
+          <img id="view" width="512" height="512" alt="board" src="/stream" />
+        </div>
       </div>
-      <div class="row">
-        <span class="lbl">白方</span>
-        <select id="white" class="seat"><option value="">空</option><option value="human">人</option><option value="anima">ANIMA</option><option value="bot">电脑</option></select>
-        <span class="lbl">黑方</span>
-        <select id="black" class="seat"><option value="">空</option><option value="human">人</option><option value="anima">ANIMA</option><option value="bot">电脑</option></select>
-      </div>
-      <div class="row">
-        <button class="primary" id="start">开始</button>
-        <button class="primary" id="newgame">开新局</button>
-        <button class="danger" id="resign">认输</button>
-        <button id="reset">复位</button>
-      </div>
-      <img id="view" width="512" height="512" alt="board" src="/stream" />
       <div id="sel">配好双方后点「开始」。</div>
     </div>
 
-    <div class="panel">
+    <!-- 侧栏：控制 + 状态 + AWI 流量 -->
+    <div class="side">
+      <div class="control-card">
+        <div class="ctl-row">
+          <span class="lbl">棋种</span>
+          <select id="gameSel">
+            <option value="chess">国际象棋</option>
+            <option value="gomoku">五子棋</option>
+            <option value="go">围棋（占位）</option>
+          </select>
+        </div>
+        <div class="ctl-row">
+          <span class="seat-group">
+            <span class="lbl">白方</span>
+            <select id="white" class="seat"><option value="">空</option><option value="human">人</option><option value="anima">ANIMA</option><option value="bot">电脑</option></select>
+          </span>
+          <span class="seat-group">
+            <span class="lbl">黑方</span>
+            <select id="black" class="seat"><option value="">空</option><option value="human">人</option><option value="anima">ANIMA</option><option value="bot">电脑</option></select>
+          </span>
+        </div>
+        <div class="actions">
+          <button class="primary" id="start">开始</button>
+          <button class="primary" id="newgame">开新局</button>
+          <button class="danger" id="resign">认输</button>
+          <button id="reset">复位</button>
+        </div>
+      </div>
       <div class="statusbar" id="status">状态加载中…</div>
-      <div class="term-title">AWI 实时流量（谁在调我的接口 · 命令回 success/fail）</div>
-      <div id="term"></div>
+      <div class="term-wrap">
+        <div class="term-title">AWI 实时流量（谁在调我的接口 · 命令回 success/fail）</div>
+        <div class="term" id="term"></div>
+      </div>
     </div>
   </div>
 
@@ -85,6 +241,21 @@
   let fromSq = null;
   let game = "chess", phase = "not_start";
   const GRID = { gomoku: 15, go: 19 };   // 落子类棋种的格数（世界自己的 UI，可写死）
+
+  // ---------- 主题切换（明亮木纹 / 精致暗色，localStorage 记住）----------
+  const THEME_KEY = "simchess-theme";
+  function applyTheme(t) {
+    document.documentElement.setAttribute("data-theme", t);
+    const dark = t === "dark";
+    $("themeIcon").textContent = dark ? "🌙" : "☀️";
+    $("themeLbl").textContent = dark ? "暗色" : "明亮";
+  }
+  applyTheme(localStorage.getItem(THEME_KEY) || "dark");
+  $("themeToggle").onclick = () => {
+    const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    localStorage.setItem(THEME_KEY, next);
+    applyTheme(next);
+  };
 
   // ---------- 棋种选择：切桌（要在非比赛中）----------
   $("gameSel").addEventListener("change", async () => {
