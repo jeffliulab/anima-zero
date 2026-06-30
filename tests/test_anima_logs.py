@@ -51,6 +51,40 @@ def test_per_session_files_and_recent_filters(tmp_path, monkeypatch):
     assert len(llm_log.recent(10)) == 2, "全部=合并所有文件，两条都在"
 
 
+def test_bound_stream_keeps_session_across_yields(tmp_path, monkeypatch):
+    """回归：流式生成器在多次 yield 之间调用 LLM，session 标签必须全程保住。
+
+    复刻真实环境最毒的一点——Starlette 用线程池迭代同步生成器、【每次 next() 都换一份新上下文】。
+    旧写法（生成器内部 with session_scope）会跨 yield 丢标签，所有调用落进无归属 misc 桶
+    （= anima-logs 按会话查永远空的根因）。bound_stream 必须扛住它。"""
+    import contextvars
+
+    monkeypatch.setattr(llm_log, "_DIR", str(tmp_path))
+    wrapped = llm_log.LoggingLLM(_FakeLLM(LLMReply(text="ok")), "fake")
+
+    def handle_stream():
+        # 模拟主循环：在多次 yield 之间真正调用 LLM（每次调用经 LoggingLLM 落一条日志）
+        yield "start"
+        wrapped.chat("sys", [{"role": "user", "text": "step1"}], [], None)
+        yield "mid"
+        wrapped.chat("sys", [{"role": "user", "text": "step2"}], [], None)
+        yield "done"
+
+    # 外层模拟 Starlette：每次 next() 在一份【全新、无 session】的上下文副本里跑
+    outer = llm_log.bound_stream("sess-S", handle_stream())
+    while True:
+        fresh = contextvars.copy_context()
+        try:
+            fresh.run(next, outer)
+        except StopIteration:
+            break
+
+    # 两次 LLM 调用都应归到 sess-S（而不是落进 misc）
+    only_s = llm_log.recent(10, session="sess-S")
+    assert [e["last_user"] for e in only_s] == ["step1", "step2"], "跨 yield 的每次调用都应带上 session"
+    assert (tmp_path / "session-sess-S.jsonl").exists(), "应写进 session-<id>.jsonl，而非 misc"
+
+
 def test_logging_llm_records_errors_and_reraises(tmp_path, monkeypatch):
     monkeypatch.setattr(llm_log, "_DIR", str(tmp_path))
     wrapped = llm_log.LoggingLLM(_FakeLLM(boom=True), "fake")

@@ -17,6 +17,13 @@ from typing import Any
 _DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs", "anima")
 _SEQ = 0
 
+# 留痕文本的最大留存长度（字符）——只是给写盘一个上界防失控，正常条目都远短于此 = 等同"留全文"。
+# 放宽前曾是 system 240 / last_user 400 / reply 600，太短：anima-logs 一键复制/排查时把 system 提示、
+# 长回复都截掉了，拿不到"所有信息要素"。现给到几千～两万字级，env 可覆盖（默认集中这一处）。
+_MAX_SYSTEM = int(os.getenv("ANIMA_LOG_MAX_SYSTEM", "8000"))
+_MAX_USER = int(os.getenv("ANIMA_LOG_MAX_USER", "8000"))
+_MAX_REPLY = int(os.getenv("ANIMA_LOG_MAX_REPLY", "20000"))
+
 # 当前 session 标签（请求级上下文变量）：每条日志据此标 session，anima-logs 页可按 session 过滤。
 # 后台行为树线程靠 BehaviorRunner.start() 捕获 copy_context() 把它带进线程（否则解说会丢 session）。
 _session_ctx: contextvars.ContextVar[str] = contextvars.ContextVar("anima_session", default="")
@@ -30,6 +37,27 @@ def session_scope(session_id: str):
         yield
     finally:
         _session_ctx.reset(tok)
+
+
+def bind_session(session_id: str) -> None:
+    """在【当前上下文】里持久设上 session 标签（不像 session_scope 那样退出即 reset）。给 bound_stream 用。"""
+    _session_ctx.set(session_id or "")
+
+
+def bound_stream(session_id: str, gen):
+    """把一个同步生成器包成【全程带 session 标签】的生成器（专给 SSE 流式端点用）。
+
+    做法：用一份 copy_context() 先 bind_session，再每步 ctx.run(next, gen) 迭代——这样即便外层
+    （Starlette 线程池）每次 next() 复制一份新上下文，生成器体里的 LLM 调用（在多次 yield 之间）也
+    始终读得到 session。若像以前那样把 `with session_scope` 写在生成器内部，标签会跨 yield 丢失，
+    所有调用落进无归属的 misc 桶（这正是 anima-logs 按会话查永远空的根因）。见 tests/test_anima_logs.py。"""
+    ctx = contextvars.copy_context()
+    ctx.run(bind_session, session_id)
+    while True:
+        try:
+            yield ctx.run(next, gen)
+        except StopIteration:
+            return
 
 
 def current_session() -> str:
@@ -63,12 +91,12 @@ def record(model: str, system: str, history: list, tools: list, has_image: bool,
         "ts": time.strftime("%H:%M:%S"),
         "session": _session_ctx.get(),               # 这次调用属于哪个 session（空=非会话场景，如连通自检）
         "model": model,
-        "system": (system or "")[:240],            # 系统提示前缀——据此一眼分辨 主循环/意图分类/解说/陪聊
-        "last_user": (last_user or "")[:400],
+        "system": (system or "")[:_MAX_SYSTEM],     # 系统提示（前缀）——据此一眼分辨 主循环/意图分类/解说/陪聊
+        "last_user": (last_user or "")[:_MAX_USER],
         "n_history": len(history or []),
         "n_tools": len(tools or []),
         "has_image": bool(has_image),
-        "reply": (getattr(reply, "text", "") or "")[:600],
+        "reply": (getattr(reply, "text", "") or "")[:_MAX_REPLY],
         "tool_calls": [tc.name for tc in (getattr(reply, "tool_calls", None) or [])],
         "tokens": getattr(reply, "usage", None),     # {input,output,total} 或 None（provider 没给 / 出错）
         "ms": round(ms, 1),

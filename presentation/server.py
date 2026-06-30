@@ -18,7 +18,7 @@ from pydantic import BaseModel
 from anima import awi_log, config
 from anima.behavior.manager import RunnerManager
 from anima.llm import LLM, DEFAULT_BRAIN, list_brains, make_llm
-from anima.llm_log import LoggingLLM, recent as _llm_recent, sessions as _llm_sessions, session_scope
+from anima.llm_log import LoggingLLM, bound_stream, recent as _llm_recent, sessions as _llm_sessions, session_scope
 from anima.orchestrator import Orchestrator
 from anima.registry import WorldRegistry
 from anima.session import SessionStore
@@ -34,11 +34,17 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 # ⛔ 回归教训(2026-06-28):加新世界 sim-chess 时,曾把启动命令写成只 ANIMA_WORLDS="sim-chess=..."
 #    → 把旧世界 sim-desk 从清单里挤掉了。从此:**默认清单必须含所有已知世界,加世界=往这份默认里追加,
 #    绝不替换**;改 ANIMA_WORLDS / README / .env.example 时同理,保留所有既有世界。
-# 各世界默认地址(env 可覆盖,不写死散落):sim-desk 桌面世界 :8100、sim-chess 棋具世界 :8102。
+# 各世界默认地址(env 可覆盖,不写死散落):sim-desk 桌面世界 :8100、sim-chess 棋具世界 :8102、camera 摄像头世界 :8104。
 SIM_DESK_URL = os.getenv("SIM_DESK_URL", "http://localhost:8100")
 SIM_CHESS_URL = os.getenv("SIM_CHESS_URL", "http://localhost:8102")
+CAMERA_URL = os.getenv("CAMERA_URL", "http://localhost:8104")
 # 没设 ANIMA_WORLDS 时的默认清单 = 所有已知世界(都注册,在线与否由前端按 online() 标注)
-_DEFAULT_WORLDS: list[tuple[str, str]] = [("sim-desk", SIM_DESK_URL), ("sim-chess", SIM_CHESS_URL)]
+# ⚠️ T0:加世界=往这份默认里【追加】,绝不替换(camera 是 v0.3 新增,sim-desk/sim-chess 必须保留)。
+_DEFAULT_WORLDS: list[tuple[str, str]] = [
+    ("sim-desk", SIM_DESK_URL),
+    ("sim-chess", SIM_CHESS_URL),
+    ("camera", CAMERA_URL),
+]
 
 
 def _parse_worlds() -> list[tuple[str, str]]:
@@ -257,14 +263,15 @@ def chat_stream(inp: ChatIn) -> StreamingResponse:
             yield _sse({"type": "done"})
             return
         try:
-            with session_scope(inp.session_id):   # 流式期间 LLM 调用同样标 session
-                for ev in orchestrator.handle_stream(session, inp.message, get_llm(session.brain)):
-                    yield _sse(ev)
+            for ev in orchestrator.handle_stream(session, inp.message, get_llm(session.brain)):
+                yield _sse(ev)
         except Exception as e:
             yield _sse({"type": "reply", "text": f"(大脑调用出错:{type(e).__name__}: {e})"})
             yield _sse({"type": "done"})
 
-    return StreamingResponse(gen(), media_type="text/event-stream")
+    # bound_stream 给整条生成器套上一个带 session 的固定上下文逐步迭代——保证流式期间每次 LLM 调用
+    # （连同行为树 copy_context()）都读得到 session、正确写进 session-<id>.jsonl。详见 llm_log.bound_stream。
+    return StreamingResponse(bound_stream(inp.session_id, gen()), media_type="text/event-stream")
 
 
 @app.get("/api/status")  # 给前端看连接状态
@@ -280,7 +287,7 @@ def awi_overview() -> dict:
         w = registry.get(name)
         online = w.online() if hasattr(w, "online") else True
         info = {"name": name, "url": getattr(w, "base", ""), "online": online,
-                "version": "", "tools": [], "state": None, "perceive_state": None}
+                "version": "", "tools": [], "state": None, "status": None}
         if online:
             try:
                 caps = w.capabilities()  # 命中握手缓存,不再问世界(见 RemoteWorld.capabilities)
@@ -289,18 +296,18 @@ def awi_overview() -> dict:
                     {"name": t.name, "description": t.description, "kind": t.kind, "parameters": t.parameters}
                     for t in caps.tools
                 ]
-                # 仪表盘=给人看的调试台 → 展示【世界真值】(走世界本地 /status,人的上帝视角),而不是 ANIMA 受限的 perceive。
-                # 这跟 ANIMA 的 perceive 明确分开:sim-chess 的真值(局面/轮次/胜负)藏在 /status、绝不给 ANIMA。
+                # status = 世界自身的真实状态(仅人看的调试台,走世界本地 /status,人的上帝视角),绝不给 ANIMA。
+                # 这跟 ANIMA 的 perceive 明确分开:sim-chess 的真值(局面/轮次/胜负)藏在 /status、绝不进 perceive。
                 # 没有 /status 的世界(如 sim-desk,它的 perceive 本就是真值)→ 回退到 perceive 的 state。
                 truth = w.debug_state() if hasattr(w, "debug_state") else None
                 if truth is None:
                     truth = w.last_state() if hasattr(w, "last_state") else None
                     if truth is None:
                         truth = w.perceive().state
-                info["state"] = truth
-                # perceive_state = ANIMA 上一次 perceive 真正收到的 state(用缓存,不额外 perceive、不刷流量)。
+                info["status"] = truth
+                # state = ANIMA 上一次 perceive 真正收到的结构化 state(用缓存,不额外 perceive、不刷流量)。
                 # 这是「world 向 ANIMA 传输的唯一结构化东西」——卡片里单独、显眼地展示它。
-                info["perceive_state"] = w.last_state() if hasattr(w, "last_state") else None
+                info["state"] = w.last_state() if hasattr(w, "last_state") else None
             except Exception:
                 info["online"] = False
         worlds_info.append(info)
