@@ -141,7 +141,7 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
           <code className="mx-1 rounded bg-neutral-800 px-1">capabilities</code>(声明 tools)、
           <code className="mx-1 rounded bg-neutral-800 px-1">perceive</code>(看：画面 + 结构化 state)、
           <code className="mx-1 rounded bg-neutral-800 px-1">invoke</code>(调一个 tool，如 take_seat / start_game / move / resign)。
-          下面每张世界卡片按 <b className="text-neutral-200">TOOLS / STATE</b> 分区，都是"<b>这个世界</b>声明的"，各世界各异。
+          下面每张世界卡片分三区：<b className="text-neutral-200">TOOLS</b>(能力) / <b className="text-neutral-200">STATE</b>(随画面给脑的结构化状态) / <b className="text-neutral-200">STATUS</b>(仅人看的调试真值·上帝视角)，都是"<b>这个世界</b>声明/持有的"，各世界各异。
         </p>
         <p className="text-xs leading-relaxed text-neutral-500">
           注意：<b>skill（剧本）和行为树是 ANIMA 脑内的结构、不在 AWI 线上</b>（世界根本不知道它们存在），所以这里看不到——
@@ -188,7 +188,7 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
                 </div>
                 <div className="mt-1 text-[11px] text-neutral-500">{w.url}</div>
 
-                {/* 风格2 · 色条分区：TOOLS(绿) / STATE(蓝)——同构卡片：描述 + 原始 schema/内容 */}
+                {/* 风格2 · 色条分区：TOOLS(绿) / STATE(蓝) / STATUS(紫)——三个独立指标区 */}
                 <div className="mt-3 space-y-3">
                   <Region title="TOOLS" color="#3fb950" sub="世界声明、ANIMA 调用的能力（含 schema）">
                     {w.tools.map((t) => (
@@ -198,26 +198,30 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
                     {w.tools.length === 0 && <div className="text-xs text-neutral-500">(离线，拿不到能力)</div>}
                   </Region>
 
-                  <Region title="STATE" color="#58a6ff" sub="两条通道：① 随画面给脑的结构化 state（脑能看）；② 仅人看的调试真值（脑看不到）">
+                  <Region title="STATE" color="#58a6ff" sub="随画面给脑的结构化 state（脑能看）——世界声明的契约，绝不含棋盘真值">
                     {!w.online ? (
                       <div className="text-xs text-neutral-500">(离线，拿不到 state)</div>
                     ) : (
-                      <>
-                        <CapCard name="perceive.state" kind="给脑 · 随画面" accent="text-sky-300"
-                          desc="世界经 perceive 随画面给 ANIMA 的结构化状态。下面是世界【声明】的契约（键→含义），由模块声明、不是缓存的上次值；绝不含棋盘真值。"
-                          schema={w.state_schema && Object.keys(w.state_schema).length ? w.state_schema : (w.state ?? {})} />
-                        {(() => {
-                          const truth = JSON.stringify(w.status ?? {});
-                          const seen = JSON.stringify(w.state ?? {});
-                          const hidden = truth !== seen && truth !== "{}" && truth !== "null";
-                          return hidden ? (
-                            <CapCard name="🔒 调试真值（上帝视角）" kind="仅人看 · 非 perceive" accent="text-neutral-300"
-                              desc="世界本地的完整真值，只给人看的调试台、不进 perceive——ANIMA 看不到（棋类世界里如 FEN / 棋子真实位置）"
-                              schema={w.status ?? {}} />
-                          ) : null;
-                        })()}
-                      </>
+                      <CapCard name="perceive.state" kind="给脑 · 随画面" accent="text-sky-300"
+                        desc="世界经 perceive 随画面给 ANIMA 的结构化状态。下面是世界【声明】的契约（键→含义），由模块声明、不是缓存的上次值；绝不含棋盘真值。"
+                        schema={w.state_schema && Object.keys(w.state_schema).length ? w.state_schema : (w.state ?? {})} />
                     )}
+                  </Region>
+
+                  <Region title="STATUS" color="#a371f7" sub="仅人看的调试真值（上帝视角）——走世界本地 /status，绝不进 perceive、ANIMA 看不到">
+                    {!w.online ? (
+                      <div className="text-xs text-neutral-500">(离线，拿不到 status)</div>
+                    ) : (() => {
+                      const truth = JSON.stringify(w.status ?? {});
+                      const has = w.status != null && truth !== "{}" && truth !== "null";
+                      return has ? (
+                        <CapCard name="🔒 调试真值（上帝视角）" kind="仅人看 · 非 perceive" accent="text-neutral-300"
+                          desc="世界本地的完整真值，只给人看的调试台、不进 perceive——ANIMA 看不到（棋类世界里如 FEN / 棋子真实位置）"
+                          schema={w.status ?? {}} />
+                      ) : (
+                        <div className="text-xs text-neutral-500">(此世界没有 /status 上帝视角，如 sim-desk)</div>
+                      );
+                    })()}
                   </Region>
                 </div>
               </div>
