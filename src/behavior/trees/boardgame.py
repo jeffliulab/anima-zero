@@ -37,6 +37,7 @@ class BoardGameBlackboard(Blackboard):
     adapter: Any = None                     # BoardGameAdapter（注入的棋种适配器）
     belief: Any = None                      # ANIMA 期望的局面/信念（如 chess.Board），每拍用视觉校准；与世界真值分家
     my_side: str = "white"                  # "white" / "black"
+    prims: set = field(default_factory=set)  # 世界支持的物理原语名集合（move/remove/place…）——喂给 adapter.expand_move 决定怎么拆
     narrate: Optional[Callable] = None      # (uci, san, state) -> 一句解说
     observed: Optional[dict] = None         # 最近一帧看到的摆放（调试/状态用）
     pending_observed: Optional[dict] = None  # 正在多帧确认的"候选变化"
@@ -74,29 +75,13 @@ class Perceive(Behaviour):
 
     def update(self) -> Status:
         c = self.bb
-        # 1) 拿画面 + 角色 meta（世界异常 → 计 perceive_fail；到上限就判 world_unreachable 退出，不再静默空转）
+        # 1) 拿画面（世界异常 → 计 perceive_fail；到上限就判 world_unreachable 退出，不再静默空转）。
+        #    新框架：世界只给画面、不给 controllers/phase——轮到谁走 / 是否终局，全由大脑看信念判（见 MyTurn/ShouldStop）。
         try:
             obs = c.world.perceive()
         except Exception as e:
             return self._perceive_failed(c, type(e).__name__)
         img = obs.image_png
-        state = obs.state or {}
-        # 通用：每拍从 controllers 重新认"我执哪方"（不在脑里存死执方）。没有 anima 席位=被换下→如实退出。
-        ctrl = state.get("controllers") or {}
-        mine = next((s for s in ctrl if ctrl.get(s) == "anima"), None)
-        if ctrl and mine is None:
-            c.exit_reason = "seat_lost"
-            return Status.SUCCESS                        # 本拍进 decide → ShouldStop 据 exit_reason 收尾
-        if mine is not None:
-            c.my_side = mine
-        # 跟着世界 phase 走（phase 是唯一从静态画面看不出来的东西，所以世界要明确声明）：
-        #   not_start → 这拍 idle（不驱动世界，等开赛）；game_over → 收尾退出；in_game → 继续往下看。
-        phase = state.get("phase")
-        if phase == "not_start":
-            return Status.RUNNING
-        if phase == "game_over" and not c.exit_reason:
-            c.exit_reason = "phase:game_over"
-            return Status.SUCCESS
         if img is None:
             return self._perceive_failed(c, "无画面")
 
@@ -245,7 +230,14 @@ class EngineMove(Behaviour):
 
 
 class SendMove(Behaviour):
-    """发命令给世界，看 success/fail。成功推进 state；失败累计、下拍重试。"""
+    """把一手棋拆成【物理原语序列】逐个发给世界，全成功才推进信念；任一步失败累计、下拍重看重走。
+
+    数据世界（只有 move）→ 序列就一条 move（世界数据层自己吞吃子/易位/升变）；
+    物理世界（move+remove+place）→ 吃子=remove+move、易位=move王+move车、升变=move+remove+place。
+    拆解在 adapter.expand_move（按 c.prims 世界能力），本节点只负责【逐个执行 + 看成败】。
+    注：v0.4 用世界返回的 ok/fail 判每步（如 gazebo 的落点自检）；基于视觉的逐步核对 + 精细的
+    部分失败恢复（如 remove 成了但 move 没成）留 0.5——这里失败就整条重来。
+    """
 
     def __init__(self, bb: BoardGameBlackboard):
         super().__init__("send_move")
@@ -257,19 +249,23 @@ class SendMove(Behaviour):
             # 单写者令牌失效（新局已开 / 被接管）→ 不再向同一世界发命令。不计失败（这不是出错）。
             return Status.FAILURE
         mv = c.pending_move
-        cmd = c.adapter.to_command(c.belief, mv)
-        res = c.world.invoke("move", **cmd)
-        if res.ok:
-            uci = c.adapter.move_uci(mv)
-            c.adapter.apply(c.belief, mv)
-            c.act_fail = 0
-            c.move_count += 1
-            c.last_uci, c.last_san = uci, c.pending_san
-            c.pending_move = None
-            return Status.SUCCESS
-        c.act_fail += 1
-        c.emit("fail", f"这手没走成（{res.message}），重看重走。")
-        return Status.FAILURE
+        ops = c.adapter.expand_move(c.belief, mv, c.prims)
+        for i, op in enumerate(ops):
+            kind = op["op"]
+            args = {k: v for k, v in op.items() if k != "op"}
+            res = c.world.invoke(kind, **args)
+            if not res.ok:
+                c.act_fail += 1
+                step = f"（第 {i + 1}/{len(ops)} 步 {kind}）" if len(ops) > 1 else ""
+                c.emit("fail", f"这手没走成{step}：{res.message}，重看重走。")
+                return Status.FAILURE
+        uci = c.adapter.move_uci(mv)
+        c.adapter.apply(c.belief, mv)
+        c.act_fail = 0
+        c.move_count += 1
+        c.last_uci, c.last_san = uci, c.pending_san
+        c.pending_move = None
+        return Status.SUCCESS
 
 
 class Narrate(Behaviour):
@@ -313,17 +309,25 @@ def _template_narrator(uci: str, san: str, my_side: str) -> str:
 
 
 def start_boardgame(shared_world, adapter, my_side: str,
-                    narrate: Optional[Callable] = None, display_name: str = "Chess Mode") -> BehaviorRunner:
+                    narrate: Optional[Callable] = None, display_name: str = "Chess Mode",
+                    belief: Any = None) -> BehaviorRunner:
     """组装一局对弈：黑板 + 对弈树 + 发动机(BehaviorRunner)。返回 runner，调用方 manager.start 后台跑。
 
     对弈用**自己的短超时世界 client**（不碰共享的长超时 client）：这样协作式取消最多等一个短超时
     就能退出、且 join 不会被旧局的长往返拖住；退出时 teardown 关掉它。
+
+    `belief` 可传入一个预先 seed 好的信念局面（如 record 子技能读盘后的结果 / 半路接手）；不传则从开局起。
+    `prims` 从世界能力查询得到（有哪些物理原语），喂给 adapter.expand_move 决定怎么拆一手棋。
     """
     game_world = RemoteWorld(getattr(shared_world, "name", "world"),
                              getattr(shared_world, "base", ""), timeout=config.GAME_WORLD_TIMEOUT)
+    try:
+        prims = {t.name for t in shared_world.capabilities().tools}
+    except Exception:  # noqa: BLE001
+        prims = {"move"}
     bb = BoardGameBlackboard(
-        world=game_world, adapter=adapter, belief=adapter.new_state(),
-        my_side=my_side, narrate=narrate or _template_narrator, display_name=display_name,
+        world=game_world, adapter=adapter, belief=belief if belief is not None else adapter.new_state(),
+        my_side=my_side, prims=prims, narrate=narrate or _template_narrator, display_name=display_name,
     )
     side_cn = messages.SIDE_NAMES.get(my_side, my_side)
     bb.emit("start", f"进入 {display_name}，我执{side_cn[0]}。")

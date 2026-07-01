@@ -51,6 +51,9 @@ class CountTools:
     def to_command(self, state, move):
         return {}
 
+    def expand_move(self, state, move, prims):
+        return [{"op": "move"}]                     # 一步棋 = 一条 move 原语（无额外参数）
+
     def move_uci(self, move):
         return f"step{move['step']}"
 

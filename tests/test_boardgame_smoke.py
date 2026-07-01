@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import chess
+from py_trees.common import Status
 
 import render  # world/sim-chess/render.py（conftest 加进 sys.path）
 from anima import config
@@ -47,9 +48,45 @@ class FakeWorld:
                             tools=[ToolSpec("move", "落子", {}, "tool")])
 
 
-def _bb(world: FakeWorld, belief: chess.Board, my_side="white") -> boardgame.BoardGameBlackboard:
+class FakePhysWorld(FakeWorld):
+    """物理世界的假模型：除 move 外还支持 remove/place，并记录收到的原语序列。
+
+    关键区别（模拟 gazebo-chess）：物理 `move` 是**裸搬子**（不判棋规——大脑才是裁判），
+    所以「吃子」必须先 remove(to) 再 move；数据世界的 move 才判合法（见 FakeWorld）。
+    """
+
+    def __init__(self, board: chess.Board | None = None):
+        super().__init__(board)
+        self.name = "fake-phys"
+        self.ops: list[tuple[str, dict]] = []
+
+    def invoke(self, name: str, **cmd) -> ActionResult:
+        self.ops.append((name, cmd))
+        if name == "move":
+            f, t = chess.parse_square(cmd["from"]), chess.parse_square(cmd["to"])
+            p = self.board.remove_piece_at(f)
+            if p is None:
+                return ActionResult(ok=False, message=f"{cmd['from']} 空")
+            self.board.set_piece_at(t, p)                      # 裸搬，不判棋规
+            return ActionResult(ok=True, message="moved")
+        if name == "remove":
+            self.board.remove_piece_at(chess.parse_square(cmd["square"]))
+            return ActionResult(ok=True, message="removed")
+        if name == "place":
+            self.board.set_piece_at(chess.parse_square(cmd["square"]),
+                                    chess.Piece.from_symbol(cmd["piece"]))
+            return ActionResult(ok=True, message="placed")
+        return ActionResult(ok=False, message=f"未知命令 {name}")
+
+    def capabilities(self) -> Capabilities:
+        return Capabilities(name=self.name, version="test",
+                            tools=[ToolSpec(n, n, {}, "tool") for n in ("move", "remove", "place")])
+
+
+def _bb(world: FakeWorld, belief: chess.Board, my_side="white", prims=None) -> boardgame.BoardGameBlackboard:
     return boardgame.BoardGameBlackboard(
         world=world, adapter=ChessAdapter(), belief=belief, my_side=my_side,
+        prims=set(prims) if prims else set(),
         narrate=lambda uci, san, st: f"走了 {san}", display_name="Chess Mode",
     )
 
@@ -103,40 +140,44 @@ def test_anima_resigns_when_hopelessly_lost():
     assert "end" in _channels(bb)
 
 
-def test_tree_idles_when_world_phase_not_start():
-    """world 还没开赛（perceive.state.phase=not_start）→ 树这拍 idle：不走子、不结束，等世界开局。"""
+def test_sendmove_physical_capture_removes_then_moves():
+    """新框架核心：物理世界(move+remove+place)吃子 = 先 remove(to) 再 move。
+    大脑当裁判（只发合法手），世界只做裸搬——所以吃子得先把被吃子拿走，再搬子过去。"""
+    # 白 d4 兵可吃黑 e5 兵
+    fen = "rnbqkbnr/pppp1ppp/8/4p3/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 0 2"
+    world = FakePhysWorld(chess.Board(fen))
+    bb = _bb(world, chess.Board(fen), my_side="white", prims={"move", "remove", "place"})
+    bb.pending_move = chess.Move.from_uci("d4e5")
+    bb.pending_san = "dxe5"
+
+    assert boardgame.SendMove(bb).update() == Status.SUCCESS
+    assert [n for n, _ in world.ops] == ["remove", "move"], "吃子应拆成 remove(e5) + move(d4->e5)"
+    assert world.board.piece_at(chess.E5) == chess.Piece(chess.PAWN, chess.WHITE), "白兵应到 e5"
+    assert bb.move_count == 1 and bb.act_fail == 0
+
+
+def test_sendmove_data_world_capture_is_single_move():
+    """数据世界(只有 move)吃子 = 一条 move（世界数据层自己吞）——框架靠能力查询自动区分，无世界名特判。"""
+    fen = "rnbqkbnr/pppp1ppp/8/4p3/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 0 2"
+    world = FakeWorld(chess.Board(fen))            # 只有 move、且 move 判合法
+    bb = _bb(world, chess.Board(fen), my_side="white", prims={"move"})
+    bb.pending_move = chess.Move.from_uci("d4e5")
+    bb.pending_san = "dxe5"
+
+    assert boardgame.SendMove(bb).update() == Status.SUCCESS
+    assert world.board.piece_at(chess.E5) == chess.Piece(chess.PAWN, chess.WHITE)
+    assert bb.move_count == 1
+
+
+def test_perceive_no_image_counts_fail_not_crash():
+    """世界给不出画面（img=None）→ 计一次感知失败、这拍跳过，不崩、不静默前进（不再读 phase/controllers）。"""
     world = FakeWorld()
-    world.perceive = lambda: Observation(
-        image_png=None, state={"controllers": {"white": "anima", "black": "bot"}, "phase": "not_start"})
+    world.perceive = lambda: Observation(image_png=None, state={})
     bb = _bb(world, ChessAdapter().new_state(), my_side="white")
     tree = boardgame.build_boardgame_tree(bb)
     tree.tick_once()
-    assert bb.move_count == 0 and not bb.finished, "未开赛时树挂起：不驱动世界、不收尾"
-
-
-def test_tree_exits_when_world_phase_game_over():
-    """world 判终局（phase=game_over）→ 树收尾退出（世界是终局权威，树跟着 phase 反应）。"""
-    world = FakeWorld()
-    world.perceive = lambda: Observation(
-        image_png=None, state={"controllers": {"white": "anima", "black": "bot"}, "phase": "game_over"})
-    bb = _bb(world, ChessAdapter().new_state(), my_side="white")
-    tree = boardgame.build_boardgame_tree(bb)
-    tree.tick_once()
-    assert bb.finished and "end" in _channels(bb), "world game_over → 树收尾"
-
-
-def test_seat_lost_makes_anima_exit():
-    """对局中 world 把 ANIMA 的席位换给别人（perceive 的 controllers 里 my_side != anima）→
-    ANIMA 读这组角色 meta、通用地如实退出（不写棋种特判）。"""
-    world = FakeWorld()
-    world.perceive = lambda: Observation(   # world 说：白方现在是 human（我被换下了）
-        image_png=None, state={"controllers": {"white": "human", "black": "bot"}})
-    bb = _bb(world, ChessAdapter().new_state(), my_side="white")
-    tree = boardgame.build_boardgame_tree(bb)
-
-    tree.tick_once()
-    assert bb.exit_reason == "seat_lost", "读 world 的 controllers 发现自己被换下 → seat_lost"
-    assert bb.finished and "end" in _channels(bb)
+    assert bb.move_count == 0 and not bb.finished
+    assert bb.perceive_fail == 1
 
 
 def test_terminal_checkmate_is_detected_and_exits():
