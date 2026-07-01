@@ -172,13 +172,19 @@ class Orchestrator:
         #   有工具 → 可在需要时调用;空工具(如 camera 摄像头世界)→ 只能看 + 聊,无任何动作可调。
         # capabilities() 在 RemoteWorld 侧已缓存,这里再读一次不发 HTTP。
         try:
-            has_tools = bool(world.capabilities().tools)
+            caps = world.capabilities()
+            has_tools = bool(caps.tools)
+            guidance = caps.guidance
         except Exception:
-            has_tools = True   # 读不到能力时不臆断"不可操作",保持旧行为(由后续真正调用兜底)
+            has_tools, guidance = True, ""   # 读不到能力时不臆断"不可操作",保持旧行为(由后续真正调用兜底)
         if has_tools:
             s = base + f"\n\n当前已连接世界「{world.name}」,你能在需要时调用它的工具。"
         else:
             s = base + f"\n\n当前已连接世界「{world.name}」,它没有提供任何可调动作——你只能看画面、和用户聊,无法操作它。"
+        # 世界的「说明书」(guidance = MCP prompt)：世界自我介绍怎么跟它打交道。让大脑保持纯净通用——
+        # 不为某个世界写死逻辑，改由世界自述、大脑读了就懂（这正是 v0.4 的核心：world 交声明、脑当引擎）。
+        if guidance:
+            s += f"\n\n【这个世界的说明书（它自己写的，教你怎么跟它打交道）】\n{guidance}"
         if self._launchable(world):
             s += messages.SKILL_AVAILABILITY_HINT
         return s
