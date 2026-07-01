@@ -241,14 +241,45 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
           </div>
         </section>
 
+        {data?.engines && data.engines.length > 0 && (
+          <section>
+            <h2 className="mb-2 text-sm font-medium text-neutral-400">引擎 server（棋理顾问 · MCP 纯计算 tool server）</h2>
+            <div className="space-y-3">
+              {data.engines.map((e) => (
+                <div key={e.name} className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">🧮 {e.name} <span className="text-xs text-neutral-500">engine</span></span>
+                    <span className={`text-xs ${e.online ? "text-green-400" : "text-red-400"}`}>● {e.online ? "在线" : "离线"}</span>
+                  </div>
+                  <div className="mt-1 text-[11px] text-neutral-500">{e.url}</div>
+                  <div className="mt-1 text-[12px] text-neutral-400">{e.note}</div>
+                  <div className="mt-3 space-y-3">
+                    <Region title="TOOLS" color="#3fb950" sub="引擎声明、大脑经 MCP 调用的能力（给 FEN → 求最优着 / 评估 / 合法着）">
+                      {e.tools.map((t) => (
+                        <CapCard key={t.name} name={t.name} desc={t.description} schema={t.parameters} accent="text-green-300" />
+                      ))}
+                      {e.tools.length === 0 && <div className="text-xs text-neutral-500">(离线，拿不到能力)</div>}
+                    </Region>
+                    <div className="text-[11px] text-neutral-500">
+                      （engine 和 world 在 MCP 里都是"一个 server"；engine 是纯计算的，所以<b>只有 TOOLS</b>——无 STATE(感知/resource)、无 GUIDANCE(说明书/prompt)，那是 world 才有的。）
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section>
-          <h2 className="mb-2 text-sm font-medium text-neutral-400">AWI 实时流量(双向:ANIMA → 世界 / 世界 → ANIMA)</h2>
+          <h2 className="mb-2 text-sm font-medium text-neutral-400">AWI 实时流量(ANIMA ↔ 世界 / 引擎，走 MCP)</h2>
           <p className="mb-2 text-xs leading-relaxed text-neutral-500">
             每条都拆成两半:<span className="text-neutral-300">→ 出方向</span>(ANIMA 发的命令+参数)、
-            <span className="text-neutral-300">← 回方向</span>(世界返回的:图片字节数、ok/message、回程 state)。
-            <b className="text-neutral-400">审计点</b>:<code className="rounded bg-neutral-800 px-1">perceive</code> 的回程 state 可含<b>角色 meta</b>
-            (如 controllers=谁坐哪一方),但<b>绝不许夹带棋盘真值</b>(FEN/局面/着法);疑似含真值才标 <span className="text-amber-400">⚠</span>,请人工确认。
-            (世界的完整真值在上面每张卡片的<b>「真值(调试)」</b>里——那是走 /status 的人类上帝视角,ANIMA 看不到。)
+            <span className="text-neutral-300">← 回方向</span>(返回的:图片字节数、ok/message、回程 state / 引擎着法)。
+            这里能看到大脑↔世界的 <code className="rounded bg-neutral-800 px-1">capabilities/perceive/invoke</code>，也能看到大脑↔引擎的
+            <code className="rounded bg-neutral-800 px-1">best_move</code>(world=chess-engine)。
+            <b className="text-neutral-400">审计点</b>:<code className="rounded bg-neutral-800 px-1">perceive</code> 的回程 state 是世界给脑的结构化数据，
+            <b>绝不许夹带棋盘真值</b>(FEN/局面/着法)；sim-chess 简化后 state 就是空 {"{}"}，真值只走 /status。疑似含真值才标 <span className="text-amber-400">⚠</span>，请人工确认。
+            (世界的完整真值在上面每张卡片的<b>STATUS</b>里——那是走 /status 的人类上帝视角,ANIMA 看不到。)
           </p>
           <div
             ref={termRef}

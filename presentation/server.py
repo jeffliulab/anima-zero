@@ -282,7 +282,38 @@ def status() -> dict:
 
 
 # ---- AWI 仪表盘(/awi 页面用)----
-@app.get("/api/awi")  # 世界(含能力清单 + 实时 state)+ 大脑 + 会话 + 统计
+# ---- 引擎 MCP server（棋理顾问）：若配了 ANIMA_ENGINE_URL 就在 /awi 展示它的 tools ----
+# engine 和 world 在 MCP 里都是"一个 server"，只是 engine 是纯计算 tool server：只有 tools，
+# 无感知(resource)、无说明书(prompt)。工具清单不变 → 成功后缓存。
+_ENGINE_URL = (os.getenv("ANIMA_ENGINE_URL") or "").strip() or None
+_engine_cache: dict | None = None
+
+
+def _engine_servers() -> list[dict]:
+    if not _ENGINE_URL:
+        return []
+    info = {"name": "chess-engine", "url": _ENGINE_URL, "kind": "engine", "online": False, "tools": [],
+            "note": "棋理顾问 · 纯计算 MCP tool server：给 FEN 求最优着 / 评估 / 合法着。无感知(resource)、无说明书(prompt)。"}
+    global _engine_cache
+    if _engine_cache is not None:
+        info.update(_engine_cache)
+        return [info]
+    from anima.mcp_bridge import run_sync, with_session
+
+    async def op(s):
+        tl = await s.list_tools()
+        return [{"name": t.name, "description": t.description or "", "parameters": t.inputSchema or {}}
+                for t in tl.tools]
+    try:
+        tools = run_sync(with_session(_ENGINE_URL.rstrip("/") + "/mcp", op, 5.0), 8.0)
+        _engine_cache = {"online": True, "tools": tools}   # 只缓存成功；离线不缓存→下次重试
+        info.update(_engine_cache)
+    except Exception:
+        info["online"] = False
+    return [info]
+
+
+@app.get("/api/awi")  # 世界 + 引擎 server(含能力清单 + 实时 state)+ 大脑 + 会话 + 统计
 def awi_overview() -> dict:
     worlds_info = []
     for name in registry.list_worlds():
@@ -317,7 +348,8 @@ def awi_overview() -> dict:
             except Exception:
                 info["online"] = False
         worlds_info.append(info)
-    return {"worlds": worlds_info, "brains": list_brains(), "sessions": store.list(), "stats": awi_log.stats()}
+    return {"worlds": worlds_info, "engines": _engine_servers(),
+            "brains": list_brains(), "sessions": store.list(), "stats": awi_log.stats()}
 
 
 @app.get("/api/awi/events")  # AWI 实时流量(SSE):ANIMA↔世界 每次调用

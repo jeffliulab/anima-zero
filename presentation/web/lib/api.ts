@@ -78,8 +78,19 @@ export type AwiWorld = {
   state_schema: Record<string, string>; // 世界【声明】的 perceive.state 契约（键→含义）——面板据此显示，不靠缓存上次 perceive 猜
   guidance: string; // 世界的「说明书」（= MCP prompt）：自我介绍怎么跟它打交道；大脑读它进系统提示，面板第四区显示
 };
+// 引擎 server（棋理顾问）：MCP 里和 world 一样都是"一个 server"，只是纯计算 tool server——只有 tools，
+// 无感知(resource)、无说明书(prompt)。
+export type AwiEngine = {
+  name: string;
+  url: string;
+  kind: string;      // "engine"
+  online: boolean;
+  tools: AwiTool[];
+  note: string;      // 一句说明：纯计算、无感知/无说明书
+};
 export type AwiOverview = {
   worlds: AwiWorld[];
+  engines?: AwiEngine[];   // 配了 ANIMA_ENGINE_URL 才有；否则引擎在后端进程内、不作为独立 server 展示
   brains: Brain[];
   sessions: SessionSummary[];
   stats: { total: number; by_method: Record<string, number>; by_world: Record<string, number> };

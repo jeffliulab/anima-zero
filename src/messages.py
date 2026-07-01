@@ -49,10 +49,9 @@ def narrate_template(san: str, uci: str) -> str:
     return f"我走 {san}（{uci}）。"
 
 
-def game_start_reply(display_name: str, my_side_cn: str, opponent: str, defaulted: bool = False) -> str:
-    """进入对弈的确认语（enter_skill / 认领席位成功后）。opponent 由世界返回的 controllers 决定。"""
-    opp = OPPONENT_NAMES.get(opponent, opponent)
-    return f"好，进入 {display_name} ♟ 我执{my_side_cn}、对手是{opp}，棋盘在面板里实时更新。"
+def game_start_reply(display_name: str, my_side_cn: str, opponent: str = "", defaulted: bool = False) -> str:
+    """进入对弈的确认语。对手是谁（人点子 / 内置电脑）是世界网页上配的事，大脑不知道、也不假装知道。"""
+    return f"好，进入 {display_name} ♟ 我执{my_side_cn}，你走另一方（人点子或内置电脑都行），棋盘在面板里实时更新。"
 
 
 # ---- 通用技能生命周期文案（orchestrator 用，任何技能通用、不带任务专属词）----

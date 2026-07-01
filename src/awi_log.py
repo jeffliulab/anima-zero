@@ -1,6 +1,7 @@
-"""AWI 流量记账(ANIMA 端):记录每一次脑↔世界的调用,给 /awi 仪表盘的实时 terminal + 统计用。
+"""AWI 流量记账(ANIMA 端):记录每一次脑↔世界 / 脑↔引擎的调用,给 /awi 仪表盘的实时 terminal + 统计用。
 
-这是把「AWI 这套接口」可视化:谁(哪个世界)被调了什么(capabilities / perceive / invoke)、耗时多少。
+这是把「AWI 这套接口」(现经 **MCP**)可视化:谁(哪个 server:世界 or 引擎)被调了什么、耗时多少。
+world 的 capabilities / perceive / invoke、engine 的 best_move（world 字段记成 "chess-engine"）都会出现在这里。
 """
 from __future__ import annotations
 

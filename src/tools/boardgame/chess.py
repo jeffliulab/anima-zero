@@ -82,17 +82,26 @@ class ChessAdapter:
         return self.ai.best_move(state)
 
     def _engine_move_mcp(self, state: chess.Board) -> Optional[chess.Move]:
-        """经 MCP 向独立引擎 server 求最优着（给 FEN → 回 UCI）。连不上 / 出错 → None（上层下拍重试）。"""
+        """经 MCP 向独立引擎 server 求最优着（给 FEN → 回 UCI）。连不上 / 出错 → None（上层下拍重试）。
+        这一路 MCP 流量也记进 awi_log（world="chess-engine"），在 /awi 流量区能看到大脑↔引擎的调用。"""
+        import time as _t
+
+        from ... import awi_log
         from ...mcp_bridge import run_sync, with_session
         url = self._engine_url.rstrip("/") + "/mcp"
 
         async def op(s):
             r = await s.call_tool("best_move", {"fen": state.fen()})
             return "".join(c.text for c in r.content if getattr(c, "text", None))
+        t0 = _t.perf_counter()
         try:
             uci = run_sync(with_session(url, op, 15.0), 20.0)
-        except Exception:
+        except Exception as e:
+            awi_log.record("chess-engine", "best_move", f"best_move → 失败({type(e).__name__})",
+                           (_t.perf_counter() - t0) * 1000)
             return None
+        awi_log.record("chess-engine", "best_move", f"best_move → {uci or '无子可走'}",
+                       (_t.perf_counter() - t0) * 1000, resp={"uci": uci})
         return chess.Move.from_uci(uci) if uci else None
 
     # ---- 终局 / 轮次 ----
