@@ -1,3 +1,6 @@
 [submodule "world/sim-desk"]
 	path = world/sim-desk
 	url = git@github.com:jeffliulab/sim-desk.git
+[submodule "world/soma-zero"]
+	path = world/soma-zero
+	url = git@github.com:jeffliulab/soma-zero.git
