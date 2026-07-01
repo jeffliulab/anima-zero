@@ -126,6 +126,66 @@ class ChessAdapter:
             cmd["promotion"] = chess.piece_symbol(move.promotion)  # 'q'/'r'/'b'/'n'
         return cmd
 
+    # ---- 把一手逻辑棋拆成物理原语序列（按世界支持的原语） ----
+    def expand_move(self, state: chess.Board, move: chess.Move, prims: set) -> list[dict]:
+        b = state
+        frm = chess.square_name(move.from_square)
+        to = chess.square_name(move.to_square)
+        piece = b.piece_at(move.from_square)
+        letter = _vision.LETTER[piece.piece_type] if piece else None
+        promo = chess.piece_symbol(move.promotion) if move.promotion else None
+
+        # 数据世界（无 remove）：一步 move，吃子/易位/过路兵/升变全靠世界数据层一步吞。
+        if "remove" not in prims:
+            cmd = {"op": "move", "from": frm, "to": to, "piece": letter}
+            if promo:
+                cmd["promotion"] = promo
+            return [cmd]
+
+        # 物理世界（有 remove）：真拆成一连串原子物理动作。
+        ops: list[dict] = []
+        # 王车易位 = 王移 + 车移（不是吃子，单独处理）
+        if b.is_castling(move):
+            ops.append({"op": "move", "from": frm, "to": to, "piece": letter})
+            rank = chess.square_rank(move.from_square)
+            rf, rt = ((7, 5) if b.is_kingside_castling(move) else (0, 3))
+            ops.append({"op": "move",
+                        "from": chess.square_name(chess.square(rf, rank)),
+                        "to": chess.square_name(chess.square(rt, rank)), "piece": "R"})
+            return ops
+        # 先把被吃的子移走：过路兵的被吃兵不在 to 格（在 to 同列、from 同行），普通吃子在 to 格。
+        if b.is_en_passant(move):
+            cap = chess.square(chess.square_file(move.to_square), chess.square_rank(move.from_square))
+            ops.append({"op": "remove", "square": chess.square_name(cap)})
+        elif b.is_capture(move):
+            ops.append({"op": "remove", "square": to})
+        # 走这一步
+        ops.append({"op": "move", "from": frm, "to": to, "piece": letter})
+        # 升变：把落到底线的兵换成新子（移走兵 + 摆上新子）；世界若没有 place 就退化成给 move 带 promotion 标记。
+        if promo:
+            if "place" in prims:
+                ops.append({"op": "remove", "square": to})
+                ops.append({"op": "place", "square": to, "piece": promo.upper()})
+            else:
+                ops[-1]["promotion"] = promo
+        return ops
+
+    # ---- 从一帧画面构造信念局面（半路接手 / 开局 seed）----
+    def seed_from_vision(self, image_png: bytes, side_to_move: str = "white") -> chess.Board:
+        placement = self.read_board(image_png)          # {square(0..63): 符号}，只含有子的格
+        b = chess.Board(None)                            # 空盘
+        for sq, sym in placement.items():
+            try:
+                b.set_piece_at(sq, chess.Piece.from_symbol(sym))
+            except (ValueError, KeyError):
+                continue                                 # 认到非法符号（如空格模板）→ 跳过
+        b.turn = chess.WHITE if side_to_move == "white" else chess.BLACK
+        try:
+            b.set_castling_fen("KQkq")                   # python-chess 只保留与实际 K/R 位置一致的易位权
+        except Exception:  # noqa: BLE001
+            b.set_castling_fen("-")
+        return b
+
     def move_uci(self, move: chess.Move) -> str:
         return move.uci()
 

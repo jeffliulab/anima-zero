@@ -32,6 +32,14 @@ class BoardGameAdapter(Protocol):
     def my_turn(self, state: Any, my_side: str) -> bool: ...     # state 轮到 my_side 了吗
     def side_to_move(self, state: Any) -> str: ...              # "white"/"black"——替对弈树黑板算 turn，避免它直接碰棋规则
     def to_command(self, state: Any, move: Any) -> dict: ...     # move → {from,to,piece,promotion}
+    # 把一手「逻辑棋」拆成「物理原语序列」，按世界支持的原语 prims（工具名集合，如 {"move","remove","place"}）决定拆多细：
+    #   仅有 move（数据世界，如 sim-chess）→ [move]，吃子/易位/过路兵/升变都靠世界数据层一步吞；
+    #   有 remove/place（物理世界，如 gazebo-chess）→ 真拆（吃子=remove+move、过路兵=remove被吃兵+move、
+    #   易位=move王+move车、升变=move+remove+place新子）。每个原语 = {"op": "move|remove|place", ...参数}。
+    #   靠「世界有哪些原语」判，不靠世界名——这是「框架不被某个世界特例污染」的关键。
+    def expand_move(self, state: Any, move: Any, prims: set) -> list[dict]: ...
+    # 从一帧画面构造「信念局面」（半路接手 / 开局 seed）。轮到谁走图上看不出，由调用方给（默认白先）。
+    def seed_from_vision(self, image_png: bytes, side_to_move: str = "white") -> Any: ...
     def move_uci(self, move: Any) -> str: ...                    # 给日志/状态用
     def describe(self, state: Any, move: Any) -> str: ...        # 可读着法名（给解说）
     def evaluate(self, state: Any) -> int: ...                  # 我方视角形势评分(厘兵)，给认输/求和判断
