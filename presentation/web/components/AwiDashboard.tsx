@@ -140,8 +140,8 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
           <b className="text-neutral-200">核心跨线动作</b>（协议骨架，每个世界都一样）：
           <code className="mx-1 rounded bg-neutral-800 px-1">capabilities</code>(声明 tools)、
           <code className="mx-1 rounded bg-neutral-800 px-1">perceive</code>(看：画面 + 结构化 state)、
-          <code className="mx-1 rounded bg-neutral-800 px-1">invoke</code>(调一个 tool，如 take_seat / start_game / move / resign)。
-          下面每张世界卡片分三区：<b className="text-neutral-200">TOOLS</b>(能力) / <b className="text-neutral-200">STATE</b>(随画面给脑的结构化状态) / <b className="text-neutral-200">STATUS</b>(仅人看的调试真值·上帝视角)，都是"<b>这个世界</b>声明/持有的"，各世界各异。
+          <code className="mx-1 rounded bg-neutral-800 px-1">invoke</code>(调一个 tool，如 move)。接口走标准 <b className="text-neutral-200">MCP</b>：tools=动作、resource=感知、prompt=说明书。
+          下面每张世界卡片分四区：<b className="text-neutral-200">TOOLS</b>(能力) / <b className="text-neutral-200">STATE</b>(随画面给脑的结构化状态) / <b className="text-neutral-200">STATUS</b>(仅人看的调试真值·上帝视角) / <b className="text-neutral-200">GUIDANCE</b>(世界自己写的说明书)，都是"<b>这个世界</b>声明/持有的"，各世界各异。
         </p>
         <p className="text-xs leading-relaxed text-neutral-500">
           注意：<b>skill（剧本）和行为树是 ANIMA 脑内的结构、不在 AWI 线上</b>（世界根本不知道它们存在），所以这里看不到——
@@ -222,6 +222,18 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
                         <div className="text-xs text-neutral-500">(此世界没有 /status 上帝视角，如 sim-desk)</div>
                       );
                     })()}
+                  </Region>
+
+                  <Region title="GUIDANCE" color="#f59e0b" sub="世界的「说明书」（= MCP prompt）——它自己写的、教大脑怎么跟它打交道；大脑读它进系统提示">
+                    {!w.online ? (
+                      <div className="text-xs text-neutral-500">(离线，拿不到说明书)</div>
+                    ) : w.guidance ? (
+                      <div className="whitespace-pre-wrap rounded-md border border-neutral-800 bg-neutral-950/50 p-2 text-[12px] leading-relaxed text-amber-100/80">
+                        {w.guidance}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-neutral-500">(此世界没有提供说明书)</div>
+                    )}
                   </Region>
                 </div>
               </div>

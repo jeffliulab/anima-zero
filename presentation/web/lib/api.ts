@@ -76,6 +76,7 @@ export type AwiWorld = {
   state: Record<string, unknown> | null; // ANIMA 随画面一起经 perceive 收到的结构化状态（world→脑 唯一结构化通道，脑能看）
   status: Record<string, unknown> | null; // 世界自身真实状态，仅人看：走世界本地 /status（人的上帝视角），ANIMA 看不到，如 FEN
   state_schema: Record<string, string>; // 世界【声明】的 perceive.state 契约（键→含义）——面板据此显示，不靠缓存上次 perceive 猜
+  guidance: string; // 世界的「说明书」（= MCP prompt）：自我介绍怎么跟它打交道；大脑读它进系统提示，面板第四区显示
 };
 export type AwiOverview = {
   worlds: AwiWorld[];

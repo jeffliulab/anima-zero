@@ -289,7 +289,7 @@ def awi_overview() -> dict:
         w = registry.get(name)
         online = w.online() if hasattr(w, "online") else True
         info = {"name": name, "url": getattr(w, "base", ""), "online": online,
-                "version": "", "tools": [], "state": None, "status": None, "state_schema": {}}
+                "version": "", "tools": [], "state": None, "status": None, "state_schema": {}, "guidance": ""}
         if online:
             try:
                 caps = w.capabilities()  # 命中握手缓存,不再问世界(见 RemoteWorld.capabilities)
@@ -300,6 +300,8 @@ def awi_overview() -> dict:
                 ]
                 # state_schema = 世界【声明】的 perceive.state 契约(键名+含义)。面板据此显示,不靠缓存 perceive 猜。
                 info["state_schema"] = caps.state_schema
+                # guidance = 世界的「说明书」(= MCP prompt)。面板第四区 GUIDANCE 显示;大脑也读它进系统提示。
+                info["guidance"] = caps.guidance
                 # status = 世界自身的真实状态(仅人看的调试台,走世界本地 /status,人的上帝视角),绝不给 ANIMA。
                 # 这跟 ANIMA 的 perceive 明确分开:sim-chess 的真值(局面/轮次/胜负)藏在 /status、绝不进 perceive。
                 # 没有 /status 的世界(如 sim-desk,它的 perceive 本就是真值)→ 回退到 perceive 的 state。
