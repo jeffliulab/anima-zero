@@ -56,6 +56,11 @@ def health() -> dict:
     return {"ok": True, "arm_ready": world.ready}
 
 
+@app.get("/status")  # 人类调试台·世界真值（上帝视角）：走世界本地，不进 AWI、绝不给 ANIMA
+def status() -> dict:
+    return world.debug_state()
+
+
 # ===== 人类页 / 流（世界本地，不进 AWI）=====
 @app.get("/stream")
 async def stream() -> StreamingResponse:

@@ -199,19 +199,25 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
                   </Region>
 
                   <Region title="STATE" color="#58a6ff" sub="两条通道：① 随画面给脑的结构化 state（脑能看）；② 仅人看的调试真值（脑看不到）">
-                    <CapCard name="perceive.state" kind="给脑 · 随画面" accent="text-sky-300"
-                      desc="世界经 perceive 随画面一起给 ANIMA 的结构化状态——各世界自定义（这就是 world→脑 的唯一结构化通道，脑确实收到）"
-                      schema={w.state ?? {}} />
-                    {(() => {
-                      const truth = JSON.stringify(w.status ?? {});
-                      const seen = JSON.stringify(w.state ?? {});
-                      const hidden = truth !== seen && truth !== "{}" && truth !== "null";
-                      return hidden ? (
-                        <CapCard name="🔒 调试真值（上帝视角）" kind="仅人看 · 非 perceive" accent="text-neutral-300"
-                          desc="世界本地的完整真值，只给人看的调试台、不进 perceive——ANIMA 看不到（棋类世界里如 FEN）"
-                          schema={w.status ?? {}} />
-                      ) : null;
-                    })()}
+                    {!w.online ? (
+                      <div className="text-xs text-neutral-500">(离线，拿不到 state)</div>
+                    ) : (
+                      <>
+                        <CapCard name="perceive.state" kind="给脑 · 随画面" accent="text-sky-300"
+                          desc="世界经 perceive 随画面给 ANIMA 的结构化状态。下面是世界【声明】的契约（键→含义），由模块声明、不是缓存的上次值；绝不含棋盘真值。"
+                          schema={w.state_schema && Object.keys(w.state_schema).length ? w.state_schema : (w.state ?? {})} />
+                        {(() => {
+                          const truth = JSON.stringify(w.status ?? {});
+                          const seen = JSON.stringify(w.state ?? {});
+                          const hidden = truth !== seen && truth !== "{}" && truth !== "null";
+                          return hidden ? (
+                            <CapCard name="🔒 调试真值（上帝视角）" kind="仅人看 · 非 perceive" accent="text-neutral-300"
+                              desc="世界本地的完整真值，只给人看的调试台、不进 perceive——ANIMA 看不到（棋类世界里如 FEN / 棋子真实位置）"
+                              schema={w.status ?? {}} />
+                          ) : null;
+                        })()}
+                      </>
+                    )}
                   </Region>
                 </div>
               </div>

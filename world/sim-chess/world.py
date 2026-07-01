@@ -243,7 +243,12 @@ class SimChessWorld:
     # ================= AWI 能力声明 =================
     def capabilities(self) -> dict:
         # 角色就座靠 take_seat 工具（其 seat 枚举即可选角色）；不再单独声明 seats（已删的死机制）。
-        return {"name": "sim-chess", "version": WORLD_VERSION, "tools": _TOOLS}
+        # state_schema：声明 perceive.state 的键与含义，给 /awi 面板读（不靠缓存猜）；真值（局面/FEN）走 /status、不进此。
+        return {"name": "sim-chess", "version": WORLD_VERSION, "tools": _TOOLS,
+                "state_schema": {
+                    "controllers": "谁坐哪一方：{white, black} → human | anima | bot | null(空席)",
+                    "phase": "对局阶段：not_start | in_game | game_over",
+                }}
 
     # ================= 看（perceive 的回程：画面 + 极简 state） =================
     def render_image(self):

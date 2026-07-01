@@ -32,6 +32,8 @@ CONTEXT_TOKEN_BUDGET = _i("ANIMA_CONTEXT_BUDGET", "6000")  # 上下文滑窗 tok
 # ---- 世界客户端 / 会话 / AWI 日志 ----
 WORLD_TIMEOUT = _f("ANIMA_WORLD_TIMEOUT", "30")
 WORLD_PROBE_TIMEOUT = _f("ANIMA_WORLD_PROBE_TIMEOUT", "1.5")
+# 世界本地 /status(人类调试台真值)的超时:有的世界现算真值(如 gazebo-chess 抓一段 gz 位姿)比 /health 慢,给它宽一点。
+WORLD_STATUS_TIMEOUT = _f("ANIMA_WORLD_STATUS_TIMEOUT", "5")
 TITLE_MAX_LEN = _i("ANIMA_TITLE_MAX_LEN", "24")
 AWI_LOG_MAXLEN = _i("ANIMA_AWI_LOG_MAXLEN", "400")
 AWI_POLL_INTERVAL_S = _f("ANIMA_AWI_POLL_INTERVAL_S", "0.25")

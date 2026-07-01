@@ -53,6 +53,10 @@ class Capabilities:
     name: str
     version: str
     tools: list[ToolSpec]
+    # state_schema：世界【声明】自己 perceive 的 state 里有哪些键、各是什么含义（键名→一句话）。
+    # 给 /awi 面板读——面板据此显示「这个世界的 state 契约」，离线也知道、不靠缓存上次 perceive 猜。
+    # 世界没声明 → {}。绝不含棋盘真值（真值走世界本地 /status，不进 perceive）。
+    state_schema: dict = field(default_factory=dict)
     # 注：「角色/席位」不另设一套声明——世界若有可担任的角色，就在 tools 里声明一个就座类工具
     #   （如 sim-chess 的 take_seat，枚举里列出可选角色），ANIMA 调它来就座；"当前谁坐哪一席" 经 perceive
     #   的 state.controllers 读。（曾经的 Seat/seats/claim 声明已删——和 take_seat 工具重复，没接线、是死的。）

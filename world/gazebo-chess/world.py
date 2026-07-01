@@ -57,6 +57,13 @@ MOVE_TOOL = {
 RESIGN_TOOL = {"name": "resign", "description": "认输，结束这局。", "parameters": {"type": "object", "properties": {}, "required": []}, "kind": "tool"}
 _TOOLS = [TAKE_SEAT_TOOL, START_GAME_TOOL, MOVE_TOOL, RESIGN_TOOL]
 
+# perceive 的 state 契约声明（键名 + 一句含义）——由世界【模块声明】，给 /awi 面板读；
+# 这样面板不靠「缓存上一次 perceive」猜，离线也知道这世界 state 长什么样。绝不含棋盘真值（真值走 /status）。
+STATE_SCHEMA = {
+    "controllers": "谁坐哪一方：{white, black} → human | anima | bot | null(空席)",
+    "phase": "对局阶段：not_start | in_game | game_over",
+}
+
 # 停臂驻位（让出俯视相机视野；和 _tune_camera 一致）
 PARK = [float(x) for x in os.getenv("GZCHESS_PARK_JOINTS", "2.5,0,0,0,0,0").split(",")]
 
@@ -93,7 +100,22 @@ class GazeboChessWorld:
 
     # ---------- AWI ----------
     def capabilities(self) -> dict:
-        return {"name": "gazebo-chess", "version": config.WORLD_VERSION, "tools": _TOOLS}
+        return {"name": "gazebo-chess", "version": config.WORLD_VERSION, "tools": _TOOLS,
+                "state_schema": STATE_SCHEMA}
+
+    def debug_state(self) -> dict:
+        """【人类调试台专用·世界真值，绝不给 ANIMA】走世界本地 /status。
+        返回 perceive 故意藏起来的东西：不光谁坐哪方/阶段，还有**每个棋子现在真实在哪格 + 精确位姿**。
+        这就是人的『上帝视角』，和 perceive（只给 controllers/phase）明确分开。"""
+        with self.lock:
+            self._spin(4)
+            pieces = {}
+            for nm, pp in spawn.all_model_poses(window_s=0.8).items():   # 短窗口:调试台要快点响应
+                if not nm.startswith("piece_"):
+                    continue
+                pieces[nm] = {"square": geometry.base_xy_to_square(pp[0], pp[1]),
+                              "xyz": [round(v, 4) for v in pp]}
+            return {"controllers": dict(self.controllers), "phase": self.phase, "pieces": pieces}
 
     def observe(self) -> tuple[dict, bytes | None]:
         """给画面（俯视相机帧 PNG）+ 极简 state。绝不给棋盘真值。"""

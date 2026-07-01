@@ -40,7 +40,8 @@ class RemoteWorld:  # 实现 World 协议(AWI 客户端)
         ]
         awi_log.record(self.name, "capabilities", "capabilities() 握手", (time.perf_counter() - t0) * 1000,
                        resp={"n_tools": len(tools), "tools": [t.name for t in tools]})
-        self._caps = Capabilities(name=r["name"], version=r.get("version", ""), tools=tools)
+        self._caps = Capabilities(name=r["name"], version=r.get("version", ""), tools=tools,
+                                  state_schema=r.get("state_schema", {}) or {})
         return self._caps
 
     def refresh(self) -> None:
@@ -74,9 +75,11 @@ class RemoteWorld:  # 实现 World 协议(AWI 客户端)
     def debug_state(self) -> dict | None:
         """【人类调试台专用·世界真值】给 /awi 仪表盘看的世界真实状态——走世界本地 `/status`（非 AWI 通道，
         **绝不给 ANIMA**）。这正好跟 ANIMA 的 perceive（受限、可能故意藏真值）分开：调试台是人的上帝视角。
-        世界没有 /status（如 sim-desk）→ 回 None，调用方回退到 perceive 的 state。不记 AWI 流量。"""
+        世界没有 /status（如 sim-desk）→ 回 None，调用方回退到 perceive 的 state。不记 AWI 流量。
+        用较长超时（不是 ONLINE_PROBE 的短超时）：有的世界 /status 要现算真值（如 gazebo-chess 抓一段 gz 位姿），
+        比 /health 慢；这是给人看的调试台、不影响主流程，等得起。"""
         try:
-            r = self._client.get(self.base + "/status", timeout=ONLINE_PROBE_TIMEOUT)
+            r = self._client.get(self.base + "/status", timeout=config.WORLD_STATUS_TIMEOUT)
             if r.status_code == 200:
                 return r.json()
         except Exception:

@@ -27,7 +27,16 @@ class CameraWorld:
     # ================= AWI 能力声明 =================
     def capabilities(self) -> dict:
         # 零 tools：这个世界只能看、不能操作。空列表即契约——大脑据此知道无动作可调。
-        return {"name": "camera", "version": WORLD_VERSION, "tools": []}
+        # state_schema：声明 perceive.state 的键与含义，给 /awi 面板读（不靠缓存猜）。
+        return {"name": "camera", "version": WORLD_VERSION, "tools": [],
+                "state_schema": {
+                    "selected": "当前选中的摄像头 id（人在世界页选，null=未选）",
+                    "online": "当前是否有画面（选中且抓到帧）",
+                    "available": "可选摄像头 id 列表",
+                    "resolution": "生效分辨率 [宽, 高]",
+                    "fps": "帧率",
+                    "format": "像素格式（如 MJPG）",
+                }}
 
     # ================= 看（perceive 的回程：画面 + 极简 state） =================
     def observe(self) -> tuple[dict, bytes | None]:
