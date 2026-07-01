@@ -66,6 +66,32 @@ def approach_xyz(name: str) -> tuple[float, float, float]:
     return bx, by, bz + config.APPROACH_SAFE_M
 
 
+def reservoir_spawn_xyz() -> tuple[float, float, float]:
+    """备用子区里 spawn 一枚新子时的落点（棋盘上表面高度，子底面贴面）。"""
+    return config.RESERVOIR_ORIGIN_X, config.RESERVOIR_ORIGIN_Y, config.BOARD_ORIGIN_Z
+
+
+def reservoir_grasp_xyz() -> tuple[float, float, float]:
+    """从备用子区夹起一枚子时夹爪中心的目标点（备用子腰高处）。"""
+    rx, ry, rz = reservoir_spawn_xyz()
+    return rx, ry, rz + config.PIECE_GRASP_WAIST_M
+
+
+def discard_slot_xyz(index: int) -> tuple[float, float, float]:
+    """第 index 个弃子槽的落点（棋盘上表面高度）：沿 x 排开，满一排(DISCARD_SLOTS_PER_ROW)沿 y 外扩下一排。"""
+    row = index // config.DISCARD_SLOTS_PER_ROW
+    col = index % config.DISCARD_SLOTS_PER_ROW
+    x = config.DISCARD_ORIGIN_X + col * config.DISCARD_PITCH_M
+    y = config.DISCARD_ORIGIN_Y + row * config.DISCARD_PITCH_M
+    return x, y, config.BOARD_ORIGIN_Z
+
+
+def discard_grasp_xyz(index: int) -> tuple[float, float, float]:
+    """把子放进第 index 个弃子槽时夹爪中心的目标点（槽位腰高处）。"""
+    dx, dy, dz = discard_slot_xyz(index)
+    return dx, dy, dz + config.PIECE_GRASP_WAIST_M
+
+
 def base_xy_to_square(bx: float, by: float) -> str | None:
     """world(MoveIt规划帧) (x,y) → 最近的棋格名；落在棋盘范围外返回 None。
     给 0.5 的位置评估/失败诊断用（一个子歪了/压线了，判它名义上属于哪格）。"""

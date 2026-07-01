@@ -90,6 +90,19 @@ def spawn_piece(square: str, color: str = "white", name: str | None = None) -> t
     return ok, out
 
 
+def spawn_piece_at(xyz: tuple[float, float, float], color: str = "white",
+                   name: str | None = None) -> tuple[bool, str]:
+    """在任意 world 坐标 spawn 一枚棋子（不绑格子）。给 place 从「备用子区」取新子用。
+    返回 (ok, name)（成功时第二项是模型名，供随后夹取）；失败时第二项是错误输出。"""
+    name = name or f"piece_res_{int(time.time() * 1000)}"
+    sdf, _ = models.piece_sdf(name, color)
+    ok, out = _create(sdf, name, tuple(xyz))
+    if ok:
+        _REGISTRY[name] = {"square": None, "color": color, "spawn_xyz": tuple(xyz)}
+        return True, name
+    return False, out
+
+
 def registry() -> dict[str, dict]:
     return dict(_REGISTRY)
 
