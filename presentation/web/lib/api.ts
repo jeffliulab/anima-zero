@@ -70,6 +70,7 @@ export type AwiTool = { name: string; description: string; kind: string; paramet
 export type AwiWorld = {
   name: string;
   url: string;
+  kind: string;      // "world"（有感知的现实：tools + resource + prompt 三原语齐）
   online: boolean;
   version: string;
   tools: AwiTool[];

@@ -319,7 +319,7 @@ def awi_overview() -> dict:
     for name in registry.list_worlds():
         w = registry.get(name)
         online = w.online() if hasattr(w, "online") else True
-        info = {"name": name, "url": getattr(w, "base", ""), "online": online,
+        info = {"name": name, "url": getattr(w, "base", ""), "kind": "world", "online": online,
                 "version": "", "tools": [], "state": None, "status": None, "state_schema": {}, "guidance": ""}
         if online:
             try:

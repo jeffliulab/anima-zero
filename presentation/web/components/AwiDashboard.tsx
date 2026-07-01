@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { getAwi, awiEventsUrl, AWI_LOG_SHOWN, POLL_AWI_MS, type AwiOverview } from "@/lib/api";
+import { getAwi, awiEventsUrl, AWI_LOG_SHOWN, POLL_AWI_MS, type AwiOverview, type AwiWorld, type AwiEngine, type AwiTool } from "@/lib/api";
 
 // 回方向(世界→ANIMA)的结构化返回；不同 method 用不同字段
 type Resp = {
@@ -101,6 +101,91 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+// 一张 server 卡（world / engine 通用）：MCP 里两者都是"一个 server"，区别只在填了哪几个原语。
+// 上半 = MCP 契约(脑经此调它)：Tools / Resource / Prompt；下半 = 带外(不走 MCP·普通 HTTP·仅人看/探活)。
+function ServerCard({ s }: { s: AwiWorld | AwiEngine }) {
+  const isEngine = s.kind === "engine";
+  const online = s.online;
+  const w = s as AwiWorld;
+  const stateSchema = w.state_schema;
+  const guidance = w.guidance ?? "";
+  const hasStatus =
+    w.status != null && JSON.stringify(w.status) !== "{}" && JSON.stringify(w.status) !== "null";
+  return (
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+      <div className="flex items-center justify-between">
+        <span className="font-medium">
+          {isEngine ? "🧮" : "🌐"} {s.name}{" "}
+          <span className="text-xs text-neutral-500">
+            {isEngine ? "engine server · 纯计算顾问" : `world server · 有感知的现实${w.version ? ` v${w.version}` : ""}`}
+          </span>
+        </span>
+        <span className={`text-xs ${online ? "text-green-400" : "text-red-400"}`}>● {online ? "在线" : "离线"}</span>
+      </div>
+      <div className="mt-1 text-[11px] text-neutral-500">{s.url}</div>
+
+      {/* ① MCP 契约：这个 server 经 MCP 对大脑声明的三原语 */}
+      <div className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">MCP 契约（脑经此调它）</div>
+      <div className="mt-1 space-y-3">
+        <Region title="Tools" color="#3fb950" sub="动作 · tools/list · tools/call">
+          {s.tools.map((t) => (
+            <CapCard key={t.name} name={t.name} kind={(t as AwiTool).kind} desc={t.description}
+              schema={t.parameters} accent="text-green-300" />
+          ))}
+          {s.tools.length === 0 && (
+            <div className="text-xs text-neutral-500">{online ? "(无动作，只读)" : "(离线，拿不到)"}</div>
+          )}
+        </Region>
+
+        <Region title="Resource" color="#58a6ff" sub="感知 · resources/read anima://observation">
+          {isEngine ? (
+            <div className="text-xs text-neutral-500">(无 · 纯计算 server 不感知世界，只给 FEN 算)</div>
+          ) : !online ? (
+            <div className="text-xs text-neutral-500">(离线，拿不到)</div>
+          ) : (
+            <CapCard name="anima://observation" kind="读一次给一份" accent="text-sky-300"
+              desc="世界经 MCP 给大脑的感知：一张离散画面快照(png) + 结构 state。下面是世界声明的 state 契约（键→含义），绝不含棋盘真值。"
+              schema={stateSchema && Object.keys(stateSchema).length ? stateSchema : (w.state ?? {})} />
+          )}
+        </Region>
+
+        <Region title="Prompt" color="#f59e0b" sub="说明书 · prompts/get &quot;guidance&quot;">
+          {isEngine ? (
+            <div className="text-xs text-neutral-500">(无 · engine 不需要说明书)</div>
+          ) : !online ? (
+            <div className="text-xs text-neutral-500">(离线，拿不到)</div>
+          ) : guidance ? (
+            <div className="whitespace-pre-wrap rounded-md border border-neutral-800 bg-neutral-950/50 p-2 text-[12px] leading-relaxed text-amber-100/80">
+              {guidance}
+            </div>
+          ) : (
+            <div className="text-xs text-neutral-500">(此世界没提供说明书)</div>
+          )}
+        </Region>
+      </div>
+
+      {/* ② 带外：不走 MCP，普通 HTTP，仅人看/探活 */}
+      <div className="mt-4 border-t border-neutral-800/70 pt-3">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-600">带外（不走 MCP · 普通 HTTP · 仅人看/探活）</div>
+        {isEngine ? (
+          <div className="mt-1 text-xs text-neutral-500">(engine 无带外：不渲染、不探活，只算。)</div>
+        ) : (
+          <div className="mt-1.5 space-y-1.5">
+            <div className="text-[12px] text-neutral-400">
+              🔒 <span className="text-neutral-300">调试真值 /status</span>（上帝视角，大脑绝对看不到，如 FEN/棋子真实位置）：
+              {hasStatus ? <Json value={w.status} /> : <span className="text-neutral-500"> (无 /status，如 sim-desk)</span>}
+            </div>
+            <div className="text-[11px] leading-relaxed text-neutral-500">
+              🎬 视频流 <code className="rounded bg-neutral-800 px-1">/stream</code>：连续 MJPEG，给人看（≠ Resource 的离散快照）。
+              · 🔌 探活 <code className="rounded bg-neutral-800 px-1">/health</code>：右上角在线点就来自它。
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // embedded=true：内嵌在主页中间区（h-full 滚动、隐藏顶部回主界面导航）；false：作为 /awi 整页独立版。
 // onOpenLogs：内嵌时点正文里的 anima-logs 链接 → 切到内嵌 logs 视图（而非整页跳出 SPA）。
 export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedded?: boolean; onOpenLogs?: () => void }) {
@@ -136,12 +221,14 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
           )}
         </div>
         <p className="text-sm leading-relaxed text-neutral-400">
-          AWI 是「脑 ↔ 世界」的接口标准——全程 <b>脑发起、世界应答</b>（纯拉取，世界不主动推）。
-          <b className="text-neutral-200">核心跨线动作</b>（协议骨架，每个世界都一样）：
-          <code className="mx-1 rounded bg-neutral-800 px-1">capabilities</code>(声明 tools)、
-          <code className="mx-1 rounded bg-neutral-800 px-1">perceive</code>(看：画面 + 结构化 state)、
-          <code className="mx-1 rounded bg-neutral-800 px-1">invoke</code>(调一个 tool，如 move)。接口走标准 <b className="text-neutral-200">MCP</b>：tools=动作、resource=感知、prompt=说明书。
-          下面每张世界卡片分四区：<b className="text-neutral-200">TOOLS</b>(能力) / <b className="text-neutral-200">STATE</b>(随画面给脑的结构化状态) / <b className="text-neutral-200">STATUS</b>(仅人看的调试真值·上帝视角) / <b className="text-neutral-200">GUIDANCE</b>(世界自己写的说明书)，都是"<b>这个世界</b>声明/持有的"，各世界各异。
+          接口走标准 <b className="text-neutral-200">MCP</b>：ANIMA 是 <b>host</b>，连若干 <b className="text-neutral-200">server</b>（世界 + 引擎）——全程<b>脑发起、server 应答</b>。
+          每个 server 用 MCP 的<b className="text-neutral-200">三原语</b>自我描述：
+          <b className="text-green-300">Tools</b>(动作，<code className="mx-1 rounded bg-neutral-800 px-1">tools/call</code>)、
+          <b className="text-sky-300">Resource</b>(感知，<code className="mx-1 rounded bg-neutral-800 px-1">resources/read anima://observation</code> = 一张画面快照 + 结构 state)、
+          <b className="text-amber-300">Prompt</b>(说明书，<code className="mx-1 rounded bg-neutral-800 px-1">prompts/get guidance</code>)。
+          <b className="text-neutral-200">世界 server</b> = 三样都有的现实；<b className="text-neutral-200">引擎 server</b> = 只有 Tools 的纯计算顾问。
+          另有<b className="text-neutral-200">带外</b>（不走 MCP、普通 HTTP）：<code className="mx-1 rounded bg-neutral-800 px-1">/status</code>(上帝视角真值·仅人看)、
+          <code className="mx-1 rounded bg-neutral-800 px-1">/stream</code>(连续视频)、<code className="mx-1 rounded bg-neutral-800 px-1">/health</code>(探活)——每张卡下半单独一块。
         </p>
         <p className="text-xs leading-relaxed text-neutral-500">
           注意：<b>skill（剧本）和行为树是 ANIMA 脑内的结构、不在 AWI 线上</b>（世界根本不知道它们存在），所以这里看不到——
@@ -163,112 +250,22 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
 
         {data && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat label="AWI 总调用" value={data.stats.total} />
-            <Stat label="世界" value={data.worlds.length} />
-            <Stat
-              label="大脑(已配置 / 总)"
-              value={`${data.brains.filter((b) => b.available).length}/${data.brains.length}`}
-            />
-            <Stat label="会话" value={data.sessions.length} />
+            <Stat label="server 总数" value={data.worlds.length + (data.engines?.length ?? 0)} />
+            <Stat label="世界 server" value={data.worlds.length} />
+            <Stat label="引擎 server" value={data.engines?.length ?? 0} />
+            <Stat label="AWI 调用" value={data.stats.total} />
           </div>
         )}
 
         <section>
-          <h2 className="mb-2 text-sm font-medium text-neutral-400">已连接的世界（它声明的 tools）</h2>
+          <h2 className="mb-2 text-sm font-medium text-neutral-400">
+            servers（世界 + 引擎；MCP 里都是"一个 server"，只是填了哪几个原语不同）
+          </h2>
           <div className="space-y-3">
-            {data?.worlds.map((w) => (
-              <div key={w.name} className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">
-                    🌐 {w.name} <span className="text-xs text-neutral-500">v{w.version}</span>
-                  </span>
-                  <span className={`text-xs ${w.online ? "text-green-400" : "text-red-400"}`}>
-                    ● {w.online ? "在线" : "离线"}
-                  </span>
-                </div>
-                <div className="mt-1 text-[11px] text-neutral-500">{w.url}</div>
-
-                {/* 风格2 · 色条分区：TOOLS(绿) / STATE(蓝) / STATUS(紫)——三个独立指标区 */}
-                <div className="mt-3 space-y-3">
-                  <Region title="TOOLS" color="#3fb950" sub="世界声明、ANIMA 调用的能力（含 schema）">
-                    {w.tools.map((t) => (
-                      <CapCard key={t.name} name={t.name} kind={t.kind} desc={t.description}
-                        schema={t.parameters} accent="text-green-300" />
-                    ))}
-                    {w.tools.length === 0 && <div className="text-xs text-neutral-500">(离线，拿不到能力)</div>}
-                  </Region>
-
-                  <Region title="STATE" color="#58a6ff" sub="随画面给脑的结构化 state（脑能看）——世界声明的契约，绝不含棋盘真值">
-                    {!w.online ? (
-                      <div className="text-xs text-neutral-500">(离线，拿不到 state)</div>
-                    ) : (
-                      <CapCard name="perceive.state" kind="给脑 · 随画面" accent="text-sky-300"
-                        desc="世界经 perceive 随画面给 ANIMA 的结构化状态。下面是世界【声明】的契约（键→含义），由模块声明、不是缓存的上次值；绝不含棋盘真值。"
-                        schema={w.state_schema && Object.keys(w.state_schema).length ? w.state_schema : (w.state ?? {})} />
-                    )}
-                  </Region>
-
-                  <Region title="STATUS" color="#a371f7" sub="仅人看的调试真值（上帝视角）——走世界本地 /status，绝不进 perceive、ANIMA 看不到">
-                    {!w.online ? (
-                      <div className="text-xs text-neutral-500">(离线，拿不到 status)</div>
-                    ) : (() => {
-                      const truth = JSON.stringify(w.status ?? {});
-                      const has = w.status != null && truth !== "{}" && truth !== "null";
-                      return has ? (
-                        <CapCard name="🔒 调试真值（上帝视角）" kind="仅人看 · 非 perceive" accent="text-neutral-300"
-                          desc="世界本地的完整真值，只给人看的调试台、不进 perceive——ANIMA 看不到（棋类世界里如 FEN / 棋子真实位置）"
-                          schema={w.status ?? {}} />
-                      ) : (
-                        <div className="text-xs text-neutral-500">(此世界没有 /status 上帝视角，如 sim-desk)</div>
-                      );
-                    })()}
-                  </Region>
-
-                  <Region title="GUIDANCE" color="#f59e0b" sub="世界的「说明书」（= MCP prompt）——它自己写的、教大脑怎么跟它打交道；大脑读它进系统提示">
-                    {!w.online ? (
-                      <div className="text-xs text-neutral-500">(离线，拿不到说明书)</div>
-                    ) : w.guidance ? (
-                      <div className="whitespace-pre-wrap rounded-md border border-neutral-800 bg-neutral-950/50 p-2 text-[12px] leading-relaxed text-amber-100/80">
-                        {w.guidance}
-                      </div>
-                    ) : (
-                      <div className="text-xs text-neutral-500">(此世界没有提供说明书)</div>
-                    )}
-                  </Region>
-                </div>
-              </div>
-            ))}
+            {data?.worlds.map((w) => <ServerCard key={`w:${w.name}`} s={w} />)}
+            {data?.engines?.map((e) => <ServerCard key={`e:${e.name}`} s={e} />)}
           </div>
         </section>
-
-        {data?.engines && data.engines.length > 0 && (
-          <section>
-            <h2 className="mb-2 text-sm font-medium text-neutral-400">引擎 server（棋理顾问 · MCP 纯计算 tool server）</h2>
-            <div className="space-y-3">
-              {data.engines.map((e) => (
-                <div key={e.name} className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">🧮 {e.name} <span className="text-xs text-neutral-500">engine</span></span>
-                    <span className={`text-xs ${e.online ? "text-green-400" : "text-red-400"}`}>● {e.online ? "在线" : "离线"}</span>
-                  </div>
-                  <div className="mt-1 text-[11px] text-neutral-500">{e.url}</div>
-                  <div className="mt-1 text-[12px] text-neutral-400">{e.note}</div>
-                  <div className="mt-3 space-y-3">
-                    <Region title="TOOLS" color="#3fb950" sub="引擎声明、大脑经 MCP 调用的能力（给 FEN → 求最优着 / 评估 / 合法着）">
-                      {e.tools.map((t) => (
-                        <CapCard key={t.name} name={t.name} desc={t.description} schema={t.parameters} accent="text-green-300" />
-                      ))}
-                      {e.tools.length === 0 && <div className="text-xs text-neutral-500">(离线，拿不到能力)</div>}
-                    </Region>
-                    <div className="text-[11px] text-neutral-500">
-                      （engine 和 world 在 MCP 里都是"一个 server"；engine 是纯计算的，所以<b>只有 TOOLS</b>——无 STATE(感知/resource)、无 GUIDANCE(说明书/prompt)，那是 world 才有的。）
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
 
         <section>
           <h2 className="mb-2 text-sm font-medium text-neutral-400">AWI 实时流量(ANIMA ↔ 世界 / 引擎，走 MCP)</h2>
