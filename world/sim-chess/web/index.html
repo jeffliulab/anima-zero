@@ -179,8 +179,8 @@
   <div class="topbar">
     <div class="title">
       <h1>棋桌 · 一张能托管象棋 / 五子棋 / 围棋的世界 (AWI)</h1>
-      <div class="hint">我握着真棋盘，只给 ANIMA <b>看画面</b> + <b>一组角色 meta（谁坐哪方）+ 阶段（phase）</b>，不告诉它局面坐标。
-        配好双方（人 / ANIMA / 电脑）→ 开始。所有「切换类」操作要先暂停。轮到"人"那方：点起子格 → 点目标格走子。</div>
+      <div class="hint">我握着真棋盘，只给 ANIMA <b>看画面</b>——不告诉它局面/轮次/胜负。ANIMA 只有一个动作 <b>move</b>，看着走。
+        想让电脑陪下，就把「内置电脑」设成某一方；轮到人/ANIMA 那方：点起子格 → 点目标格走子。</div>
     </div>
     <button class="theme-btn" id="themeToggle" title="切换主题">
       <span id="themeIcon">🌙</span><span class="lbl" id="themeLbl">暗色</span>
@@ -195,7 +195,7 @@
           <img id="view" width="512" height="512" alt="board" src="/stream" />
         </div>
       </div>
-      <div id="sel">配好双方后点「开始」。</div>
+      <div id="sel">点起子格 → 点目标格走子。</div>
     </div>
 
     <!-- 侧栏：控制 + 状态 + AWI 流量 -->
@@ -211,19 +211,13 @@
         </div>
         <div class="ctl-row">
           <span class="seat-group">
-            <span class="lbl">白方</span>
-            <select id="white" class="seat"><option value="">空</option><option value="human">人</option><option value="anima">ANIMA</option><option value="bot">电脑</option></select>
-          </span>
-          <span class="seat-group">
-            <span class="lbl">黑方</span>
-            <select id="black" class="seat"><option value="">空</option><option value="human">人</option><option value="anima">ANIMA</option><option value="bot">电脑</option></select>
+            <span class="lbl">内置电脑走</span>
+            <select id="botSide"><option value="">无</option><option value="white">白方</option><option value="black">黑方</option></select>
           </span>
         </div>
         <div class="actions">
-          <button class="primary" id="start">开始</button>
           <button class="primary" id="newgame">开新局</button>
           <button class="danger" id="resign">认输</button>
-          <button id="reset">复位</button>
         </div>
       </div>
       <div class="statusbar" id="status">状态加载中…</div>
@@ -239,7 +233,7 @@
   const selInfo = document.getElementById("sel");
   const $ = (id) => document.getElementById(id);
   let fromSq = null;
-  let game = "chess", phase = "not_start";
+  let game = "chess", over = false;
   const GRID = { gomoku: 15, go: 19 };   // 落子类棋种的格数（世界自己的 UI，可写死）
 
   // ---------- 主题切换（明亮木纹 / 精致暗色，localStorage 记住）----------
@@ -265,26 +259,19 @@
     if (!r.ok) selInfo.textContent = "切棋种失败：" + (r.message || "");
   });
 
-  // ---------- 配座 / 换人：改下拉即生效（空/人/ANIMA/电脑）----------
-  function setSeat(seat) {
-    const v = $(seat).value;   // "" = 空
-    fetch("/set_controller", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ seat, controller: v || null }) })
-      .then(r => r.json()).then(r => { if (!r.ok) selInfo.textContent = "配座失败：" + (r.message || ""); });
-  }
-  $("white").addEventListener("change", () => setSeat("white"));
-  $("black").addEventListener("change", () => setSeat("black"));
+  // ---------- 内置电脑走哪方：改下拉即生效（无/白/黑）----------
+  $("botSide").addEventListener("change", () => {
+    fetch("/bot_side", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ side: $("botSide").value || null }) })
+      .then(r => r.json()).then(r => { if (!r.ok) selInfo.textContent = "配内置电脑失败：" + (r.message || ""); });
+  });
 
-  // ---------- 生命周期按钮 ----------
+  // ---------- 按钮：开新局 / 认输 ----------
   const post = (url, body) => fetch(url, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : { method: "POST" });
-  $("start").onclick = async () => { const r = await (await post("/start")).json(); if (!r.ok) selInfo.textContent = "开始失败：" + (r.message || ""); };
-  $("newgame").onclick = $("start").onclick;
-  $("reset").onclick = () => { fromSq = null; post("/reset"); };
+  $("newgame").onclick = () => { fromSq = null; post("/reset"); };
   $("resign").onclick = () => {
-    // 认输哪方：认输那个由"人"控制的一方（人 vs ANIMA/电脑 的常见情形）
-    const c = window._ctrl || {};
-    const side = c.white === "human" ? "white" : (c.black === "human" ? "black" : null);
-    if (!side) { selInfo.textContent = "没有「人」坐着，认输按钮无效。"; return; }
+    // 认输方 = 非内置电脑的那方（人/ANIMA 在下的一方）；没配内置电脑则默认白方认输。
+    const side = ($("botSide").value === "white") ? "black" : "white";
     post("/resign", { side });
   };
 
@@ -300,7 +287,7 @@
     return "abcdefgh"[col] + (8 - row);   // 白方在下
   }
   view.addEventListener("click", async (e) => {
-    if (phase !== "in_game") { selInfo.textContent = "现在不在比赛中（先配好双方点开始）。"; return; }
+    if (over) { selInfo.textContent = "对局已结束，点「开新局」再来。"; return; }
     if (game === "gomoku" || game === "go") {
       const { row, col } = rc(e, GRID[game]);
       const res = await (await post("/place", { row, col })).json();
@@ -319,41 +306,24 @@
     selInfo.textContent = res.ok ? "点一下选起子格…" : ("走子无效，圈已消失，请重新点起子格。（" + (res.message || "") + "）");
   });
 
-  // ---------- 按阶段显隐/禁用控件 ----------
-  function applyPhase(s) {
-    const both = s.controllers && s.controllers.white && s.controllers.black;
-    const inGame = s.phase === "in_game";
-    // 切换类（棋种/配座）只在非比赛中可用
-    $("gameSel").disabled = inGame;
-    $("white").disabled = inGame; $("black").disabled = inGame;
-    // 生命周期按钮按阶段显隐
-    const show = (id, on) => $(id).classList.toggle("hidden", !on);
-    show("start", s.phase === "not_start");
-    show("newgame", s.phase === "game_over");
-    show("resign", s.phase === "in_game");
-    $("start").disabled = !both;   // 双方配齐才能开始
+  // ---------- 认输按钮：仅未终局可用 ----------
+  function applyState(s) {
+    $("resign").disabled = !!s.over;
   }
 
-  const PHASE_CN = { not_start: "未开始", in_game: "比赛中", game_over: "对弈结束" };
-  const CTRL_CN = { human: "人", anima: "ANIMA", bot: "电脑", null: "空", "": "空" };
+  const SIDE_CN = { white: "白方", black: "黑方", "": "无", null: "无" };
   async function refreshStatus() {
     try {
       const s = await (await fetch("/status")).json();
-      game = s.game || "chess"; phase = s.phase || "not_start";
-      window._ctrl = s.controllers || {};
-      const c = s.controllers || {};
+      game = s.game || "chess"; over = !!s.over;
       if ($("gameSel").value !== game && document.activeElement !== $("gameSel")) $("gameSel").value = game;
-      // 席位下拉跟随世界真值（ANIMA take_seat、别处换人都会反映）——不打断正在操作的那个
-      for (const seat of ["white", "black"]) {
-        const el = $(seat), v = c[seat] || "";
-        if (el.value !== v && document.activeElement !== el) el.value = v;
-      }
-      const over = s.phase === "game_over" ? `· 结果 ${s.result || "—"}（可「开新局」或在此复盘）` : "";
+      const bs = s.bot_side || "";
+      if ($("botSide").value !== bs && document.activeElement !== $("botSide")) $("botSide").value = bs;
+      const res = s.over ? `· 结果 ${s.result || "—"}（点「开新局」再来）` : "";
       $("status").innerHTML =
-        `<span class="phase p-${phase}">${PHASE_CN[phase] || phase}</span>` +
-        `棋种:<b>${game}</b> · 白:<b>${CTRL_CN[c.white] ?? c.white}</b> 黑:<b>${CTRL_CN[c.black] ?? c.black}</b>` +
-        ` · 轮到 <b>${s.turn}</b> · 第 ${s.fullmove} 手 ${over}<br>最近：${s.last || "—"}`;
-      applyPhase(s);
+        `棋种:<b>${game}</b> · 内置电脑:<b>${SIDE_CN[bs] ?? bs}</b>` +
+        ` · 轮到 <b>${s.turn}</b> · 第 ${s.fullmove} 手 ${res}<br>最近：${s.last || "—"}`;
+      applyState(s);
     } catch (e) {}
   }
   refreshStatus(); setInterval(refreshStatus, 1000);

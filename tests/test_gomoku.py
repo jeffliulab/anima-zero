@@ -41,7 +41,7 @@ def test_bot_plays_legal_near_existing():
     assert col == "white" and g.grid[r][c] == "white", "bot 应真落一个合法白子"
 
 
-def test_world_switch_changes_render_but_state_stays_role_and_phase():
+def test_world_switch_changes_render_state_stays_empty():
     w = SimChessWorld()
     assert w.status()["game"] == "chess"
     chess_img = w.render_image()
@@ -50,16 +50,13 @@ def test_world_switch_changes_render_but_state_stays_role_and_phase():
     gomoku_img = w.render_image()
     assert gomoku_img.size != chess_img.size, "切棋种后渲染画面应明显不同"
     state, _ = w.observe()
-    assert set(state.keys()) == {"controllers", "phase"}, "state 只给角色 meta + phase，不泄露棋种/局面真值"
+    assert state == {}, "state 空，绝不泄露棋种/局面真值（大脑靠看画面察觉换棋了）"
 
 
 def test_world_anima_chess_move_fails_on_gomoku_board():
     # 五子棋对局中，ANIMA 的象棋走法应失败（它要靠画面自己察觉换棋了）
     w = SimChessWorld()
-    w.switch_game("gomoku")
-    w.set_controller("white", "anima")
-    w.set_controller("black", "bot")
-    w.start_game()                          # 进 in_game，才到棋种守卫
+    w.switch_game("gomoku")                  # 换成五子棋（无需选边/开局）
     res = w.invoke("move", **{"from": "e2", "to": "e4"})
     assert res["ok"] is False, "ANIMA 的象棋走法在五子棋盘上应失败"
 
@@ -68,8 +65,5 @@ def test_world_human_click_guarded_on_gomoku():
     # 五子棋对局中，象棋两步点击不能在隐藏象棋盘上误走子（棋种守卫，与 _move/human_place 对称）
     w = SimChessWorld()
     w.switch_game("gomoku")
-    w.set_controller("white", "human")
-    w.set_controller("black", "human")
-    w.start_game()
     res = w.human_click_move("e2", "e4")
     assert res["ok"] is False and "象棋" in res["message"], "五子棋对局中 human_click_move 应被棋种守卫挡住"
