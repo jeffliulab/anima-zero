@@ -9,6 +9,7 @@ state = 一个 python-chess Board（ANIMA 期望的局面）；世界才是唯�
 from __future__ import annotations
 
 import importlib.util
+import os
 from typing import Optional
 
 import chess
@@ -32,10 +33,16 @@ class ChessAdapter:
     world_action = "move"    # 这盘棋需要世界提供的落子能力（用于能力判断，不在别处写死）
 
     def __init__(self, depth: int | None = None, time_limit: float | None = None) -> None:
-        self._engine = _load_engine()
-        depth = depth if depth is not None else config.CHESS_DEPTH
-        time_limit = time_limit if time_limit is not None else config.CHESS_TIME
-        self.ai = self._engine.AI(depth=depth, time_limit=time_limit)
+        # 引擎双路：配了 ANIMA_ENGINE_URL → 经 MCP 调独立引擎 server（棋理顾问，MCP 多 server 用法）；
+        # 没配 → 进程内加载引擎（默认；单测 / 无额外进程时用）。棋力升级只换背后的引擎，行为树/skill 不动。
+        self._engine_url = (os.getenv("ANIMA_ENGINE_URL") or "").strip() or None
+        if self._engine_url:
+            self._engine = self.ai = None
+        else:
+            self._engine = _load_engine()
+            depth = depth if depth is not None else config.CHESS_DEPTH
+            time_limit = time_limit if time_limit is not None else config.CHESS_TIME
+            self.ai = self._engine.AI(depth=depth, time_limit=time_limit)
 
     def new_state(self) -> chess.Board:
         return chess.Board()
@@ -70,7 +77,23 @@ class ChessAdapter:
 
     # ---- 引擎出手（ANIMA 自己的引擎，天生合法）----
     def engine_move(self, state: chess.Board) -> Optional[chess.Move]:
+        if self._engine_url:
+            return self._engine_move_mcp(state)
         return self.ai.best_move(state)
+
+    def _engine_move_mcp(self, state: chess.Board) -> Optional[chess.Move]:
+        """经 MCP 向独立引擎 server 求最优着（给 FEN → 回 UCI）。连不上 / 出错 → None（上层下拍重试）。"""
+        from ...mcp_bridge import run_sync, with_session
+        url = self._engine_url.rstrip("/") + "/mcp"
+
+        async def op(s):
+            r = await s.call_tool("best_move", {"fen": state.fen()})
+            return "".join(c.text for c in r.content if getattr(c, "text", None))
+        try:
+            uci = run_sync(with_session(url, op, 15.0), 20.0)
+        except Exception:
+            return None
+        return chess.Move.from_uci(uci) if uci else None
 
     # ---- 终局 / 轮次 ----
     def is_terminal(self, state: chess.Board) -> dict:
