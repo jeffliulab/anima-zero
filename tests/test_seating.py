@@ -10,7 +10,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from anima.awi import Capabilities, Observation, ToolSpec
-from anima.skills.boardgame import _chess_launch, build_registry
+from anima.skills.boardgame import _play_launch, _record_launch, build_registry
 from world import SimChessWorld   # conftest 把 world/sim-chess 加进了 sys.path
 
 
@@ -122,44 +122,43 @@ def _close(res):
         pass
 
 
-def test_launch_reads_existing_seat_when_already_set_up():
-    """人在世界页配好 + 开局（in_game、anima 已坐）→ 进入只需读旧座 + 起树（修 #6/#7）。"""
-    fw = _FakeWorld({"white": "anima", "black": "bot"}, start=True)
-    res = _chess_launch(build_registry().get("chess"), fw, llm=None, role=None)
+def test_play_launch_with_role_starts_tree_without_ceremony():
+    """新框架：给 role=white 就起对弈树；launcher 【不再】take_seat/start_game——
+    世界座位/开局是人在世界自己界面上做的（这就是 Jeff 要的「把开局仪式解耦出对弈」）。"""
+    fw = _FakeWorld({})                       # 两席全空、not_start
+    res = _play_launch(build_registry().get("chess"), fw, llm=None, role="white")
     try:
-        assert res["ok"] and res["my_side"] == "white" and res["opponent"] == "bot"
-        assert fw.w.phase == "in_game", "已在比赛中：不重复开局"
+        assert res["ok"] and res["my_side"] == "white" and "runner" in res
+        assert fw.w.controllers == {"white": None, "black": None}, "launcher 不碰世界座位"
+        assert fw.w.phase == "not_start", "launcher 不 start_game"
     finally:
         _close(res)
 
 
-def test_launch_auto_seats_and_starts_from_role():
-    """对手已配（bot），大脑给 role=white → launcher 自动 take_seat + start_game，一步开打。"""
-    fw = _FakeWorld({"black": "bot"})        # 只配了对手，anima 还没坐
-    res = _chess_launch(build_registry().get("chess"), fw, llm=None, role="white")
-    try:
-        assert res["ok"] and res["my_side"] == "white"
-        assert fw.w.controllers["white"] == "anima", "launcher 替它就座"
-        assert fw.w.phase == "in_game", "双方配齐 → 顺手开局"
-    finally:
-        _close(res)
-
-
-def test_launch_without_role_and_not_seated_asks_side():
-    """没就座又没给 role → 如实问执哪方（绝不默认选边）。"""
-    fw = _FakeWorld({"black": "bot"})
-    res = _chess_launch(build_registry().get("chess"), fw, llm=None, role=None)
+def test_play_launch_without_role_asks_side():
+    """没给 role → 如实问执哪方（绝不默认选边），不起 runner。"""
+    fw = _FakeWorld({})
+    res = _play_launch(build_registry().get("chess"), fw, llm=None, role=None)
     assert res["ok"] is False and "哪一方" in res["message"] and "runner" not in res
 
 
-def test_launch_waits_when_opponent_unset():
-    """给了 role 能就座，但对手席空着 → 进面板、就座、但不开局（空转等人配对手）。"""
-    fw = _FakeWorld({})                       # 两席全空
-    res = _chess_launch(build_registry().get("chess"), fw, llm=None, role="black")
+def test_record_launch_starts_runner():
+    """记录棋盘 sub-skill：进入即起一个读盘 runner（不需要 role）。"""
+    fw = _FakeWorld({})
+    res = _record_launch(build_registry().get("chess_record"), fw, llm=None)
     try:
-        assert res["ok"] and res["my_side"] == "black"
-        assert fw.w.controllers["black"] == "anima"
-        assert fw.w.phase == "not_start", "对手没配齐 → 不开局，树空转等开始"
-        assert "对手席还空着" in res["reply"]
+        assert res["ok"] and "runner" in res
     finally:
         _close(res)
+
+
+def test_family_launchable_by_capability_not_by_name():
+    """下棋家族靠【能力查询】挂载：play/record 需 move（sim-chess 有）→ 挂得上；
+    setup 需 place（sim-chess 没有）→ 挂不上。证明 setup 只在物理世界可用，且不靠世界名特判。"""
+    reg = build_registry()
+    assert reg.get("chess_setup").required_action == "place"
+    sim_tools = {t.name for t in _FakeWorld({}).capabilities().tools}
+    assert "place" not in sim_tools and "move" in sim_tools
+    launchable = {s.id for s in reg.launchable_on(_FakeWorld({}))}
+    assert {"chess", "chess_record"} <= launchable
+    assert "chess_setup" not in launchable, "sim-chess 没 place → 摆盘挂不上"
