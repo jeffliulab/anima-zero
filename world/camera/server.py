@@ -11,7 +11,6 @@ POST /select 那一下。这把"碰硬件"那一步交到了人手里。
 from __future__ import annotations
 
 import asyncio
-import base64
 import os
 
 from fastapi import FastAPI
@@ -19,43 +18,32 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
+from awi_mcp import build_awi_mcp
 from world import CameraWorld
 
 world = CameraWorld()
+
+# 世界说明书（= MCP prompt "guidance"；大脑读了就懂怎么跟我打交道）。
+CAMERA_GUIDANCE = (
+    "我是「摄像头」世界：一个只读的真实相机画面源。我没有任何可调动作（tools 为空）——你只能【看】、不能操作。\n"
+    "感知（perceive）给你当前选中摄像头的画面；state 为空 {}。没选摄像头 / 抓不到画面时我不给图（你会看到没有画面），"
+    "我绝不伪造一张。\n"
+    "想让我出画面，需要人在我的网页上从下拉框选一个摄像头（连接硬件那一步交给人做），不是你能调的。"
+)
 
 # 可调项 env 可覆盖（世界独立进程，不 import 脑 config；默认值在此一处）。
 STREAM_FPS = int(os.getenv("CAMERA_STREAM_FPS", "15"))   # 实时画面帧率
 
 _CORS = [o.strip() for o in os.getenv("ANIMA_CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()]
 
-app = FastAPI(title="camera world")
+# AWI（脑↔世界）现在走标准 MCP：世界作为 MCP server 挂在 /mcp（tools/resources/prompts）。
+mcp_asgi, mcp_lifespan = build_awi_mcp(world, guidance=CAMERA_GUIDANCE, server_name="camera")
+
+app = FastAPI(title="camera world", lifespan=mcp_lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=_CORS, allow_methods=["*"], allow_headers=["*"])
+app.mount("/mcp", mcp_asgi)   # 大脑经此 list_tools / read_resource(感知) / call_tool / get_prompt(说明书)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-# ===== AWI（脑↔世界）=====
-@app.get("/capabilities")
-def capabilities() -> dict:
-    return world.capabilities()       # tools 为空：大脑无动作可调
-
-
-@app.get("/perceive")
-def perceive() -> dict:
-    state, image_png = world.observe()
-    # 没选 / 抓不到画面 → image_b64 给 null（大脑侧据此知道"暂时没画面"），绝不伪造一张图。
-    return {"state": state,
-            "image_b64": base64.b64encode(image_png).decode() if image_png else None}
-
-
-class InvokeIn(BaseModel):
-    name: str
-    args: dict = {}
-
-
-@app.post("/invoke")
-def invoke(inp: InvokeIn) -> dict:
-    return world.invoke(inp.name, **inp.args)   # 本世界没有动作，一律拒绝
 
 
 @app.get("/health")

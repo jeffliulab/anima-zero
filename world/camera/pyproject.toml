@@ -13,7 +13,8 @@ dependencies = [
     "uvicorn>=0.32",
     "pydantic>=2.6",
     "opencv-python>=4.6",
+    "mcp>=1.2",         # 世界作 MCP server 暴露 AWI(tools/resources/prompts);挂在 /mcp
 ]
 
 [tool.setuptools]
-py-modules = ["server", "world", "capture", "v4l2_caps"]
+py-modules = ["server", "world", "capture", "v4l2_caps", "awi_mcp"]

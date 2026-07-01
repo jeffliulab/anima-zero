@@ -57,6 +57,10 @@ class Capabilities:
     # 给 /awi 面板读——面板据此显示「这个世界的 state 契约」，离线也知道、不靠缓存上次 perceive 猜。
     # 世界没声明 → {}。绝不含棋盘真值（真值走世界本地 /status，不进 perceive）。
     state_schema: dict = field(default_factory=dict)
+    # guidance：世界的「说明书」——一段自我介绍（我是什么世界、工具怎么用、state 啥意思、想干正事的正确姿势）。
+    # 对应 MCP 的 Prompt（世界经 prompts/get 提供）；大脑把它拼进系统提示，就"懂"这个陌生世界怎么打交道。
+    # 世界没提供 → ""。是让大脑保持纯净通用的关键：世界自我描述，大脑不为某个世界写死逻辑。
+    guidance: str = ""
     # 注：「角色/席位」不另设一套声明——世界若有可担任的角色，就在 tools 里声明一个就座类工具
     #   （如 sim-chess 的 take_seat，枚举里列出可选角色），ANIMA 调它来就座；"当前谁坐哪一席" 经 perceive
     #   的 state.controllers 读。（曾经的 Seat/seats/claim 声明已删——和 take_seat 工具重复，没接线、是死的。）
