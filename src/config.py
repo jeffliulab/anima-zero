@@ -30,10 +30,21 @@ MAX_STEPS = _i("ANIMA_MAX_STEPS", "8")                   # ReAct 主循环最多
 CONTEXT_TOKEN_BUDGET = _i("ANIMA_CONTEXT_BUDGET", "6000")  # 上下文滑窗 token 预算
 
 # ---- 世界客户端 / 会话 / AWI 日志 ----
+# WORLD_TIMEOUT 只管【快速读操作】（capabilities 握手 / perceive）的死线——读操作本该秒回，死线语义正确。
 WORLD_TIMEOUT = _f("ANIMA_WORLD_TIMEOUT", "30")
 WORLD_PROBE_TIMEOUT = _f("ANIMA_WORLD_PROBE_TIMEOUT", "1.5")
 # 世界本地 /status(人类调试台真值)的超时:有的世界现算真值(如 gazebo-chess 抓一段 gz 位姿)比 /health 慢,给它宽一点。
 WORLD_STATUS_TIMEOUT = _f("ANIMA_WORLD_STATUS_TIMEOUT", "5")
+# ---- 动作(invoke)的「生命迹象」语义（v0.5 wave 0 框架修正）----
+# 物理动作可能要几十秒：不对「动作比 X 秒长」判死，而对「X 秒没有任何生命迹象」判失联——
+# 世界经 MCP progress 报进度即续命（MCP 规范的 SHOULD-reset，SDK 不做、由 mcp_bridge.run_alive 落地），
+# 另设总上限硬闸（有进度也不无限等）。取消响应粒度 = 监督器巡检步长。
+WORLD_CONNECT_TIMEOUT = _f("ANIMA_WORLD_CONNECT_TIMEOUT", "5")       # 连上世界 / MCP 握手的死线
+WORLD_LIVENESS_TIMEOUT = _f("ANIMA_WORLD_LIVENESS_TIMEOUT", "20")    # 无生命迹象判失联（progress 即续命）
+WORLD_INVOKE_HARD_CAP = _f("ANIMA_WORLD_INVOKE_HARD_CAP", "180")     # 单次动作总上限（有进度也不无限等）
+BRIDGE_WATCHDOG_POLL_S = _f("ANIMA_BRIDGE_WATCHDOG_POLL_S", "0.25")  # 监督器巡检步长（也是取消响应延迟）
+BRIDGE_GRACE_S = _f("ANIMA_BRIDGE_GRACE_S", "5")                     # 外层后备宽限（监督器才是权威，这是安全带）
+ENGINE_MCP_TIMEOUT = _f("ANIMA_ENGINE_MCP_TIMEOUT", "15")            # 引擎 server 一次调用的死线（纯计算，秒回）
 TITLE_MAX_LEN = _i("ANIMA_TITLE_MAX_LEN", "24")
 AWI_LOG_MAXLEN = _i("ANIMA_AWI_LOG_MAXLEN", "400")
 AWI_POLL_INTERVAL_S = _f("ANIMA_AWI_POLL_INTERVAL_S", "0.25")
@@ -55,7 +66,7 @@ GAME_TICK_S = _f("ANIMA_GAME_TICK_S", "1.0")
 GAME_MAX_FAIL = _i("ANIMA_GAME_MAX_FAIL", "5")              # 发命令(act)连续失败上限
 GAME_PERCEIVE_MAX_FAIL = _i("ANIMA_GAME_PERCEIVE_MAX_FAIL", "5")  # 感知(世界异常)失败上限(与 act 分开计)
 GAME_EVENT_BUFFER = _i("ANIMA_GAME_EVENT_BUFFER", "500")
-GAME_WORLD_TIMEOUT = _f("ANIMA_GAME_WORLD_TIMEOUT", "2.5")  # 对弈专用世界 client 短超时(协作式取消够快的关键)
+GAME_WORLD_TIMEOUT = _f("ANIMA_GAME_WORLD_TIMEOUT", "2.5")  # 对弈专用世界 client 的【读操作】短超时(perceive 要快)。取消响应现靠 invoke 的 _should_abort(粒度=BRIDGE_WATCHDOG_POLL_S)，不再靠短超时兜底
 GAME_CANCEL_JOIN_S = _f("ANIMA_GAME_CANCEL_JOIN_S", "3.0")  # manager 停旧 runner 的 join 上限
 GAME_RESIGN_EVAL = _i("ANIMA_GAME_RESIGN_EVAL", "-900")    # 我方视角形势评分(厘兵)低于此→倾向认输(约落后一个皇后)
 GAME_RESIGN_CONFIRM = _i("ANIMA_GAME_RESIGN_CONFIRM", "3")  # 评分须连续这么多拍都极差才认输(避免兑子瞬间误判)

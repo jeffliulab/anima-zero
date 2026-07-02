@@ -71,7 +71,7 @@ class _FakeWorld:
         state, _png = self.w.observe()
         return Observation(image_png=None, state=state)
 
-    def invoke(self, name, **args):
+    def invoke(self, name, *, _on_progress=None, _should_abort=None, **args):
         r = self.w.invoke(name, **args)
         return SimpleNamespace(ok=r.get("ok", False), message=r.get("message", ""), data=r.get("data", {}))
 

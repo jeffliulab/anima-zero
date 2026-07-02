@@ -82,7 +82,9 @@ class SetupBoard(Behaviour):
             c.finished = True
             return Status.SUCCESS
         square, sym = self._todo.pop(0)
-        res = c.world.invoke("place", square=square, piece=sym)
+        res = c.world.invoke("place", square=square, piece=sym,
+                             _on_progress=lambda msg, p, tot: c.emit("progress", msg),
+                             _should_abort=lambda: c.cancelled)
         if res.ok:
             c.emit("setup", f"摆好 {sym}@{square}（还剩 {len(self._todo)}）", square=square, piece=sym)
         else:

@@ -253,7 +253,14 @@ class SendMove(Behaviour):
         for i, op in enumerate(ops):
             kind = op["op"]
             args = {k: v for k, v in op.items() if k != "op"}
-            res = c.world.invoke(kind, **args)
+            # 物理动作可能几十秒：进度转发到事件流（用户实时看到"已夹取，正在移向 e4"，不是黑等）；
+            # 取消/换局经 _should_abort 放弃等待（0.25s 级粒度）——放弃等待 ≠ 世界停手（当前原语会做完）。
+            step_tag = f"（{i + 1}/{len(ops)} {kind}）" if len(ops) > 1 else ""
+            res = c.world.invoke(
+                kind,
+                _on_progress=lambda msg, p, tot, _tag=step_tag: c.emit("progress", _tag + msg),
+                _should_abort=lambda: c.cancelled or not c.is_writer(),
+                **args)
             if not res.ok:
                 c.act_fail += 1
                 step = f"（第 {i + 1}/{len(ops)} 步 {kind}）" if len(ops) > 1 else ""

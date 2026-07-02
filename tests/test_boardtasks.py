@@ -23,7 +23,7 @@ class RenderWorld:
     def perceive(self) -> Observation:
         return Observation(image_png=render.to_png(render.render_board(self.board)), state={})
 
-    def invoke(self, name, **cmd) -> ActionResult:
+    def invoke(self, name, *, _on_progress=None, _should_abort=None, **cmd) -> ActionResult:
         return ActionResult(ok=True, message="ok")
 
     def capabilities(self) -> Capabilities:
@@ -42,7 +42,7 @@ class PlaceWorld:
     def perceive(self) -> Observation:
         return Observation(image_png=b"x", state={})
 
-    def invoke(self, name, **cmd) -> ActionResult:
+    def invoke(self, name, *, _on_progress=None, _should_abort=None, **cmd) -> ActionResult:
         if name == "place":
             self.placed.append((cmd["square"], cmd["piece"]))
             return ActionResult(ok=True, message="ok")

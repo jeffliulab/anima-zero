@@ -30,7 +30,7 @@ class FakeWorld:
     def perceive(self) -> Observation:
         return Observation(image_png=render.to_png(render.render_board(self.board)), state={})
 
-    def invoke(self, name: str, **cmd) -> ActionResult:
+    def invoke(self, name: str, *, _on_progress=None, _should_abort=None, **cmd) -> ActionResult:
         if name != "move":
             return ActionResult(ok=False, message=f"未知命令 {name}")
         uci = f"{cmd['from']}{cmd['to']}{cmd.get('promotion', '')}"
@@ -60,7 +60,7 @@ class FakePhysWorld(FakeWorld):
         self.name = "fake-phys"
         self.ops: list[tuple[str, dict]] = []
 
-    def invoke(self, name: str, **cmd) -> ActionResult:
+    def invoke(self, name: str, *, _on_progress=None, _should_abort=None, **cmd) -> ActionResult:
         self.ops.append((name, cmd))
         if name == "move":
             f, t = chess.parse_square(cmd["from"]), chess.parse_square(cmd["to"])

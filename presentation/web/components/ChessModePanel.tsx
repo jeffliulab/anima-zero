@@ -78,7 +78,9 @@ export default function ChessModePanel({
             ? "text-emerald-300"
             : k === "fail" || k === "error" || k === "stuck"
               ? "text-rose-300"
-              : "text-neutral-400";
+              : k === "progress"
+                ? "text-neutral-500 italic" // 物理动作实时进度（"已夹取，正在移向 e4"）：暗色斜体，可读但不抢戏
+                : "text-neutral-400";
 
   return (
     <div className="flex h-screen flex-col border-l-2 border-amber-500/60 bg-amber-950/20">

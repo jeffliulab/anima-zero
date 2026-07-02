@@ -68,7 +68,13 @@ class Capabilities:
 
 @runtime_checkable
 class World(Protocol):
-    """★ AWI 的核心:世界标准。实现这三个方法,就能作为一个世界接入 ANIMA。"""
+    """★ AWI 的核心:世界标准。实现这三个方法,就能作为一个世界接入 ANIMA。
+
+    invoke 的**客户端旁路参数**（可选、带下划线防撞工具参数）：调用方可传 keyword-only 的
+    `_on_progress(message, progress, total)`（世界报进度时转发）与 `_should_abort() -> bool`
+    （放弃等待）。实现方（RemoteWorld / 测试假世界）接受并按需使用或忽略即可——它们不是
+    世界工具的参数、不上 AWI 线，只是「怎么等」的本地约定。
+    """
 
     def capabilities(self) -> Capabilities: ...
 

@@ -1,32 +1,36 @@
 """RemoteWorld：把一个「独立运行的世界」接成 anima 的 World（AWI 客户端）。
 
-**接口采标 MCP（v0.4）**：世界现在是标准 **MCP server**——大脑经官方 MCP SDK 连它的 `/mcp` 端点：
+**接口 = 标准 MCP（v0.4 采标，v0.5 收口单路）**：世界是标准 **MCP server**——大脑经官方 MCP SDK
+连它的 `/mcp` 端点：
   - `capabilities()` ← MCP `tools/list`（动作）+ `prompts/get "guidance"`（说明书）
   - `perceive()`    ← MCP `resources/read anima://observation`（快照图 + 结构 state）
-  - `invoke()`      ← MCP `tools/call`
+  - `invoke()`      ← MCP `tools/call`（带 progress：世界报进度=生命迹象，见下）
 MCP 是 async 的，经 `mcp_bridge` 同步桥调用（见该文件）。能力握手一次即缓存。
+（v0.4 的旧 HTTP AWI 回退双路已删：四个世界全迁 MCP 后它只剩死代码 + transport 粘滞的坑。）
 
-**过渡期双路**：迁移是逐个世界做的，所以首次握手先试 MCP，连不上（世界还没改成 MCP server）就**回退旧 HTTP
-AWI**（GET /capabilities、GET /perceive、POST /invoke）。等四个世界全迁完，删掉旧分支即可。
+**长动作语义（v0.5 wave 0）**：物理动作可能几十秒。`invoke` 不再掐固定死线，而是「生命迹象」监督
+（mcp_bridge.run_alive）：世界经 MCP progress 报进度即续命，X 秒无迹象才判失联，另有总上限硬闸；
+进度自动写 AWI 日志（仪表盘可见），还可经 `_on_progress` 转发给调用方（如对弈树发到事件流）。
+读操作（capabilities/perceive）本该秒回，仍用 WORLD_TIMEOUT 死线。
 
-**永远带外**：`/health`（探活）、`/status`（上帝视角真值，绝不进 perceive）、`/stream`（MJPEG 直播）始终走普通
-HTTP，不进 MCP——这是红线（MCP 只跑 JSON-RPC 文本，传不了视频流）。
+**永远带外**：`/health`（探活）、`/status`（上帝视角真值，绝不进 perceive）、`/stream`（MJPEG 直播）
+始终走普通 HTTP，不进 MCP——这是红线（MCP 只跑 JSON-RPC 文本，传不了视频流）。
 """
 from __future__ import annotations
 
 import base64
 import json
 import time
-from typing import Any
+from typing import Any, Callable, Optional
 
 import httpx
 from pydantic import AnyUrl
 
-from . import awi_log, config
+from . import awi_log, config, mcp_bridge
 from .awi import ActionResult, Capabilities, Observation, ToolSpec
 from .mcp_bridge import run_sync, with_session
 
-DEFAULT_TIMEOUT = config.WORLD_TIMEOUT       # 正常调用世界的超时（config，env 可覆盖）
+DEFAULT_TIMEOUT = config.WORLD_TIMEOUT       # 读操作（capabilities/perceive）的死线（config，env 可覆盖）
 ONLINE_PROBE_TIMEOUT = config.WORLD_PROBE_TIMEOUT  # 探在线的短超时
 
 # MCP 契约常量（世界侧适配器 awi_mcp.py 用同样的字符串，两边必须一致）。
@@ -40,27 +44,15 @@ class RemoteWorld:  # 实现 World 协议(AWI 客户端)
         self.base = base_url.rstrip("/")
         self.mcp_url = self.base + "/mcp"
         self.timeout = timeout
-        self._client = httpx.Client(timeout=timeout)  # 带外用(/health /status /stream) + 旧 HTTP 回退
+        self._client = httpx.Client(timeout=timeout)  # 带外专用(/health /status /stream)
         self._caps: Capabilities | None = None    # 能力缓存:握手一次,之后复用
-        self._transport: str | None = None        # None=未探测 / "mcp" / "http"（回退）
         self._last_state: dict | None = None       # 最近一次 perceive 的 state(给 /awi 仪表盘看)
 
-    # ---------- 能力握手（探测传输方式 + 缓存）----------
+    # ---------- 能力握手（一次 + 缓存）----------
     def capabilities(self) -> Capabilities:
         if self._caps is not None:
             return self._caps
-        t0 = time.perf_counter()
-        caps = self._caps_mcp()          # 先试 MCP
-        if caps is None:
-            caps = self._caps_http()     # 回退旧 HTTP AWI
-        self._caps = caps
-        awi_log.record(self.name, "capabilities", f"capabilities() 握手[{self._transport}]",
-                       (time.perf_counter() - t0) * 1000,
-                       resp={"transport": self._transport, "n_tools": len(caps.tools),
-                             "tools": [t.name for t in caps.tools], "has_guidance": bool(caps.guidance)})
-        return caps
 
-    def _caps_mcp(self) -> Capabilities | None:
         async def op(s):
             tl = await s.list_tools()
             tools = [ToolSpec(
@@ -79,38 +71,24 @@ class RemoteWorld:  # 实现 World 协议(AWI 客户端)
             except Exception:
                 pass
             return tools, guidance
-        try:
-            tools, guidance = run_sync(with_session(self.mcp_url, op, self.timeout), self.timeout + 5)
-        except Exception:
-            return None
-        self._transport = "mcp"
-        return Capabilities(name=self.name, version="", tools=tools, state_schema={}, guidance=guidance)
 
-    def _caps_http(self) -> Capabilities:
-        r = self._client.get(self.base + "/capabilities").json()
-        tools = [ToolSpec(t["name"], t["description"], t["parameters"], t.get("kind", "tool"))
-                 for t in r.get("tools", [])]
-        self._transport = "http"
-        return Capabilities(name=r["name"], version=r.get("version", ""), tools=tools,
-                            state_schema=r.get("state_schema", {}) or {}, guidance=r.get("guidance", "") or "")
+        t0 = time.perf_counter()
+        tools, guidance = run_sync(with_session(self.mcp_url, op, self.timeout),
+                                   self.timeout + config.BRIDGE_GRACE_S)
+        self._caps = Capabilities(name=self.name, version="", tools=tools, state_schema={},
+                                  guidance=guidance)
+        awi_log.record(self.name, "capabilities", "capabilities() 握手[mcp]",
+                       (time.perf_counter() - t0) * 1000,
+                       resp={"transport": "mcp", "n_tools": len(tools),
+                             "tools": [t.name for t in tools], "has_guidance": bool(guidance)})
+        return self._caps
 
     def refresh(self) -> None:
         """丢掉能力缓存,下次 capabilities() 重新握手(世界换了工具 / 重启后用)。"""
         self._caps = None
-        self._transport = None
 
-    # ---------- 感知 ----------
+    # ---------- 感知（快速读，固定死线）----------
     def perceive(self) -> Observation:
-        if self._transport is None:
-            self.capabilities()  # 确保已探测传输方式
-        t0 = time.perf_counter()
-        obs = self._perceive_mcp() if self._transport == "mcp" else self._perceive_http()
-        awi_log.record(self.name, "perceive", "perceive()", (time.perf_counter() - t0) * 1000,
-                       resp={"img_bytes": len(obs.image_png) if obs.image_png else 0, "state": obs.state})
-        self._last_state = obs.state
-        return obs
-
-    def _perceive_mcp(self) -> Observation:
         async def op(s):
             rd = await s.read_resource(AnyUrl(OBSERVATION_URI))
             state: dict = {}
@@ -124,49 +102,75 @@ class RemoteWorld:  # 实现 World 协议(AWI 客户端)
                 elif getattr(c, "blob", None) is not None:
                     img = base64.b64decode(c.blob)
             return state, img
+
+        t0 = time.perf_counter()
         try:
-            state, img = run_sync(with_session(self.mcp_url, op, self.timeout), self.timeout + 5)
+            state, img = run_sync(with_session(self.mcp_url, op, self.timeout),
+                                  self.timeout + config.BRIDGE_GRACE_S)
         except Exception:
             state, img = {}, None
-        return Observation(image_png=img, state=state)
-
-    def _perceive_http(self) -> Observation:
-        r = self._client.get(self.base + "/perceive").json()
-        img = base64.b64decode(r["image_b64"]) if r.get("image_b64") else None
-        return Observation(image_png=img, state=r.get("state", {}))
+        obs = Observation(image_png=img, state=state)
+        awi_log.record(self.name, "perceive", "perceive()", (time.perf_counter() - t0) * 1000,
+                       resp={"img_bytes": len(obs.image_png) if obs.image_png else 0, "state": obs.state})
+        self._last_state = obs.state
+        return obs
 
     def last_state(self) -> dict | None:
         """最近一次 perceive 到的 state(没感知过则 None)。给 /awi 仪表盘读。"""
         return self._last_state
 
-    # ---------- 动作 ----------
-    def invoke(self, name: str, **kwargs: Any) -> ActionResult:
-        if self._transport is None:
+    # ---------- 动作（可能很慢：生命迹象监督，不掐固定死线）----------
+    def invoke(self, name: str, *, _on_progress: Optional[Callable] = None,
+               _should_abort: Optional[Callable[[], bool]] = None, **kwargs: Any) -> ActionResult:
+        """调世界的一个工具。慢动作按「生命迹象」等待：
+
+        - `_on_progress(message, progress, total)`：可选，世界每报一次进度转发一次（对弈树用它发事件流）；
+          不管传不传，进度都自动写 AWI 日志（仪表盘可见）。
+        - `_should_abort() -> bool`：可选，返回 True 就放弃等待（取消/换局；粒度 0.25s 级）。
+        带下划线是刻意的：这两个是**客户端旁路参数**，绝不会和世界工具自己的参数撞名。
+        """
+        if self._caps is None:
             self.capabilities()
         t0 = time.perf_counter()
-        res = self._invoke_mcp(name, kwargs) if self._transport == "mcp" else self._invoke_http(name, kwargs)
-        awi_log.record(self.name, "invoke", f"{name}({kwargs})", (time.perf_counter() - t0) * 1000,
-                       resp={"ok": res.ok, "message": res.message, "has_data": bool(res.data)})
-        return res
+        beat = mcp_bridge.Beat()
 
-    def _invoke_mcp(self, name: str, args: dict) -> ActionResult:
+        async def _cb(progress: float, total, message) -> None:
+            beat.touch()   # 进度 = 生命迹象，续命
+            awi_log.record(self.name, "progress", f"{name}: {message or ''}",
+                           (time.perf_counter() - t0) * 1000, resp={"progress": progress})
+            if _on_progress is not None:
+                try:
+                    _on_progress(message or "", progress, total)
+                except Exception:  # noqa: BLE001  上层回调坏了不该毁掉动作本身
+                    pass
+
         async def op(s):
-            r = await s.call_tool(name, args)
+            r = await s.call_tool(name, kwargs, progress_callback=_cb)
             text = "".join(c.text for c in r.content if getattr(c, "text", None))
             data = r.structuredContent or {}
             ok = not bool(getattr(r, "isError", False))
             return ok, text, data
+
         try:
-            ok, text, data = run_sync(with_session(self.mcp_url, op, self.timeout), self.timeout + 5)
+            ok, text, data = mcp_bridge.run_alive(
+                with_session(self.mcp_url, op, config.WORLD_CONNECT_TIMEOUT,
+                             read_timeout=config.WORLD_LIVENESS_TIMEOUT + config.BRIDGE_GRACE_S),
+                beat=beat, liveness_s=config.WORLD_LIVENESS_TIMEOUT,
+                hard_cap_s=config.WORLD_INVOKE_HARD_CAP, should_abort=_should_abort)
+            res = ActionResult(ok=ok, message=text, data=data)
+        except mcp_bridge.LivenessTimeout:
+            res = ActionResult(False, f"世界失联：{config.WORLD_LIVENESS_TIMEOUT:g}s 无生命迹象")
+        except mcp_bridge.HardCapTimeout:
+            res = ActionResult(False, f"动作超总上限（{config.WORLD_INVOKE_HARD_CAP:g}s），放弃等待")
+        except mcp_bridge.CallAborted:
+            res = ActionResult(False, "已放弃等待（任务取消）")
         except Exception as e:
-            return ActionResult(False, f"（世界调用失败：{type(e).__name__}）")
-        return ActionResult(ok=ok, message=text, data=data)
+            res = ActionResult(False, f"（世界调用失败：{type(e).__name__}）")
+        awi_log.record(self.name, "invoke", f"{name}({kwargs})", (time.perf_counter() - t0) * 1000,
+                       resp={"ok": res.ok, "message": res.message, "has_data": bool(res.data)})
+        return res
 
-    def _invoke_http(self, name: str, args: dict) -> ActionResult:
-        r = self._client.post(self.base + "/invoke", json={"name": name, "args": args}).json()
-        return ActionResult(ok=r.get("ok", False), message=r.get("message", ""), data=r.get("data", {}))
-
-    # ---------- 带外（探活 / 上帝视角真值 / 直播）：始终普通 HTTP，与传输方式无关 ----------
+    # ---------- 带外（探活 / 上帝视角真值 / 直播）：始终普通 HTTP，与 MCP 无关 ----------
     def debug_state(self) -> dict | None:
         """【人类调试台专用·世界真值】走世界本地 `/status`（非 AWI 通道，绝不给 ANIMA）。没有 /status → None。"""
         try:

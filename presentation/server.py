@@ -305,7 +305,8 @@ def _engine_servers() -> list[dict]:
         return [{"name": t.name, "description": t.description or "", "parameters": t.inputSchema or {}}
                 for t in tl.tools]
     try:
-        tools = run_sync(with_session(_ENGINE_URL.rstrip("/") + "/mcp", op, 5.0), 8.0)
+        tools = run_sync(with_session(_ENGINE_URL.rstrip("/") + "/mcp", op, config.WORLD_CONNECT_TIMEOUT),
+                         config.WORLD_CONNECT_TIMEOUT + config.BRIDGE_GRACE_S)
         _engine_cache = {"online": True, "tools": tools}   # 只缓存成功；离线不缓存→下次重试
         info.update(_engine_cache)
     except Exception:

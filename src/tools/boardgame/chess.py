@@ -86,7 +86,7 @@ class ChessAdapter:
         这一路 MCP 流量也记进 awi_log（world="chess-engine"），在 /awi 流量区能看到大脑↔引擎的调用。"""
         import time as _t
 
-        from ... import awi_log
+        from ... import awi_log, config as _cfg
         from ...mcp_bridge import run_sync, with_session
         url = self._engine_url.rstrip("/") + "/mcp"
 
@@ -95,7 +95,8 @@ class ChessAdapter:
             return "".join(c.text for c in r.content if getattr(c, "text", None))
         t0 = _t.perf_counter()
         try:
-            uci = run_sync(with_session(url, op, 15.0), 20.0)
+            uci = run_sync(with_session(url, op, _cfg.ENGINE_MCP_TIMEOUT),
+                           _cfg.ENGINE_MCP_TIMEOUT + _cfg.BRIDGE_GRACE_S)
         except Exception as e:
             awi_log.record("chess-engine", "best_move", f"best_move → 失败({type(e).__name__})",
                            (_t.perf_counter() - t0) * 1000)

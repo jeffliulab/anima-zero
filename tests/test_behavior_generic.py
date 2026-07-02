@@ -71,7 +71,7 @@ class OkWorld:
     def perceive(self):
         return Observation(image_png=b"", state={})    # 非 None 即可（CountTools 不读它）
 
-    def invoke(self, name, **cmd):
+    def invoke(self, name, *, _on_progress=None, _should_abort=None, **cmd):
         return ActionResult(ok=True, message="ok")
 
     def capabilities(self):
