@@ -5,8 +5,6 @@ const BASE = process.env.NEXT_PUBLIC_API ?? "http://localhost:8000";
 export const AWI_LOG_SHOWN = Number(process.env.NEXT_PUBLIC_AWI_LOG_SHOWN) || 300;
 
 // 前端轮询间隔（毫秒）：集中此处、可用 NEXT_PUBLIC_* env 覆盖，不在各组件内联写死。
-export const POLL_GAME_STATE_MS = Number(process.env.NEXT_PUBLIC_POLL_GAME_STATE_MS) || 1500;
-export const POLL_GAME_EVENTS_MS = Number(process.env.NEXT_PUBLIC_POLL_GAME_EVENTS_MS) || 1200;
 export const POLL_AWI_MS = Number(process.env.NEXT_PUBLIC_POLL_AWI_MS) || 3000;
 
 export type Brain = {
@@ -24,6 +22,7 @@ export type ChatEvent =
   | { type: "perception"; image_b64: string | null; state: Record<string, unknown> }
   | { type: "thinking"; text: string }
   | { type: "tool_call"; name: string; args: Record<string, unknown> }
+  | { type: "progress"; name: string; message: string; progress: number } // 长动作实时进度（如夹爪搬运）
   | { type: "tool_result"; name: string; ok: boolean; message: string }
   | { type: "reply"; text: string }
   | { type: "done" };
@@ -170,53 +169,6 @@ export async function sendChat(sessionId: string, message: string): Promise<{ re
     body: JSON.stringify({ session_id: sessionId, message }),
   });
   return (await r.json()) as { reply: string };
-}
-
-// ---- Chess Mode（对弈行为树）----
-export type GameEvent = { id: number; ts: string; channel: string; text: string; uci?: string };
-export type GameQuestion = { id: number; text: string; options: string[] | null; timeout_s: number | null };
-export type GameStatus = {
-  display_name: string;
-  my_side: string;
-  turn: string;
-  my_turn: boolean;
-  move_count: number;
-  finished: boolean;
-  paused: boolean; // 暂停中（runner 挂起，不再驱动世界）
-  question: GameQuestion | null; // HITL：ANIMA 正等人回答的问题；null=没在问
-  exit_reason: string;
-  last: string;
-};
-export type GameState = { active: boolean; status?: GameStatus; events?: GameEvent[] };
-
-export async function getGame(sid: string, since = 0): Promise<GameState> {
-  const r = await fetch(`${BASE}/api/game/${encodeURIComponent(sid)}?since=${since}`);
-  return (await r.json()) as GameState;
-}
-
-export async function startGame(
-  sid: string,
-): Promise<{ ok: boolean; display_name?: string; message?: string }> {
-  const r = await fetch(`${BASE}/api/game/start`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ session_id: sid }),
-  });
-  return await r.json();
-}
-
-export async function stopGame(sid: string): Promise<void> {
-  await fetch(`${BASE}/api/game/${encodeURIComponent(sid)}/stop`, { method: "POST" });
-}
-
-// 下棋区的输入框：把用户的话发进正在跑的对弈循环（认输/不下了→停；否则 ANIMA 回一句）。
-export async function sayGame(sid: string, message: string): Promise<{ ok: boolean; reply?: string }> {
-  const r = await fetch(`${BASE}/api/game/${encodeURIComponent(sid)}/say`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
-  });
-  return (await r.json()) as { ok: boolean; reply?: string };
 }
 
 // 流式聊天:边收边回调每个事件(SSE)

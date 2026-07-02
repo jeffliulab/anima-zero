@@ -16,13 +16,11 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 
 from anima import awi_log, config, session_log
-from anima.behavior.manager import RunnerManager
 from anima.llm import LLM, DEFAULT_BRAIN, list_brains, make_llm
 from anima.llm_log import LoggingLLM, bound_stream, recent as _llm_recent, sessions as _llm_sessions, session_scope
 from anima.orchestrator import Orchestrator
 from anima.registry import WorldRegistry
 from anima.session import SessionStore
-from anima.skills.boardgame import build_registry as _build_skills
 
 # 从 anima-zero/.env 读配置(选脑 / API key / Ollama 地址 / 世界 URL);.env 不入库,模板见 .env.example
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
@@ -90,10 +88,7 @@ _DEFAULT_BRAIN = DEFAULT_BRAIN
 
 # 会话 + 本地记忆;编排器按会话运行(大脑从会话上取)
 store = SessionStore()
-_skills = _build_skills()                       # 脑内技能注册表（对弈…）
-_runs = RunnerManager()                         # 多棵行为树的通用运行时管理员（开新前停旧 + 单写者 + 清理）
-# 编排器 = 元控制器：进入/退出/暂停/恢复/路由意图都在它那层；server.py 只剩 HTTP 门面
-orchestrator = Orchestrator(registry, store, skills=_skills, runs=_runs)
+orchestrator = Orchestrator(registry, store)
 
 SSE_POLL_INTERVAL_S = config.AWI_POLL_INTERVAL_S  # AWI 流量 SSE 多久查一次新事件(config 单一来源,删 inline 魔法数)
 
@@ -170,9 +165,7 @@ class NewSessionIn(BaseModel):
 
 @app.post("/api/sessions")  # 新建会话(同一个世界的活跃会话会被冻结)
 def new_session(inp: NewSessionIn) -> dict:
-    s, frozen_ids = store.new(inp.world, inp.brain)
-    for fid in frozen_ids:          # 联动：被冻结的旧会话若在对弈，停掉它的对弈树（单活跃会话=单活跃对弈树）
-        orchestrator.stop_run(fid)
+    s, _frozen = store.new(inp.world, inp.brain)
     return s.summary()
 
 
@@ -189,9 +182,8 @@ def get_session(sid: str) -> dict:
     return {**s.summary(), "messages": s.messages}
 
 
-@app.delete("/api/sessions/{sid}")  # 删一个会话(先停其对弈树,再删磁盘记录)
+@app.delete("/api/sessions/{sid}")  # 删一个会话(删磁盘记录)
 def delete_session(sid: str) -> dict:
-    orchestrator.stop_run(sid)      # 若该会话在对弈,先把对弈树干净停掉
     deleted = store.delete(sid)
     return {"ok": deleted}
 
@@ -282,36 +274,31 @@ def status() -> dict:
 
 
 # ---- AWI 仪表盘(/awi 页面用)----
-# ---- 引擎 MCP server（棋理顾问）：若配了 ANIMA_ENGINE_URL 就在 /awi 展示它的 tools ----
-# engine 和 world 在 MCP 里都是"一个 server"，只是 engine 是纯计算 tool server：只有 tools，
-# 无感知(resource)、无说明书(prompt)。工具清单不变 → 成功后缓存。
-_ENGINE_URL = (os.getenv("ANIMA_ENGINE_URL") or "").strip() or None
-_engine_cache: dict | None = None
-
-
-def _engine_servers() -> list[dict]:
-    if not _ENGINE_URL:
-        return []
-    info = {"name": "chess-engine", "url": _ENGINE_URL, "kind": "engine", "online": False, "tools": [],
-            "note": "棋理顾问 · 纯计算 MCP tool server：给 FEN 求最优着 / 评估 / 合法着。无感知(resource)、无说明书(prompt)。"}
-    global _engine_cache
-    if _engine_cache is not None:
-        info.update(_engine_cache)
-        return [info]
-    from anima.mcp_bridge import run_sync, with_session
-
-    async def op(s):
-        tl = await s.list_tools()
-        return [{"name": t.name, "description": t.description or "", "parameters": t.inputSchema or {}}
-                for t in tl.tools]
-    try:
-        tools = run_sync(with_session(_ENGINE_URL.rstrip("/") + "/mcp", op, config.WORLD_CONNECT_TIMEOUT),
-                         config.WORLD_CONNECT_TIMEOUT + config.BRIDGE_GRACE_S)
-        _engine_cache = {"online": True, "tools": tools}   # 只缓存成功；离线不缓存→下次重试
-        info.update(_engine_cache)
-    except Exception:
-        info["online"] = False
-    return [info]
+# ---- 挂载服务（顾问）卡片：读各在线世界声明的 services，经 registry 建/复用客户端 ----
+# service 和 world 在 MCP 里都是"一个 server"，只是 service 是纯计算 tool server：只有 tools，
+# 无感知(resource)、无说明书(prompt)。能力清单由 RemoteService 缓存（握手一次）。
+def _service_servers() -> list[dict]:
+    by_url: dict[str, dict] = {}
+    for wname in registry.list_worlds():
+        w = registry.get(wname)
+        if not (hasattr(w, "online") and w.online()):
+            continue
+        for svc in registry.services_for(w):
+            info = by_url.get(svc.base)
+            if info is None:
+                info = {"name": svc.name, "url": svc.base, "kind": "service",
+                        "online": svc.online(), "tools": [], "declared_by": []}
+                if info["online"]:
+                    try:
+                        info["tools"] = [
+                            {"name": t.name, "description": t.description, "kind": t.kind,
+                             "parameters": t.parameters}
+                            for t in svc.capabilities().tools]
+                    except Exception:
+                        info["online"] = False
+                by_url[svc.base] = info
+            info["declared_by"].append(wname)
+    return list(by_url.values())
 
 
 @app.get("/api/awi")  # 世界 + 引擎 server(含能力清单 + 实时 state)+ 大脑 + 会话 + 统计
@@ -349,7 +336,9 @@ def awi_overview() -> dict:
             except Exception:
                 info["online"] = False
         worlds_info.append(info)
-    return {"worlds": worlds_info, "engines": _engine_servers(),
+    services = _service_servers()
+    return {"worlds": worlds_info, "services": services,
+            "engines": services,   # 【W5 删】旧前端字段名兼容（AwiDashboard 现读 engines）
             "brains": list_brains(), "sessions": store.list(), "stats": awi_log.stats()}
 
 
@@ -380,56 +369,3 @@ def session_logs(limit: int = 500, session: str = "") -> dict:
     return {"entries": session_log.recent(limit, session), "sessions": session_log.sessions()}
 
 
-# ===================== 对弈（skill / 行为树）HTTP 端点 =====================
-# 业务编排（进入/退出/暂停/恢复/路由意图）已收口到 orchestrator（元控制器）+ 通用运行时；
-# 这里只剩**薄 HTTP 端点**：转发给 orchestrator / 读 runs 状态，自己不做任何意图判断或起局逻辑。
-
-
-class GameStartIn(BaseModel):
-    session_id: str
-    skill: str | None = None        # 进入哪个 skill（默认注册表里第一个）
-
-
-@app.post("/api/game/start")  # 显式进入（前端按钮可用；聊天里说"下棋"由 LLM 调 enter_skill 自动进入）
-def game_start(inp: GameStartIn) -> dict:
-    if not store.exists(inp.session_id):
-        return {"ok": False, "message": "会话不存在"}
-    g = _runs.get(inp.session_id)
-    if g and not g.finished:
-        return {"ok": True, "display_name": g.bb.display_name, "message": "已在对弈中"}
-    session = store.get(inp.session_id)
-    sid = inp.skill or (_skills.list()[0].id if _skills.list() else None)
-    # 在 session 上下文里进入：enter→runs.start→runner.start 会 copy_context()，后台解说线程据此继承 session 标签
-    with session_scope(inp.session_id):
-        r = orchestrator.enter(session, sid, get_llm(session.brain))
-    return {"ok": r.get("ok", False), "message": r.get("reply", ""), "display_name": r.get("display_name", "")}
-
-
-@app.get("/api/game/{sid}")  # 前端对弈面板轮询：是否对弈中 + 状态 + 事件
-def game_state(sid: str, since: int = 0) -> dict:
-    g = _runs.get(sid)
-    if g is None:
-        return {"active": False}
-    if g.finished:
-        orchestrator.finalize_if_done(sid)   # 结束即把整盘记录折进主聊天（幂等）
-    return {"active": not g.finished, "status": g.status(), "events": g.events_since(since)}
-
-
-@app.post("/api/game/{sid}/stop")  # 退出对弈
-def game_stop(sid: str) -> dict:
-    orchestrator.stop_run(sid)       # 取消 + 限时 join + 移除 + 清 _active_skill
-    return {"ok": True}
-
-
-class GameSayIn(BaseModel):
-    message: str
-
-
-@app.post("/api/game/{sid}/say")  # 对弈面板输入框：把话路由进对弈循环（退出/暂停/恢复/回答/闲聊，全由 orchestrator 判断）
-def game_say(sid: str, inp: GameSayIn) -> dict:
-    if not store.exists(sid):
-        return {"ok": False, "message": "会话不存在"}
-    session = store.get(sid)
-    with session_scope(sid):
-        r = orchestrator.route_in_skill(session, inp.message, get_llm(session.brain))
-    return {"ok": r.get("ok", False), "reply": r.get("reply", "")}

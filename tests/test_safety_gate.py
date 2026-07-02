@@ -6,7 +6,7 @@ Wave 6 安全网：钉住「会改世界的动作要过闸、只读动作不过�
 from __future__ import annotations
 
 from anima.awi import ActionResult, Capabilities, Observation, ToolSpec
-from anima.behavior import RunnerManager
+
 from anima.llm import LLMReply, ToolCall
 from anima.orchestrator import Orchestrator
 from anima.registry import WorldRegistry
@@ -52,7 +52,7 @@ def _orch(tmp_path, world, gate):
     reg = WorldRegistry()
     reg._worlds[world.name] = world
     store = SessionStore(root=str(tmp_path))
-    orch = Orchestrator(reg, store, safety=gate, runs=RunnerManager())
+    orch = Orchestrator(reg, store, safety=gate)
     session, _ = store.new(world.name, "fake")
     return orch, session
 

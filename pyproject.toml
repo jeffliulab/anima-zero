@@ -37,33 +37,25 @@ dependencies = [
     "pydantic>=2.6",
     "python-dotenv>=1.0",
     "httpx>=0.27",      # 世界客户端(RemoteWorld)直接用;之前仅靠 anthropic/fastapi 传递依赖,现显式声明
-    "mcp>=1.2",         # 官方 MCP SDK：大脑作 MCP host/client 连世界/引擎(v0.4 接口采标 MCP);先钉 v1.x
-    "chess>=1.10",      # python-chess: 棋种策略用(规则/FEN/终局);引擎合法性也靠它
-    "py-trees>=2.2",    # 行为树(对弈循环层)
-    "numpy>=1.26",      # v0.5 视觉桥·追踪层(占用识别)——脑侧首次引入数值运行时
-    "opencv-python-headless>=4.6",  # v0.5 视觉桥·板角检测/单应/采样(headless:服务器无 GUI)
-    "onnxruntime>=1.20",  # v0.5 视觉桥·CNN 层推理(只推理;训练用 torch 但只在离线脚本,不进运行时)
+    "mcp>=1.2",         # 官方 MCP SDK：大脑作 MCP host/client 连世界/服务(接口采标 MCP);先钉 v1.x
+    "chess>=1.10",      # python-chess: 脑侧已不用;同 venv 运行的 sim-chess 世界与引擎 service 需要
+    "langgraph>=1.0",   # 主循环骨架(StateGraph);节点内脏仍是自有 LLM 层/MCP 桥,不用 LangChain 抽象
 ]
 
 [project.optional-dependencies]
 dev = [
     "ruff>=0.4",
-    "pytest>=8.0",      # 自动化回归测试(视觉 round-trip + 对弈冒烟)
-    "onnx>=1.16",       # 仅测试用:手搓最小 ONNX 测 CNN 读盘管线(运行时只要 onnxruntime)
+    "pytest>=8.0",      # 自动化回归测试(主循环/挂载/统一日志/链路)
 ]
 
 [project.urls]
 Homepage = "https://github.com/jeffliulab/anima-zero"
 "SOMA Zero (body)" = "https://github.com/jeffliulab/soma-zero"
 
-# 扁平 src/ 映射成 anima 包(不建 src/anima);llm/ skills/ behavior/ tools/ 是子包
+# 扁平 src/ 映射成 anima 包(不建 src/anima);llm/ 是子包
 [tool.setuptools]
 package-dir = { "anima" = "src" }
-packages = [
-    "anima", "anima.llm", "anima.skills",
-    "anima.behavior", "anima.behavior.trees",
-    "anima.tools", "anima.tools.boardgame",
-]
+packages = ["anima", "anima.llm"]
 
 [tool.ruff]
 line-length = 100

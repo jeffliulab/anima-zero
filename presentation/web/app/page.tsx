@@ -3,15 +3,12 @@ import { useCallback, useEffect, useState } from "react";
 import SessionSidebar from "@/components/SessionSidebar";
 import SensingArea from "@/components/SensingArea";
 import ChatPanel from "@/components/ChatPanel";
-import ChessModePanel from "@/components/ChessModePanel";
 import AwiDashboard from "@/components/AwiDashboard";
 import AnimaLogsView from "@/components/AnimaLogsView";
 import {
   getBrains,
   getWorlds,
-  getGame,
   listSessions,
-  POLL_GAME_STATE_MS,
   POLL_AWI_MS,
   type Brain,
   type World,
@@ -23,28 +20,8 @@ export default function Home() {
   const [worlds, setWorlds] = useState<World[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [currentId, setCurrentId] = useState("");
-  const [gameActive, setGameActive] = useState(false);
   // 中间区当前看什么：会话视图(默认) / 留白主页 / 内嵌 AWI / 内嵌 anima-logs
   const [view, setView] = useState<"session" | "home" | "awi" | "logs">("session");
-
-  // 轮询当前会话是否在 Chess Mode（对弈行为树跑着）→ 决定是否浮现面板
-  useEffect(() => {
-    if (!currentId) {
-      setGameActive(false);
-      return;
-    }
-    let stop = false;
-    const tick = async () => {
-      const g = await getGame(currentId).catch(() => null);
-      if (!stop) setGameActive(!!g?.active);
-    };
-    tick();
-    const t = setInterval(tick, POLL_GAME_STATE_MS);
-    return () => {
-      stop = true;
-      clearInterval(t);
-    };
-  }, [currentId]);
 
   const refreshSessions = useCallback(async () => {
     const s = await listSessions().catch(() => []);
@@ -113,22 +90,13 @@ export default function Home() {
         <SensingArea streamUrl={streamUrl} worldName={current?.world ?? null} online={worldOnline} />
       )}
 
-      {/* 右栏：session 视图维持原逻辑(对局→下棋面板，否则聊天)；其它 view → 全新空会话且只读(paused)，
-          不显示别的 session 记录（将来 AWI/logs 各自的 chatbot 在此长出来）。 */}
-      {inSession && gameActive && currentId ? (
-        <ChessModePanel
-          sessionId={currentId}
-          streamUrl={streamUrl}
-          onExit={() => setGameActive(false)}
-        />
-      ) : (
-        <ChatPanel
-          session={inSession ? current : null}
-          brains={brains}
-          onSessionsChanged={refreshSessions}
-          paused={!inSession}
-        />
-      )}
+      {/* 右栏：聊天面板（v0.6 起无对弈面板——下棋=普通对话）；非 session 视图只读(paused)。 */}
+      <ChatPanel
+        session={inSession ? current : null}
+        brains={brains}
+        onSessionsChanged={refreshSessions}
+        paused={!inSession}
+      />
     </main>
   );
 }

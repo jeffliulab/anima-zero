@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from anima.awi import ActionResult, Capabilities, Observation, ToolSpec
-from anima.behavior import RunnerManager
+
 from anima.orchestrator import Orchestrator
 from anima.registry import WorldRegistry
 from anima.session import SessionStore
@@ -33,7 +33,7 @@ class _World:
 def _orch(tmp_path, world):
     reg = WorldRegistry()
     reg._worlds[world.name] = world
-    return Orchestrator(reg, SessionStore(root=str(tmp_path)), runs=RunnerManager())
+    return Orchestrator(reg, SessionStore(root=str(tmp_path)))
 
 
 def test_system_prompt_includes_world_guidance(tmp_path):

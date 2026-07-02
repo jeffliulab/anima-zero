@@ -193,6 +193,18 @@ export default function ChatPanel({
             ...t,
             thinking: [...t.thinking, { text: "", tool_calls: [{ name: e.name, args: e.args }], tool_results: [] }],
           }));
+        else if (e.type === "progress")
+          // 长动作进度：追加到当前工具步的结果区（实时看到"已夹取，正在移向 e4"，不黑等）
+          upd((t) => {
+            if (!t.thinking.length) return t;
+            const i = t.thinking.length - 1;
+            return {
+              ...t,
+              thinking: t.thinking.map((th, j) =>
+                j === i ? { ...th, tool_results: [...th.tool_results, `⏳ ${e.message}`] } : th
+              ),
+            };
+          });
         else if (e.type === "tool_result")
           upd((t) => {
             if (!t.thinking.length) return t;

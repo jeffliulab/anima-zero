@@ -1,21 +1,16 @@
 """决策心脏测试：orchestrator 的 ReAct 主循环（handle / handle_stream）。
 
-这是「艰难的 0.2」Wave 6 补的安全网——去棋化重构（T1）之前先把主循环的**行为**钉住：
-看→想→(过安全闸)→动→再看 的闭环、工具分发、enter_skill 短路、max_steps 收口、
-对局进行中路由到面板、handle 与 handle_stream 行为一致。用假 LLM/世界，确定性、不联网。
+v0.6 起大脑无技能/行为树：主循环 = 看→想→(过安全闸)→动→再看 的闭环 + 工具分发
+（世界动作 / 服务顾问按来源路由）+ max_steps 收口 + handle 与 handle_stream 行为一致。
+用假 LLM/世界/服务，确定性、不联网。
 """
 from __future__ import annotations
 
-import py_trees
-from py_trees.common import Status
-
 from anima.awi import ActionResult, Capabilities, Observation, ToolSpec
-from anima.behavior import BehaviorRunner, Blackboard, RunnerManager
 from anima.llm import LLMReply, ToolCall
-from anima.orchestrator import ENTER_SKILL_TOOL, Orchestrator
+from anima.orchestrator import Orchestrator
 from anima.registry import WorldRegistry
 from anima.session import SessionStore
-from anima.skill import Skill, SkillRegistry
 
 
 class _CountWorld:
@@ -36,7 +31,19 @@ class _CountWorld:
         self.n_perceive += 1
         return Observation(image_png=None, state={"phase": "idle"})
 
-    def invoke(self, name, **a):
+    def invoke(self, name, *, _on_progress=None, _should_abort=None, **a):
+        # World 协议的客户端旁路参数（进度/取消）：假世界按协议接受并忽略
+        self.invoked.append((name, a))
+        return ActionResult(True, f"did {name}")
+
+
+class _ProgressWorld(_CountWorld):
+    """慢动作世界：invoke 时报两次进度（验证流式 progress 事件）。"""
+
+    def invoke(self, name, *, _on_progress=None, _should_abort=None, **a):
+        if _on_progress is not None:
+            _on_progress("已夹取", 0.5, 1.0)
+            _on_progress("正在移向 e4", 0.8, 1.0)
         self.invoked.append((name, a))
         return ActionResult(True, f"did {name}")
 
@@ -58,16 +65,11 @@ class _SeqLLM:
         return r
 
 
-class _NoOp(py_trees.behaviour.Behaviour):
-    def update(self):
-        return Status.RUNNING
-
-
-def _orch(tmp_path, world, skills=None):
+def _orch(tmp_path, world):
     reg = WorldRegistry()
     reg._worlds[world.name] = world
     store = SessionStore(root=str(tmp_path))
-    orch = Orchestrator(reg, store, skills=skills, runs=RunnerManager())
+    orch = Orchestrator(reg, store)
     session, _ = store.new(world.name, "fake")
     return orch, session
 
@@ -105,7 +107,7 @@ def test_handle_max_steps_stops(tmp_path):
     orch, session = _orch(tmp_path, world)
     llm = _SeqLLM([LLMReply(tool_calls=[ToolCall("1", "ping", {})])])  # 永远调工具，不收尾
     out = orch.handle(session, "loop", llm, max_steps=2)
-    assert "达到最大步数" in out["reply"]
+    assert "先停一下" in out["reply"]
     assert world.n_perceive == 2 and len(world.invoked) == 2, "正好转 max_steps 轮"
 
 
@@ -113,52 +115,11 @@ def test_handle_pure_chat_without_world(tmp_path):
     # 没连世界 → 纯聊天：不 perceive、直接出文字
     reg = WorldRegistry()
     store = SessionStore(root=str(tmp_path))
-    orch = Orchestrator(reg, store, runs=RunnerManager())
+    orch = Orchestrator(reg, store)
     session, _ = store.new(None, "fake")
     llm = _SeqLLM([LLMReply(text="纯聊天")])
     out = orch.handle(session, "hi", llm)
     assert out["reply"] == "纯聊天"
-
-
-def _skill_with_noop() -> Skill:
-    def launch(skill, world, llm, role=None):
-        bb = Blackboard(world=None)
-        return {"ok": True, "runner": BehaviorRunner(bb, _NoOp("noop"), tick_s=0.01),
-                "display_name": skill.display_name, "my_side": "white", "opponent": "bot"}
-    return Skill(id="g", display_name="测试技能", instructions="i",
-                 game_name="测试棋", required_action="move", launcher=launch, adapter_id="g")
-
-
-def test_handle_enter_skill_short_circuits(tmp_path):
-    world = _CountWorld(tool_name="move", tool_kind="tool")
-    skills = SkillRegistry()
-    skills.register(_skill_with_noop())
-    orch, session = _orch(tmp_path, world, skills=skills)
-    llm = _SeqLLM([LLMReply(tool_calls=[ToolCall("1", ENTER_SKILL_TOOL, {"skill_id": "g"})])])
-    try:
-        out = orch.handle(session, "来一盘", llm)
-        assert "测试技能" in out["reply"], "调 enter_skill 应进入并收尾"
-        assert orch.active_run(session.id) is not None
-        assert world.invoked == [], "enter_skill 是 orchestrator 拦截、不下发世界"
-    finally:
-        orch.stop_run(session.id)
-
-
-def test_handle_routes_to_active_run(tmp_path):
-    # run 进行中 → handle 不跑主循环，转去面板路由（route_in_skill）
-    world = _CountWorld(tool_name="move", tool_kind="tool")
-    skills = SkillRegistry()
-    skills.register(_skill_with_noop())
-    orch, session = _orch(tmp_path, world, skills=skills)
-    assert orch.enter(session, "g", _SeqLLM([LLMReply(text="x")]))["ok"]
-    try:
-        before = world.n_perceive
-        llm = _SeqLLM([LLMReply(text='{"intent":"chat"}'), LLMReply(text="陪聊一句")])
-        out = orch.handle(session, "随便说句", llm)
-        assert out["reply"], "对局中说话应被路由处理并回话"
-        assert world.n_perceive == before, "对局中 handle 不进主循环、不再 perceive"
-    finally:
-        orch.stop_run(session.id)
 
 
 def test_handle_stream_mirrors_handle(tmp_path):
@@ -174,3 +135,22 @@ def test_handle_stream_mirrors_handle(tmp_path):
     assert "perception" in types and "tool_call" in types and "tool_result" in types
     assert any(e["type"] == "reply" and e["text"] == "done" for e in events)
     assert world.invoked == [("ping", {})], "stream 版也应真正下发工具"
+    # 流式路径的工具结果也要进会话历史（后台线程里执行，别丢档）
+    msgs = orch.store.get(session.id).messages
+    assert any(m.get("role") == "tool" and m.get("name") == "ping" for m in msgs)
+
+
+def test_handle_stream_forwards_progress_events(tmp_path):
+    """长动作进度：世界 invoke 报进度 → 聊天流里实时出现 progress 事件（不黑等）。"""
+    world = _ProgressWorld(tool_name="move", tool_kind="tool")
+    orch, session = _orch(tmp_path, world)
+    llm = _SeqLLM([
+        LLMReply(tool_calls=[ToolCall("1", "move", {"to": "e4"})]),
+        LLMReply(text="ok"),
+    ])
+    events = list(orch.handle_stream(session, "动一下", llm))
+    prog = [e for e in events if e["type"] == "progress"]
+    assert [p["message"] for p in prog] == ["已夹取", "正在移向 e4"]
+    i_call = next(i for i, e in enumerate(events) if e["type"] == "tool_call")
+    i_res = next(i for i, e in enumerate(events) if e["type"] == "tool_result")
+    assert all(i_call < events.index(p) < i_res for p in prog), "进度事件夹在调用与结果之间"
