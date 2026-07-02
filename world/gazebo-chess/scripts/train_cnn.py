@@ -37,7 +37,7 @@ def load_dataset(root: Path) -> tuple[np.ndarray, np.ndarray]:
     for fp in frames:
         png = fp.read_bytes()
         frame = ov._decode_rgb(png)
-        quad = ov._detect_board_quad(frame)
+        quad = ov._detect_board_quad(frame) if frame is not None else None
         if quad is None:
             skipped += 1
             continue
@@ -57,7 +57,7 @@ def load_dataset(root: Path) -> tuple[np.ndarray, np.ndarray]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("dataset", type=Path)
+    ap.add_argument("dataset", type=Path, nargs="+")
     ap.add_argument("--epochs", type=int, default=20)
     ap.add_argument("--out", type=Path,
                     default=_ANIMA_ROOT / "src" / "tools" / "boardgame" / "weights" / "cnn_squares.onnx")
@@ -66,7 +66,9 @@ def main() -> None:
     import torch
     import torch.nn as nn
 
-    x, y = load_dataset(args.dataset)
+    parts = [load_dataset(d) for d in args.dataset]
+    x = np.concatenate([p[0] for p in parts])
+    y = np.concatenate([p[1] for p in parts])
     x = torch.from_numpy(x.transpose(0, 3, 1, 2))    # NCHW
     y = torch.from_numpy(y)
     g = torch.Generator().manual_seed(SEED)
@@ -83,7 +85,10 @@ def main() -> None:
         nn.Linear(128, len(rd.CLASSES)),
     ).to(dev)
     opt = torch.optim.Adam(net.parameters(), lr=LR)
-    lossf = nn.CrossEntropyLoss()
+    # 类别加权：~85% 的格是空的，不加权模型会塌缩成"全猜空"（试点训练实测如此）。
+    counts = np.bincount(y.numpy(), minlength=len(rd.CLASSES)).astype(np.float32)
+    w = counts.sum() / np.maximum(counts, 1.0)
+    lossf = nn.CrossEntropyLoss(weight=torch.tensor(w / w.mean()).to(dev))
 
     for ep in range(args.epochs):
         net.train()
