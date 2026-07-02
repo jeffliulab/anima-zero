@@ -26,6 +26,8 @@ from .. import idioms
 from ..blackboard import Blackboard
 from ..runner import BehaviorRunner
 from ... import config, messages
+from ...tools.boardgame import referee
+from ...tools.boardgame.base import OCC
 from ...world_client import RemoteWorld
 
 MAX_FAIL = config.GAME_MAX_FAIL    # send_move 连续失败上限
@@ -35,6 +37,7 @@ MAX_FAIL = config.GAME_MAX_FAIL    # send_move 连续失败上限
 class BoardGameBlackboard(Blackboard):
     """对弈树的黑板：在通用 Blackboard 之上，补对弈专属字段（belief 局面、执方、棋种适配器…）。"""
     adapter: Any = None                     # BoardGameAdapter（注入的棋种适配器）
+    second_eye: Any = None                  # 第二只眼（CNN 子型识别器，PIECE 空间）；None=单层（无权重/数据世界）
     belief: Any = None                      # ANIMA 期望的局面/信念（如 chess.Board），每拍用视觉校准；与世界真值分家
     my_side: str = "white"                  # "white" / "black"
     prims: set = field(default_factory=set)  # 世界支持的物理原语名集合（move/remove/place…）——喂给 adapter.expand_move 决定怎么拆
@@ -85,6 +88,11 @@ class Perceive(Behaviour):
         if img is None:
             return self._perceive_failed(c, "无画面")
 
+        # 双层视觉桥（物理世界）：主识别器在 OCC 空间 → 走「两眼读数 → 裁判三方对账 → 三态」。
+        # 数据世界（PIECE 空间老路径）走下面原有逻辑，行为逐字节不变。
+        if getattr(c.adapter, "space", None) == OCC:
+            return self._update_with_referee(c, img)
+
         # 2) 带置信度地认局面
         placement, uncertain = c.adapter.read_board_detailed(img)
         c.observed = placement
@@ -113,6 +121,48 @@ class Perceive(Behaviour):
         if mv is not None:
             uci = c.adapter.move_uci(mv)
             c.adapter.apply(c.belief, mv)                   # 推进期望局面
+            c.emit("opponent", f"对手走 {uci}", uci=uci)
+        c.pending_observed = None
+        c.observed_streak = 0
+        c.running_streak = 0
+        return Status.SUCCESS
+
+    def _update_with_referee(self, c, img: bytes) -> Status:
+        """双层路径：追踪层占用盘 × CNN 子型盘（可缺席）× 信念期望盘 → referee.judge 三方对账。
+        STEADY→决策；CANDIDATE→沿用多帧确认 + diff_move（+可选子型级核对）；CONFLICT/UNCERTAIN→再看一眼。"""
+        occ_obs, occ_unc = c.adapter.read_board_detailed(img)        # 主识别器 = 追踪层（OCC）
+        piece_obs, piece_unc = (None, set())
+        if c.second_eye is not None:
+            piece_obs, piece_unc = c.second_eye.read_detailed(img)   # 第二只眼 = CNN（PIECE）
+        v = referee.judge(occ_obs, occ_unc, piece_obs, piece_unc,
+                          expected_occ=c.adapter.observed_of(c.belief))
+        c.observed = occ_obs
+        if v.status == referee.STEADY:
+            c.perceive_fail = 0
+            c.pending_observed = None
+            c.observed_streak = 0
+            c.running_streak = 0
+            return Status.SUCCESS
+        if v.status in (referee.CONFLICT, referee.UNCERTAIN):
+            return self._running(c, v.note)                          # 两态同走"再看一眼"，note 供诊断
+        # CANDIDATE：疑似对手走子 → 多帧确认（对占用盘）后 diff_move 认这一手
+        c.perceive_fail = 0
+        if v.observed_for_diff == c.pending_observed:
+            c.observed_streak += 1
+        else:
+            c.pending_observed = v.observed_for_diff
+            c.observed_streak = 1
+        if c.observed_streak < config.VISION_CONFIRM_FRAMES:
+            return self._running(c, None)
+        mv = c.adapter.diff_move(c.belief, v.observed_for_diff)
+        if mv is not None:
+            # 裁判严格模式：CNN 在场时做子型级交叉核对（认出的这手和 CNN 看到的子型吻合才采信）
+            verify = getattr(c.adapter, "verify_move_piece_level", None)
+            if (config.VISION_REFEREE_STRICT and piece_obs is not None and verify is not None
+                    and not verify(c.belief, mv, piece_obs)):
+                return self._running(c, "两眼对走子说法不一（子型核对不过），再看一眼。")
+            uci = c.adapter.move_uci(mv)
+            c.adapter.apply(c.belief, mv)
             c.emit("opponent", f"对手走 {uci}", uci=uci)
         c.pending_observed = None
         c.observed_streak = 0
@@ -317,7 +367,7 @@ def _template_narrator(uci: str, san: str, my_side: str) -> str:
 
 def start_boardgame(shared_world, adapter, my_side: str,
                     narrate: Optional[Callable] = None, display_name: str = "Chess Mode",
-                    belief: Any = None) -> BehaviorRunner:
+                    belief: Any = None, second_eye: Any = None) -> BehaviorRunner:
     """组装一局对弈：黑板 + 对弈树 + 发动机(BehaviorRunner)。返回 runner，调用方 manager.start 后台跑。
 
     对弈用**自己的短超时世界 client**（不碰共享的长超时 client）：这样协作式取消最多等一个短超时
@@ -333,7 +383,8 @@ def start_boardgame(shared_world, adapter, my_side: str,
     except Exception:  # noqa: BLE001
         prims = {"move"}
     bb = BoardGameBlackboard(
-        world=game_world, adapter=adapter, belief=belief if belief is not None else adapter.new_state(),
+        world=game_world, adapter=adapter, second_eye=second_eye,
+        belief=belief if belief is not None else adapter.new_state(),
         my_side=my_side, prims=prims, narrate=narrate or _template_narrator, display_name=display_name,
     )
     side_cn = messages.SIDE_NAMES.get(my_side, my_side)

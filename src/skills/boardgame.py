@@ -13,13 +13,13 @@
 """
 from __future__ import annotations
 
-from .. import messages
+from .. import config, messages
 from ..llm import LLM
 from ..skill import Skill, SkillRegistry
 from ..behavior.trees.boardgame import start_boardgame
 from ..behavior.trees.boardtasks import start_record, start_setup
 from ..tools.boardgame import chess as _chess_tools  # noqa: F401  (import 即注册适配器)
-from ..tools.boardgame.base import get_adapter
+from ..tools.boardgame.base import OCC, get_adapter
 
 # 棋种无关的"对弈陪伴"说明书：走子是引擎的事，循环是行为树的事，你只管语言+高层判断。
 PLAY_GAME_INSTRUCTIONS = """\
@@ -66,17 +66,43 @@ def _make_narrator(llm: LLM, skill: Skill):
     return narrate
 
 
-def _seed_belief(world, adapter):
+def _eyes_for_world(skill: Skill, world):
+    """按世界选识别器组合（config.vision_recognizer_for 单一来源）。返回 (adapter, second_eye)。
+
+    - "occ+cnn"（物理相机世界）：新建一个带追踪层识别器的适配器实例（双层视觉桥）；CNN 权重在
+      就配第二只眼，缺权重 → 诚实降级单层（second_eye=None，裁判自动退化）。
+    - "piece"（默认）：注册表单例（老模板匹配路径，行为不变）。
+    """
+    base_adapter = get_adapter(skill.adapter_id)
+    if base_adapter is None:
+        return None, None
+    if config.vision_recognizer_for(getattr(world, "name", "")) == "occ+cnn":
+        from ..tools.boardgame._cnn_reader import CnnReader
+        from ..tools.boardgame._occupancy_vision import OccupancyRecognizer
+        adapter = type(base_adapter)(recognizer=OccupancyRecognizer())   # 同棋种、换眼睛
+        cnn = CnnReader()
+        return adapter, (cnn if cnn.available() else None)
+    return base_adapter, None
+
+
+def _seed_belief(world, adapter, second_eye=None):
     """进 play 时读一眼盘、从画面构造信念（半路接手 / 开局都走这条）。读不到 / 识别为空 → 退回标准开局。
 
-    物理世界（gazebo）v0.4 还没视觉桥，识别不到会退回开局——那是预期（gazebo 的完整对弈=0.5）；
-    数据世界（sim-chess）渲染盘认得出，进 play 即从当前盘接着下。
+    双层模式（适配器在 OCC 空间）：占用盘认不出子型，seed 靠第二只眼（CNN）；CNN 缺席就退回
+    标准开局（诚实降级——半路接手需要认子型）。数据世界（sim-chess）走老 seed_from_vision。
     """
     try:
         obs = world.perceive()
         if obs.image_png is not None:
-            b = adapter.seed_from_vision(obs.image_png, "white")
-            if hasattr(b, "piece_map") and len(b.piece_map()) >= 2:   # 至少认到两个子才采信
+            if getattr(adapter, "space", None) == OCC:
+                if second_eye is not None:
+                    placement, _unc = second_eye.read_detailed(obs.image_png)
+                    b = adapter.seed_from_placement(placement, "white")
+                else:
+                    b = None                                   # 单层认不出子型 → 退标准开局
+            else:
+                b = adapter.seed_from_vision(obs.image_png, "white")
+            if b is not None and hasattr(b, "piece_map") and len(b.piece_map()) >= 2:   # 至少认到两个子才采信
                 return b
     except Exception:  # noqa: BLE001
         pass
@@ -86,15 +112,15 @@ def _seed_belief(world, adapter):
 def _play_launch(skill: Skill, world, llm: LLM, role: str | None = None, **_) -> dict:
     """进入对弈 = 把走子循环交给引擎行为树。执方由 role 给（LLM 从对话理解），没给就问——绝不默认选边。
     新框架不再 take_seat/start_game：开局/配对手是世界自己界面上的人类操作（如 sim-chess 网页）。"""
-    adapter = get_adapter(skill.adapter_id)
+    adapter, second_eye = _eyes_for_world(skill, world)
     if adapter is None:
         return {"ok": False, "message": f"没有「{skill.adapter_id}」棋种适配器。"}
     my_side = role if role in ("white", "black") else None
     if my_side is None:
         return {"ok": False, "message": "你想让我执哪一方（白/黑）？告诉我我就开下。"}
-    belief = _seed_belief(world, adapter)
+    belief = _seed_belief(world, adapter, second_eye)
     runner = start_boardgame(world, adapter, my_side, narrate=_make_narrator(llm, skill),
-                             display_name=skill.display_name, belief=belief)
+                             display_name=skill.display_name, belief=belief, second_eye=second_eye)
     side_cn = messages.SIDE_NAMES.get(my_side, my_side)
     reply = messages.game_start_reply(skill.display_name, side_cn[0] if side_cn else "", "对手")
     return {"ok": True, "runner": runner, "display_name": skill.display_name, "reply": reply,

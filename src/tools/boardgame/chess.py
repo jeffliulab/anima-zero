@@ -242,13 +242,30 @@ class ChessAdapter:
 
     # ---- 从一帧画面构造信念局面（半路接手 / 开局 seed）----
     def seed_from_vision(self, image_png: bytes, side_to_move: str = "white") -> chess.Board:
-        placement = self.read_board(image_png)          # {square(0..63): 符号}，只含有子的格
+        return self.seed_from_placement(self.read_board(image_png), side_to_move)
+
+    def verify_move_piece_level(self, state: chess.Board, move: chess.Move, piece_obs: dict) -> bool:
+        """子型级交叉核对（裁判严格模式）：CNN 子型盘 piece_obs 与「走完 move 后应有的摆放」
+        在 CNN 自信的格上是否吻合。只比双方都有话说的格（CNN 看不清的格不冤枉它）。"""
+        b = state.copy(stack=False)
+        b.push(move)
+        expected = _vision.placement_of_board(b)
+        for sq, sym in piece_obs.items():
+            if sq in expected and expected[sq] != sym:
+                return False
+        for sq, sym in expected.items():
+            if sq in piece_obs and piece_obs[sq] != sym:
+                return False
+        return True
+
+    def seed_from_placement(self, placement: dict, side_to_move: str = "white") -> chess.Board:
+        """从一张「子型摆放表」构造信念局面（seed_from_vision 的无图版；CNN 读数直接喂这里）。"""
         b = chess.Board(None)                            # 空盘
         for sq, sym in placement.items():
             try:
                 b.set_piece_at(sq, chess.Piece.from_symbol(sym))
             except (ValueError, KeyError):
-                continue                                 # 认到非法符号（如空格模板）→ 跳过
+                continue                                 # 认到非法符号（如空格模板 / 占用色）→ 跳过
         b.turn = chess.WHITE if side_to_move == "white" else chess.BLACK
         try:
             b.set_castling_fen("KQkq")                   # python-chess 只保留与实际 K/R 位置一致的易位权

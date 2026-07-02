@@ -42,12 +42,14 @@ dependencies = [
     "py-trees>=2.2",    # 行为树(对弈循环层)
     "numpy>=1.26",      # v0.5 视觉桥·追踪层(占用识别)——脑侧首次引入数值运行时
     "opencv-python-headless>=4.6",  # v0.5 视觉桥·板角检测/单应/采样(headless:服务器无 GUI)
+    "onnxruntime>=1.20",  # v0.5 视觉桥·CNN 层推理(只推理;训练用 torch 但只在离线脚本,不进运行时)
 ]
 
 [project.optional-dependencies]
 dev = [
     "ruff>=0.4",
     "pytest>=8.0",      # 自动化回归测试(视觉 round-trip + 对弈冒烟)
+    "onnx>=1.16",       # 仅测试用:手搓最小 ONNX 测 CNN 读盘管线(运行时只要 onnxruntime)
 ]
 
 [project.urls]

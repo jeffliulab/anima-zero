@@ -96,6 +96,23 @@ VISION_OCC_RECT_CELL_PX = _i("ANIMA_VISION_OCC_RECT_CELL_PX", "48")   # 矫正(�
 # 板方向约定:探测到的板四角(图中 左上/右上/右下/左下)与棋盘格坐标的对应,按 90° 一档旋转(0-3)。
 # 默认 0 = 相机从白方一侧看盘(图下缘=rank1、图左=a 列)。这是"一次性棋盘外参"级别的约定,换机位改它。
 VISION_OCC_QUARTER_TURNS = _i("ANIMA_VISION_OCC_QUARTER_TURNS", "0")
+# 视觉·CNN 层(第二层,认子型;权重缺失自动降级单层,见 _cnn_reader.py)
+VISION_CNN_CONF_MIN = _f("ANIMA_VISION_CNN_CONF_MIN", "0.7")  # 每格 softmax 置信下限,低于→该格"看不清"
+# 裁判严格模式:CANDIDATE 认出走子后,再用 CNN 子型盘核对这一手(子型级交叉核对);不吻合→降级"再看一眼"。
+VISION_REFEREE_STRICT = os.getenv("ANIMA_VISION_REFEREE_STRICT", "1") not in ("0", "false", "False")
+# 识别器选择:{世界名→组合}(单一来源,env 可覆盖;格式 "world=combo,world2=combo")。
+# 组合:"piece"=老模板匹配(sim-chess 2D 合成图) / "occ+cnn"=双层视觉桥(物理相机世界)。
+_RECOG_DEFAULT = "gazebo-chess=occ+cnn"
+
+
+def vision_recognizer_for(world_name: str) -> str:
+    """某个世界该用哪种识别器组合。没配的世界一律 "piece"（老路径，行为不变）。"""
+    mapping = {}
+    for pair in os.getenv("ANIMA_VISION_RECOGNIZERS", _RECOG_DEFAULT).split(","):
+        if "=" in pair:
+            k, v = pair.split("=", 1)
+            mapping[k.strip()] = v.strip()
+    return mapping.get(world_name, "piece")
 
 # ---- 象棋引擎（ANIMA 自己的脑子）----
 CHESS_DEPTH = _i("ANIMA_CHESS_DEPTH", "3")
@@ -103,6 +120,15 @@ CHESS_TIME = _f("ANIMA_CHESS_TIME", "1.5")
 
 
 # ---- 路径派生（无绝对路径硬编码）----
+def cnn_weights_path() -> str:
+    """CNN 识别器 ONNX 权重路径：默认在脑仓 src/tools/boardgame/weights/ 下（.gitignore，公开仓
+    不塞二进制；用 world/gazebo-chess/scripts/train_cnn.py 可复现地重训），env ANIMA_CNN_WEIGHTS 覆盖。"""
+    env = os.getenv("ANIMA_CNN_WEIGHTS")
+    if env:
+        return env
+    return str(Path(__file__).resolve().parent / "tools" / "boardgame" / "weights" / "cnn_squares.onnx")
+
+
 def chess_engine_path() -> str:
     """ANIMA 复用的象棋引擎路径：默认从仓库结构派生（anima-zero 上溯到 career-projects 根，
     再拼 3-anima-chess-engine/chess/engine.py），可用 env ANIMA_CHESS_ENGINE_PATH 覆盖。"""
