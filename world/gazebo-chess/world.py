@@ -107,12 +107,32 @@ class GazeboChessWorld:
         with self.lock:
             spawn.spawn_board()
             spawn.spawn_camera()
-            if demo_square:
+            fen = config.SETUP_FEN.strip()
+            if fen:                                     # v0.5 多子：按 FEN 摆放字段摆盘
+                self._spawn_fen(fen)
+            elif demo_square:                           # v0.4 单演示子路径原样保留（追加不替换）
                 spawn.spawn_piece(demo_square, "white")
             if self.ready:
                 self.arm.goto_arm(PARK, config.MOVE_TIME_APPROACH_S)
             time.sleep(config.SETTLE_S)
             self._spin(20)
+
+    @staticmethod
+    def _spawn_fen(fen: str) -> None:
+        """按 FEN 的【摆放字段】摆多子（大写白/小写黑；不管轮次/易位权——那是大脑的事）。
+        手工解析、不引 python-chess（世界 venv 不为此加依赖；FEN 摆放字段语法是域常量级的简单格式）。"""
+        rows = fen.split()[0].split("/")
+        for i, row in enumerate(rows[:8]):
+            rank = 7 - i                                 # FEN 第一行是 rank8
+            file = 0
+            for ch in row:
+                if ch.isdigit():
+                    file += int(ch)
+                    continue
+                if ch.lower() in "pnbrqk" and file < 8:
+                    sq = geometry.square_name(file, rank)
+                    spawn.spawn_piece(sq, "white" if ch.isupper() else "black", kind=ch.lower())
+                    file += 1
 
     # ---------- AWI ----------
     def capabilities(self) -> dict:
@@ -252,7 +272,7 @@ class GazeboChessWorld:
             color = "white" if letter.isupper() else "black"
             note(_P_LOCATE, f"在备用子区备一枚{color}子")
             rx, ry, rz = geometry.reservoir_spawn_xyz()
-            ok, nm = spawn.spawn_piece_at((rx, ry, rz), color)
+            ok, nm = spawn.spawn_piece_at((rx, ry, rz), color, kind=letter.lower())
             if not ok:
                 return {"ok": False, "message": f"备用子区取子失败：{nm}"}
             time.sleep(config.SPAWN_SETTLE_S); self._spin(8)

@@ -81,7 +81,8 @@ def test_gray_blob_on_square_is_uncertain_not_guessed():
     f, r = chess.square_file(chess.D5), chess.square_rank(chess.D5)
     pt = np.array([[[(f + 0.5) * TOPDOWN_CELL, (8 - r - 0.2) * TOPDOWN_CELL]]], np.float32)
     u, v = cv2.perspectiveTransform(pt, m)[0][0]
-    cv2.circle(arr, (int(u), int(v)), 18, (128, 128, 128), -1)
+    # 灰度取判色空档带（BLACK_THRESH=80 与 WHITE_THRESH=110 之间）——"非白非黑非板绿"的东西
+    cv2.circle(arr, (int(u), int(v)), 18, (95, 95, 95), -1)
     ok, buf = cv2.imencode(".png", cv2.cvtColor(arr, cv2.COLOR_RGB2BGR))
 
     placement, uncertain = OccupancyRecognizer().read_detailed(buf.tobytes())

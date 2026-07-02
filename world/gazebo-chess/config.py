@@ -67,14 +67,33 @@ DISCARD_SLOTS_PER_ROW = _i("GZCHESS_DISCARD_SLOTS_PER_ROW", "8")             # �
 RESERVOIR_ORIGIN_X = _f("GZCHESS_RESERVOIR_ORIGIN_X", str(BOARD_ORIGIN_X))    # 备用子区取子点 x
 RESERVOIR_ORIGIN_Y = _f("GZCHESS_RESERVOIR_ORIGIN_Y", "-0.24")               # 放在棋盘另一侧（和弃子区分开）
 
-# ---- 相机（俯视）----
-# 棋盘上方高度。⚠️ 约束是**竖直** FOV（16:9 下 vfov≈0.6rad < hfov 1.0）：board 0.40m 要全进画面、
-# 竖直视野 2*h*tan(vfov/2) 得 ≥ 0.40+留边，故 h≈0.85m（0.55m 时竖直只看到 ~0.34m、远端会被裁）。
+# ---- 相机 ----
+# v0.5：默认**斜视**（斜着才看得出子型，给 CNN 认；对齐 v0.5 视觉桥）。旧俯视完整保留，
+# GZCHESS_CAM_MODE=overhead 一键切回（T0：加新不丢旧）。
+CAM_MODE = os.getenv("GZCHESS_CAM_MODE", "oblique")          # "oblique"（斜上方）| "overhead"（正俯视）
+# 斜视位姿（板局部系）：从棋盘中心出发，方位角 AZIM（-90°=白方/rank1 一侧）、俯角 ELEV、直线距离 DIST。
+# 默认值的账：俯角 50° 能看出子身高度差；距离 0.85m 时 40cm 棋盘在 720p 竖直视野内整盘可见。
+CAM_OBL_AZIM_DEG = _f("GZCHESS_CAM_OBL_AZIM_DEG", "-90")
+CAM_OBL_ELEV_DEG = _f("GZCHESS_CAM_OBL_ELEV_DEG", "50")
+CAM_OBL_DIST_M = _f("GZCHESS_CAM_OBL_DIST_M", "0.85")
+# 俯视（overhead 模式用）：棋盘上方高度。⚠️ 约束是**竖直** FOV（16:9 下 vfov≈0.6rad < hfov 1.0）：
+# board 0.40m 要全进画面、竖直视野 2*h*tan(vfov/2) 得 ≥ 0.40+留边，故 h≈0.85m。
 CAM_HEIGHT_M = _f("GZCHESS_CAM_HEIGHT_M", "0.85")
 CAM_FOV_RAD = _f("GZCHESS_CAM_FOV_RAD", "1.0")     # 垂直视野（约 57°）
 CAM_W = _i("GZCHESS_CAM_W", "1280")
 CAM_H = _i("GZCHESS_CAM_H", "720")
 CAM_FPS = _i("GZCHESS_CAM_FPS", "15")
+
+# ---- 摆盘（v0.5 多子）----
+# 非空 → 启动按 FEN（只用摆放字段）摆多子；空 → 只摆一枚演示子（GZCHESS_DEMO_PIECE，v0.4 路径保留）。
+SETUP_FEN = os.getenv("GZCHESS_SETUP_FEN", "")
+
+# ---- 合成数据管线（scripts/gen_dataset.py：CNN 训练数据，世界真值自动打标签）----
+DATASET_OUT_DIR = os.getenv("GZCHESS_DATASET_OUT_DIR", "")   # 空→脚本默认仓外 ~/gzchess-dataset
+DATASET_N = _i("GZCHESS_DATASET_N", "300")                   # 采多少帧（ChessCog 量级是 5000，先小跑验管线）
+DATASET_MIN_PIECES = _i("GZCHESS_DATASET_MIN_PIECES", "2")   # 每帧随机摆几个子（下限/上限）
+DATASET_MAX_PIECES = _i("GZCHESS_DATASET_MAX_PIECES", "16")
+DATASET_SETTLE_S = _f("GZCHESS_DATASET_SETTLE_S", "0.8")     # 摆完等物理/画面稳定再抓帧
 
 # ---- 夹爪（来自 episode 夹爪 xacro 的固有几何，域常量；这里只记录、便于算夹持目标）----
 # 手指为 prismatic，joint∈[0, GRIP_STROKE]；joint=0 闭合、=STROKE 张开。

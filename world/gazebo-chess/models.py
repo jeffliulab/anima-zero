@@ -51,18 +51,28 @@ def board_sdf(name: str = "chessboard") -> tuple[str, tuple[float, float, float]
     return sdf, spawn_xyz
 
 
-def piece_sdf(name: str, color: str = "white") -> tuple[str, tuple[float, float, float]]:
-    """一枚棋子：底座(宽)+ 抓取腰(GRASP_WIDTH 宽，高摩擦，给夹爪夹)+ 头。
+# 每种棋子的「剪影配方」（视觉专用，见 piece_sdf）：总高相对 PIECE_HEIGHT_M 的倍数——
+# 高度阶梯 兵<车<马<象<后<王 是国象实物的惯例，让斜视下 CNN/人眼都能按剪影分型。
+_KIND_HEIGHT_FACTOR = {"p": 1.0, "r": 1.1, "n": 1.15, "b": 1.25, "q": 1.4, "k": 1.5}
+
+
+def piece_sdf(name: str, color: str = "white", kind: str = "p") -> tuple[str, tuple[float, float, float]]:
+    """一枚棋子：底座(宽)+ 抓取腰(GRASP_WIDTH 宽，高摩擦，给夹爪夹)+ 分型的头。
     返回 (sdf, spawn 世界 xyz=模型原点)。模型原点在棋子底面中心，spawn z = 棋盘上表面。
-    color: white/black → 材质色。
+    color: white/black → 材质色；kind: p/n/b/r/q/k → 头部剪影（v0.5：斜视下能看出子型）。
+
+    ⚠️ **碰撞体六种子完全一致**（沿用 v0.4 验证过的 底座+腰+头 三段圆柱）——分型只改【视觉】：
+    抓取物理/IK 不因子型而变，wave 0 验通的夹取对所有子型直接成立。
     """
+    kind = (kind or "p").lower()
+    if kind not in _KIND_HEIGHT_FACTOR:
+        kind = "p"
     base_r = config.PIECE_BASE_DIAM_M / 2.0
     waist_r = config.PIECE_GRASP_WIDTH_M / 2.0
-    waist_z0 = config.PIECE_GRASP_WAIST_M               # 腰中心离底面高度（抓取点）
     base_h = 0.008
     waist_h = 0.020                                     # 腰段高度（够夹爪指接触）
     head_r = waist_r * 0.7
-    total_h = config.PIECE_HEIGHT_M
+    total_h = config.PIECE_HEIGHT_M                     # 碰撞体总高：全型一致（物理不变）
     head_h = max(0.004, total_h - base_h - waist_h)
     mass = 0.020
     if color == "white":
@@ -96,22 +106,88 @@ def piece_sdf(name: str, color: str = "white") -> tuple[str, tuple[float, float,
       <visual name="waist"><pose>0 0 {waist_cz:.4f} 0 0 0</pose>
         <geometry><cylinder><radius>{waist_r:.4f}</radius><length>{waist_h}</length></cylinder></geometry>
         <material>{mat}</material></visual>
-      <visual name="head"><pose>0 0 {head_cz:.4f} 0 0 0</pose>
-        <geometry><cylinder><radius>{head_r:.4f}</radius><length>{head_h:.4f}</length></cylinder></geometry>
-        <material>{mat}</material></visual>
-    </link>
+{_head_visuals(kind, head_r, base_h + waist_h, total_h, mat)}    </link>
   </model>
 </sdf>"""
     return sdf, spawn_xyz
 
 
-def camera_sdf(name: str = "overhead_cam") -> tuple[str, tuple[float, float, float], tuple[float, float, float]]:
-    """俯视相机：架在棋盘中心正上方 CAM_HEIGHT 处，朝下拍。
-    返回 (sdf, spawn xyz, spawn rpy)。相机像素在 CAM_IMAGE_TOPIC 上发布（gz 话题），再用 image_bridge 桥到 ROS。
-    朝向：CAM_RPY 默认 pitch=+90°（相机 +x 轴朝下）。图像上下左右朝向需对着仿真核对。
+def _head_visuals(kind: str, head_r: float, z0: float, collision_total_h: float, mat: str) -> str:
+    """每种棋子的头部【视觉】剪影（碰撞体不在此、全型一致）。z0 = 腰顶高度。
+
+    剪影配方（简单几何体，斜视下轮廓可分）：
+      p 兵=矮柱+圆球  r 车=粗短柱+宽扁盖  n 马=柱+前倾斜块(不对称)  b 象=细高柱+小球尖
+      q 后=高柱+球+小球冠  k 王=最高柱+十字
     """
-    spawn_xyz = (config.BOARD_ORIGIN_X, config.BOARD_ORIGIN_Y, config.BOARD_ORIGIN_Z + config.CAM_HEIGHT_M)
-    spawn_rpy = tuple(config.CAM_RPY)
+    total = config.PIECE_HEIGHT_M * _KIND_HEIGHT_FACTOR[kind]
+    body_h = max(0.004, total - z0)
+
+    def cyl(nm, r, h, cz, extra_pose="0 0 0"):
+        return (f'      <visual name="{nm}"><pose>0 0 {cz:.4f} {extra_pose}</pose>\n'
+                f'        <geometry><cylinder><radius>{r:.4f}</radius><length>{h:.4f}</length></cylinder></geometry>\n'
+                f'        <material>{mat}</material></visual>\n')
+
+    def sph(nm, r, cz):
+        return (f'      <visual name="{nm}"><pose>0 0 {cz:.4f} 0 0 0</pose>\n'
+                f'        <geometry><sphere><radius>{r:.4f}</radius></sphere></geometry>\n'
+                f'        <material>{mat}</material></visual>\n')
+
+    def box(nm, x, y, z, cx, cy, cz, rpy="0 0 0"):
+        return (f'      <visual name="{nm}"><pose>{cx:.4f} {cy:.4f} {cz:.4f} {rpy}</pose>\n'
+                f'        <geometry><box><size>{x:.4f} {y:.4f} {z:.4f}</size></box></geometry>\n'
+                f'        <material>{mat}</material></visual>\n')
+
+    if kind == "r":       # 车：粗短柱 + 宽扁盖
+        h1 = body_h * 0.7
+        return (cyl("head", head_r * 1.1, h1, z0 + h1 / 2)
+                + cyl("cap", head_r * 1.5, body_h * 0.3, z0 + h1 + body_h * 0.15))
+    if kind == "n":       # 马：柱 + 前倾斜块（唯一不对称剪影）
+        h1 = body_h * 0.55
+        return (cyl("head", head_r * 0.9, h1, z0 + h1 / 2)
+                + box("snout", head_r * 2.6, head_r * 1.2, head_r * 1.2,
+                      head_r * 0.8, 0.0, z0 + h1 + head_r * 0.5, rpy="0 0.5 0"))
+    if kind == "b":       # 象：细高柱 + 小球尖
+        h1 = body_h * 0.8
+        return (cyl("head", head_r * 0.75, h1, z0 + h1 / 2)
+                + sph("tip", head_r * 0.55, z0 + h1 + head_r * 0.4))
+    if kind == "q":       # 后：高柱 + 球 + 小球冠
+        h1 = body_h * 0.65
+        return (cyl("head", head_r * 0.9, h1, z0 + h1 / 2)
+                + sph("orb", head_r * 1.05, z0 + h1 + head_r * 0.6)
+                + sph("crown", head_r * 0.45, z0 + h1 + head_r * 1.9))
+    if kind == "k":       # 王：最高柱 + 十字
+        h1 = body_h * 0.75
+        cz = z0 + h1
+        return (cyl("head", head_r * 0.9, h1, z0 + h1 / 2)
+                + box("cross_v", head_r * 0.5, head_r * 0.5, head_r * 2.2, 0, 0, cz + head_r * 1.0)
+                + box("cross_h", head_r * 1.8, head_r * 0.5, head_r * 0.5, 0, 0, cz + head_r * 1.2))
+    # 兵（默认）：矮柱 + 圆球
+    h1 = body_h * 0.5
+    return (cyl("head", head_r, h1, z0 + h1 / 2)
+            + sph("ball", head_r * 0.95, z0 + h1 + head_r * 0.6))
+
+
+def camera_sdf(name: str = "overhead_cam") -> tuple[str, tuple[float, float, float], tuple[float, float, float]]:
+    """棋盘相机（v0.5 默认**斜视**、俯视保留可切，见 config.CAM_MODE）。
+    返回 (sdf, spawn xyz, spawn rpy)。相机像素在 CAM_IMAGE_TOPIC 上发布（gz 话题），再用 image_bridge 桥到 ROS。
+
+    - oblique：从板局部方位角 AZIM（默认 -90°=白方/rank1 一侧）、俯角 ELEV、距离 DIST 看向棋盘中心。
+      Gazebo 相机沿 +x 拍：yaw 指向棋盘中心、pitch=俯角。默认机位下图像下缘=rank1、左=a 列，
+      与大脑侧追踪层的方向约定（VISION_OCC_QUARTER_TURNS=0）一致。
+    - overhead：架在棋盘中心正上方 CAM_HEIGHT 处朝下拍（v0.4 原样）。
+    """
+    if config.CAM_MODE == "oblique":
+        import math
+        azim = math.radians(config.CAM_OBL_AZIM_DEG) + config.BOARD_YAW_RAD   # 板局部方位 → world
+        elev = math.radians(config.CAM_OBL_ELEV_DEG)
+        d_xy = config.CAM_OBL_DIST_M * math.cos(elev)
+        spawn_xyz = (config.BOARD_ORIGIN_X + d_xy * math.cos(azim),
+                     config.BOARD_ORIGIN_Y + d_xy * math.sin(azim),
+                     config.BOARD_ORIGIN_Z + config.CAM_OBL_DIST_M * math.sin(elev))
+        spawn_rpy = (0.0, elev, azim + math.pi)          # 朝回棋盘中心、往下俯 elev
+    else:
+        spawn_xyz = (config.BOARD_ORIGIN_X, config.BOARD_ORIGIN_Y, config.BOARD_ORIGIN_Z + config.CAM_HEIGHT_M)
+        spawn_rpy = tuple(config.CAM_RPY)
     sdf = f"""<sdf version="1.10">
   <model name="{name}">
     <static>true</static>

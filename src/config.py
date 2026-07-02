@@ -74,14 +74,22 @@ GAME_RESIGN_CONFIRM = _i("ANIMA_GAME_RESIGN_CONFIRM", "3")  # 评分须连续这
 VISION_AMBIGUITY_RATIO = _f("ANIMA_VISION_AMBIGUITY_RATIO", "0.7")  # Lowe 比值:最近/次近 SAD 超此→该格"看不清"
 VISION_CONFIRM_FRAMES = _i("ANIMA_VISION_CONFIRM_FRAMES", "2")      # 多帧确认:候选局面连续几帧一致才采信
 # 视觉·追踪层(占用+颜色识别器,v0.5 视觉桥第一层;下述默认按 gazebo 绿板/白黑子标定,斜视真帧上可再调)
-VISION_OCC_WHITE_THRESH = _i("ANIMA_VISION_OCC_WHITE_THRESH", "150")  # 非绿像素灰度>此→算白子像素
-VISION_OCC_BLACK_THRESH = _i("ANIMA_VISION_OCC_BLACK_THRESH", "80")   # 非绿像素灰度<此→算黑子像素
-VISION_OCC_GREEN_MARGIN = _i("ANIMA_VISION_OCC_GREEN_MARGIN", "12")   # G 比 R/B 高出这么多→算板面绿
+# 判色用非绿像素的灰度【中位数】（真斜视帧实测：白子背光面 p10-p90≈95-168、黑子≈32-66，
+# 80~110 是空档带）；中位数落在两阈之间 → 看不清（灰的东西：机械臂/半遮挡）。
+VISION_OCC_WHITE_THRESH = _i("ANIMA_VISION_OCC_WHITE_THRESH", "110")  # 非绿灰度中位数≥此→白子
+VISION_OCC_BLACK_THRESH = _i("ANIMA_VISION_OCC_BLACK_THRESH", "80")   # 非绿灰度中位数≤此→黑子
+VISION_OCC_GREEN_MARGIN = _i("ANIMA_VISION_OCC_GREEN_MARGIN", "12")   # G 比 R/B 高出这么多→算板面绿(绝对差)
+VISION_OCC_GREEN_REL = _f("ANIMA_VISION_OCC_GREEN_REL", "1.12")  # 或 G > R*此 且 > B*此(相对比):阴影里的暗绿板面也算绿
 # 判"格上有东西"的门槛：底带里非绿(非板面)像素占比达到此值→有物。子底座(直径3cm/格5cm)在底带
 # 的投影约占 1/4 上下，0.12 给一倍余量；低于它=板面为主=空格。
 VISION_OCC_OCCUPIED_MIN_FRAC = _f("ANIMA_VISION_OCC_OCCUPIED_MIN_FRAC", "0.12")
-VISION_OCC_DOMINANCE = _f("ANIMA_VISION_OCC_DOMINANCE", "0.55")  # 白/黑像素占非绿比须>此才敢判色,否则"看不清"
-VISION_OCC_BAND_FRAC = _f("ANIMA_VISION_OCC_BAND_FRAC", "0.45")  # 采样带=格投影靠相机一侧的这部分(子底座在格内、受遮挡最小)
+# 遮挡剔除的身柱宽度上限（占格宽比）：南邻子身在本格带里是 ≤半格的窄柱（头/上身），
+# 而本格自己的底座是 ≥0.55 格的宽段——只剔窄段，宽段当作本格有子的证据保留。
+VISION_OCC_INVADER_MAX_RUN_FRAC = _f("ANIMA_VISION_OCC_INVADER_MAX_RUN_FRAC", "0.55")
+# 采样带几何（真斜视帧上校准过的账）：子底座在【格中心】，子身向远端涂抹 ≈ 子高/tan(俯角)
+# （50° 俯角下兵≈0.76 格、王≈1.13 格）——所以带要放在「格中心 → 向近端(相机侧)延伸 BAND_FRAC 格」：
+# 那里有本格底座的下半部，而近邻(南侧)子身最多够到中心以南 ~0.37 格，0.22 的带够不着 → 不被染色。
+VISION_OCC_BAND_FRAC = _f("ANIMA_VISION_OCC_BAND_FRAC", "0.22")
 VISION_OCC_MIN_BAND_PX = _i("ANIMA_VISION_OCC_MIN_BAND_PX", "40")     # 底带里非绿像素少于此→样本不足,"看不清"
 VISION_OCC_MIN_BOARD_FRAC = _f("ANIMA_VISION_OCC_MIN_BOARD_FRAC", "0.02")  # 绿板面积占画面比低于此→没找到板
 VISION_OCC_RECT_CELL_PX = _i("ANIMA_VISION_OCC_RECT_CELL_PX", "48")   # 矫正(去斜视)后每格边长像素
