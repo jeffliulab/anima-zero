@@ -262,11 +262,24 @@ cd world/camera && pip install -e . && uvicorn server:app --port 8104
 
 ---
 
+## 十一、接口采标 MCP + 物理世界起步(v0.4)
+
+这一版做两件大事,外加一条诚实的边界。
+
+- **接口从自研 HTTP(AWI)换成业界标准 MCP**:世界＝标准 **MCP server**、脑＝**host**。MCP 三原语 **Tools / Resources / Prompts** 恰好对应我们本来的**动作 / 感知 / 说明书**——`tools/call`＝动作,`resources/read anima://observation`＝感知(画面快照 + 结构 state),`prompts/get "guidance"`＝**说明书**(世界自我介绍怎么跟它打交道,注入脑的系统提示)。世界 server＝三原语齐全的现实;引擎 server＝只有 Tools 的纯计算顾问——同一套协议。下棋引擎独立成一个 MCP server(`:8108`)。
+- **第一个物理世界 `gazebo-chess`(`:8106`)**:sim-chess 那张棋桌的 **Gazebo 3D 物理版**,真实建模六轴臂 + 真实夹爪,对大脑只露和 sim-chess 一样的 MCP 接口,内部把 ROS2 + MoveIt + Gazebo 全包起来。v0.4 先跑通 infra(往 Gazebo spawn 棋盘/棋子/相机、读位姿、俯视相机出图、MoveIt 解 IK + 发轨迹让臂动)。
+- **teleop 手动遥控(网页 GUI,`:8110`)**:先把「人能顺畅点动这条臂」验通——纯 ROS2(发 `joint_trajectory` 话题)+ MoveIt `/compute_ik` + `joint_trajectory_controller` 插值,平滑的笛卡尔点动。
+
+> **诚实的边界**:ANIMA **自主**走子那条链路(大脑发 `move` → 世界内部解 IK + 夹取 + 搬运 + 放下 + 自检)目前会超时,**本版不修,推迟 v0.5**——连同多子、失败补救一起做。这一版交付的是「标准接口 + 物理世界基础设施 + 手动遥控」,不是「ANIMA 会在物理世界下棋」。
+
+---
+
 ## 状态
 
-**v0.3(Pre-alpha),持续迭代中。** v0.1 封版了顶层架构(世界独立 + 会话 + 主循环 + 外围 hook + 原生 tool-calling);
+**v0.4(Pre-alpha),持续迭代中。** v0.1 封版了顶层架构(世界独立 + 会话 + 主循环 + 外围 hook + 原生 tool-calling);
 v0.2 在这套框架上长出第一个**技能 = Chess Mode**(技能 + 对弈行为树 + 只给画面的 sim-chess 世界 + 通用运行时 HITL/分级安全闸 + 独立 eval 记分台);
-v0.3 接入第一个**真实摄像头世界 camera**(零动作:只能看、能聊、不能操作),让 ANIMA 第一次看真实物理世界,为真机的"眼睛"铺路。
+v0.3 接入第一个**真实摄像头世界 camera**(零动作:只能看、能聊、不能操作),让 ANIMA 第一次看真实物理世界;
+v0.4 把接口**采标 MCP**,并起第一个**物理世界 gazebo-chess** + **teleop 手动遥控**(物理底座验通,ANIMA 自主走子待 v0.5)。
 真机安全硬检查、视觉裁判升级、失败恢复按依赖顺序后做(失败恢复待真机阶段兑现)。`anima-zero` 是完全开源的 Zero 线展示版。
 
 ## License

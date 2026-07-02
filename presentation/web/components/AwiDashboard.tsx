@@ -155,7 +155,7 @@ function ServerCard({ s }: { s: AwiWorld | AwiEngine }) {
           ) : !online ? (
             <div className="text-xs text-neutral-500">(离线，拿不到)</div>
           ) : guidance ? (
-            <div className="whitespace-pre-wrap rounded-md border border-neutral-800 bg-neutral-950/50 p-2 text-[12px] leading-relaxed text-amber-100/80">
+            <div className="whitespace-pre-wrap rounded-md border border-neutral-800 bg-neutral-950/50 p-2 text-[12px] leading-relaxed text-[var(--text-accent-amber)]">
               {guidance}
             </div>
           ) : (

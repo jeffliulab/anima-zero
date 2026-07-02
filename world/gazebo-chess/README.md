@@ -33,10 +33,15 @@ cd .../anima-zero/world/gazebo-chess && source .venv/bin/activate && uvicorn ser
 
 见 `config.py`（`GZCHESS_*` 环境变量，默认值集中在那里，禁硬编码）。
 
-## 当前进度（v0.4）
+## 当前进度（v0.4 封版）
 
 - [x] `config.py`、`geometry.py`（坐标换算，已离线自测通过）
-- [ ] 棋子/棋盘/相机模型 + 往 Gazebo spawn
-- [ ] W0 探路：相机出图、真实夹爪夹起一个子（调接触参数）
-- [ ] `arm_controller.py` / `grasp_pose.py` 单子抓放
-- [ ] `server.py` / `world.py` 接 AWI、接大脑跑通
+- [x] 棋子/棋盘/相机模型 + 往 Gazebo spawn（`spawn.py` / `models.py`）
+- [x] 俯视相机出图（Gazebo 相机 → `ros_gz_image image_bridge` → `vision.py` → JPEG）
+- [x] `arm_controller.py`（MoveIt `/compute_ik` + FK 复核 + `FollowJointTrajectory`）、`grasp_pose.py`
+- [x] `server.py` / `world.py` 接 MCP（`awi_mcp.py`，接口和 sim-chess 同款）
+- [x] **teleop 手动遥控（`:8110`）**：人可顺畅点动这条臂，物理底座已验通（见 `episode-ros-ws` 的 `episode_teleop` + 项目 `运行命令.md`「三 · teleop」）
+- [ ] **ANIMA 自主走子（大脑发 `move` → 世界内部真跑一趟夹取搬运）目前会 `TimeoutError` —— 待 v0.5**
+- [ ] 多子、失败补救、位置评估 —— v0.5（见 `~/.claude/plans/1-gazebo-chess-0-5-multi-piece-failure-recovery.md`）
+
+> v0.4 交付的是「物理世界基础设施 + 手动遥控」；**ANIMA 在物理世界自主下棋是 v0.5 的目标**，本版尚未跑通。

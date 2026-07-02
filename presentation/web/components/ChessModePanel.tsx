@@ -84,9 +84,9 @@ export default function ChessModePanel({
     <div className="flex h-screen flex-col border-l-2 border-amber-500/60 bg-amber-950/20">
       {/* 标签条：明显区别于普通聊天 */}
       <div className="flex items-center justify-between bg-amber-500/20 px-3 py-2">
-        <div className="text-sm font-semibold text-amber-200">
+        <div className="text-sm font-semibold text-[var(--text-accent-amber)]">
           ♟ {status?.display_name ?? "Chess Mode · 下棋模式"}
-          <span className="ml-2 text-xs font-normal text-amber-300/80">
+          <span className="ml-2 text-xs font-normal text-[var(--text-accent-amber-dim)]">
             {finished ? "· 已结束" : status?.paused ? "· ⏸ 已暂停" : "· 对弈进行中"}
           </span>
         </div>
@@ -113,7 +113,7 @@ export default function ChessModePanel({
         ) : null}
         <div className="min-w-0 flex-1 text-xs text-neutral-300">
           <div>
-            我执 <b className="text-amber-200">{status?.my_side === "white" ? "白" : "黑"}</b>
+            我执 <b className="text-[var(--text-accent-amber)]">{status?.my_side === "white" ? "白" : "黑"}</b>
             {" · "}轮到 <b>{status?.turn === "white" ? "白" : "黑"}</b>
             {status?.my_turn ? "（我）" : "（对手）"}
             {" · 第 "}
@@ -128,7 +128,7 @@ export default function ChessModePanel({
 
       {/* HITL：ANIMA 在等人回答时，把问题 + 选项显示出来（点选项填进输入框，回车/发送即作答） */}
       {status?.question && !finished && (
-        <div className="mx-3 mb-2 rounded-md border border-amber-500/50 bg-amber-500/10 p-2 text-xs text-amber-100">
+        <div className="mx-3 mb-2 rounded-md border border-amber-500/50 bg-amber-500/10 p-2 text-xs text-[var(--text-accent-amber)]">
           <div className="font-semibold">❓ ANIMA 在等你回答：</div>
           <div className="mt-0.5">{status.question.text}</div>
           {status.question.options && status.question.options.length > 0 && (
@@ -144,14 +144,14 @@ export default function ChessModePanel({
               ))}
             </div>
           )}
-          <div className="mt-1 text-[10px] text-amber-300/70">在下面输入框回答即可。</div>
+          <div className="mt-1 text-[10px] text-[var(--text-accent-amber-dim)]">在下面输入框回答即可。</div>
         </div>
       )}
 
       {/* 解说/事件流（占满中间，可滚动） */}
       <div
         ref={feedRef}
-        className="mx-3 flex-1 overflow-y-auto rounded-md bg-black/40 p-2 text-[13px] leading-relaxed"
+        className="mx-3 flex-1 overflow-y-auto rounded-md bg-black p-2 text-[13px] leading-relaxed"
       >
         {events.length === 0 ? (
           <div className="text-neutral-500">对弈即将开始…</div>

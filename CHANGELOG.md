@@ -2,6 +2,17 @@
 
 ANIMA Zero 版本记录。**保持简洁——每版只说重点;具体改了什么,查 git commit。** 格式参考 [Keep a Changelog](https://keepachangelog.com)。
 
+## [0.4.0] — 2026-07-02
+
+Main: 把脑↔世界/引擎的接口从自研 HTTP（AWI）换成业界标准 MCP；并第一次把「世界」从合成画面推进到真实物理仿真——新世界 gazebo-chess（Gazebo 物理棋盘 + 真实六轴臂）跑通了基础设施，配一个网页手动遥控 teleop。注：ANIMA 自主走子（大脑发 move）目前会超时，本版不修，留到 v0.5。
+
+Features:
+
+1. 接口采标 MCP：世界＝标准 MCP server，脑＝host。MCP 三原语 Tools / Resources / Prompts 对应 动作 / 感知 / 说明书；新增「说明书」（prompts/get guidance）注入脑的系统提示。
+2. 下棋引擎从下棋 skill 里独立成一个 MCP server（:8108，只有 Tools 的纯计算顾问）；顺带简化 sim-chess 的 state。
+3. 新增物理世界 gazebo-chess（:8106）：Gazebo 物理仿真 + 真实机械臂，spawn/位姿/俯视相机出图/MoveIt 解 IK + 发轨迹这条 infra 已通（单子、真实夹爪的完整夹取与失败补救留 v0.5）。
+4. teleop 手动遥控（网页 GUI，:8110）：ROS2 + MoveIt IK + joint_trajectory_controller 插值，人可顺畅点动这条臂（关节/笛卡尔/夹爪/回 home）——先把物理底座验通。
+
 ## [0.3.0] — 2026-06-30
 
 Main: 接入真实摄像头世界camera，让 ANIMA 第一次看到真实的物理世界。这一版是一个轻量级版本，主要测试真实camera的stream。

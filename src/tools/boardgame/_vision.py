@@ -7,6 +7,11 @@
 【外观约定】下面常量/画法必须与 world/sim-chess/render.py 的"棋盘物理外观"一致——
 这相当于"知道棋子长什么样"（real vision 也得知道），不是读内部状态。两边一致性由
 round-trip 测试（render→read 100% 一致，见 tests/test_vision_roundtrip.py）守住。
+
+当前版本：V0.2 虚拟棋盘用的模式匹配
+【注意】V0.3版本已经进入真实摄像头，V0.3版本及以后无法使用本代码，需要更新升级。
+
+
 """
 from __future__ import annotations
 
