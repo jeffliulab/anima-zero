@@ -162,7 +162,7 @@ class ArmController(Node):
         return ja, jg
 
     def pick_at(self, px: float, py: float, pz: float, progress=None,
-                inject_miss: bool = False) -> tuple[bool, str]:
+                inject_miss: bool = False, avoid_xy=None) -> tuple[bool, str]:
         """在世界点 (px,py,pz) 抓一个子：选一个 IK 可达候选 → 开爪→到接近点→下到抓取点→闭爪→抬回接近点。
 
         progress: 可选的进度上报回调 `progress(message: str)`——每个候选/关键子步各报一句人话，
@@ -170,7 +170,7 @@ class ArmController(Node):
         inject_miss: 失败注入（测补救链路）：动作全走、但**不闭爪**——物理后果=夹空，子留在原地。
         """
         note = progress or (lambda m: None)
-        for label, approach, grasp in grasp_pose.candidates_for_point(px, py, pz):
+        for label, approach, grasp in grasp_pose.candidates_for_point(px, py, pz, avoid_xy=avoid_xy):
             note(f"IK 求解抓取姿态（候选 {label}）")
             sol = self._solve_candidate(approach, grasp)
             if sol is None:
@@ -194,10 +194,11 @@ class ArmController(Node):
             return True, f"抓取动作完成({label})"
         return False, "所有候选姿态都 IK 不可达"
 
-    def place_at(self, px: float, py: float, pz: float, progress=None) -> tuple[bool, str]:
-        """在世界点放下：到接近点→下到放置点→开爪→抬回接近点。progress 语义同 pick_at。"""
+    def place_at(self, px: float, py: float, pz: float, progress=None,
+                 avoid_xy=None) -> tuple[bool, str]:
+        """在世界点放下：到接近点→下到放置点→开爪→抬回接近点。progress/avoid_xy 语义同 pick_at。"""
         note = progress or (lambda m: None)
-        for label, approach, grasp in grasp_pose.candidates_for_point(px, py, pz):
+        for label, approach, grasp in grasp_pose.candidates_for_point(px, py, pz, avoid_xy=avoid_xy):
             note(f"IK 求解放置姿态（候选 {label}）")
             sol = self._solve_candidate(approach, grasp)
             if sol is None:

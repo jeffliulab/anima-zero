@@ -198,6 +198,12 @@ class GazeboChessWorld:
             self.arm.goto_arm(PARK, config.MOVE_TIME_APPROACH_S)
             self._spin(10)
 
+    @staticmethod
+    def _others_xy(exclude_name: str) -> list[tuple[float, float]]:
+        """除目标子外，盘上其它棋子的水平坐标——给抓取规划避撞（世界=物理，用自己的真值是本分）。"""
+        return [(pp[0], pp[1]) for nm, pp in spawn.all_model_poses().items()
+                if nm.startswith("piece_") and nm != exclude_name]
+
     def _consume_inject(self, attr: str) -> bool:
         """失败注入调度：off→False；once→注入一次后自动关；always→每次注入。"""
         mode = getattr(self, attr)
@@ -222,15 +228,16 @@ class GazeboChessWorld:
                 return {"ok": False, "message": f"{frm} 格上没有子"}
             note(_P_LOCATE, f"已定位 {frm} 上的棋子，正在规划抓取")
             gx, gy, gz = p[0], p[1], p[2] + config.PIECE_GRASP_WAIST_M
+            avoid = self._others_xy(name)
             ok, msg = self.arm.pick_at(gx, gy, gz, progress=lambda m: note(_P_PICK, m),
-                                       inject_miss=self._consume_inject("_fail_grip"))
+                                       inject_miss=self._consume_inject("_fail_grip"), avoid_xy=avoid)
             if not ok:
                 self._park(); return {"ok": False, "message": f"抓取失败：{msg}"}
             note(_P_CARRY, f"已夹取，正在移向 {to}")
             dx, dy, dz = geometry.grasp_xyz(to)
             if self._consume_inject("_fail_place"):     # 放偏注入：放置点加偏移（物理后果如实保留）
                 dx += config.FAIL_PLACE_OFFSET_M
-            ok, msg = self.arm.place_at(dx, dy, dz, progress=lambda m: note(_P_PLACE, m))
+            ok, msg = self.arm.place_at(dx, dy, dz, progress=lambda m: note(_P_PLACE, m), avoid_xy=avoid)
             if not ok:
                 self._park(); return {"ok": False, "message": f"放置失败：{msg}"}
             note(_P_VERIFY, "已放下，正在核对落点")
@@ -276,12 +283,13 @@ class GazeboChessWorld:
                 return {"ok": False, "message": f"{square} 格上没有子"}
             note(_P_LOCATE, f"已定位 {square} 上的棋子，准备夹去弃子区")
             gx, gy, gz = p[0], p[1], p[2] + config.PIECE_GRASP_WAIST_M
-            ok, msg = self.arm.pick_at(gx, gy, gz, progress=lambda m: note(_P_PICK, m))
+            avoid = self._others_xy(name)
+            ok, msg = self.arm.pick_at(gx, gy, gz, progress=lambda m: note(_P_PICK, m), avoid_xy=avoid)
             if not ok:
                 self._park(); return {"ok": False, "message": f"抓 {square} 的子失败：{msg}"}
             note(_P_CARRY, "已夹取，正在移向弃子区")
             dx, dy, dz = geometry.discard_grasp_xyz(self._discard_n)
-            ok, msg = self.arm.place_at(dx, dy, dz, progress=lambda m: note(_P_PLACE, m))
+            ok, msg = self.arm.place_at(dx, dy, dz, progress=lambda m: note(_P_PLACE, m), avoid_xy=avoid)
             self._park()
             if not ok:
                 return {"ok": False, "message": f"丢到弃子区失败：{msg}"}
@@ -309,12 +317,13 @@ class GazeboChessWorld:
                 return {"ok": False, "message": f"备用子区取子失败：{nm}"}
             time.sleep(config.SPAWN_SETTLE_S); self._spin(8)
             grx, gry, grz = geometry.reservoir_grasp_xyz()
-            ok, msg = self.arm.pick_at(grx, gry, grz, progress=lambda m: note(_P_PICK, m))
+            avoid = self._others_xy(nm)
+            ok, msg = self.arm.pick_at(grx, gry, grz, progress=lambda m: note(_P_PICK, m), avoid_xy=avoid)
             if not ok:
                 self._park(); return {"ok": False, "message": f"从备用区抓子失败：{msg}"}
             note(_P_CARRY, f"已从备用区夹取，正在移向 {square}")
             dx, dy, dz = geometry.grasp_xyz(square)
-            ok, msg = self.arm.place_at(dx, dy, dz, progress=lambda m: note(_P_PLACE, m))
+            ok, msg = self.arm.place_at(dx, dy, dz, progress=lambda m: note(_P_PLACE, m), avoid_xy=avoid)
             self._park()
             if not ok:
                 return {"ok": False, "message": f"摆到 {square} 失败：{msg}"}

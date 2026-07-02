@@ -42,14 +42,30 @@ def link6_pose_for_grasp(px: float, py: float, pz: float,
     return ((px, py, pz + config.TCP_OFFSET_M), _down_quat(wrist_yaw_rad, tilt_rad))
 
 
-def candidates_for_point(px: float, py: float, pz: float) -> list[tuple[str, Pose, Pose]]:
+def _finger_clearance(px: float, py: float, yaw: float, avoid_xy) -> float:
+    """某 wrist yaw 下，两个指尖(全开)到最近邻子的水平距离（净空，越大越安全）。
+    指展方向：yaw=0 时沿世界 Y（实测推断：e2 抓取时 e1(南邻)被指尖蹭到），随 yaw 旋转。
+    就算方向推断有偏，也只影响候选【排序】不影响正确性（所有候选仍会逐个试）。"""
+    if not avoid_xy:
+        return math.inf
+    half_span = (config.GRIP_FACE_GAP_CLOSED_M + 2 * config.GRIP_OPEN_M) / 2
+    dx, dy = -math.sin(yaw) * half_span, math.cos(yaw) * half_span
+    tips = ((px + dx, py + dy), (px - dx, py - dy))
+    return min(math.hypot(tx - ax, ty - ay) for tx, ty in tips for ax, ay in avoid_xy)
+
+
+def candidates_for_point(px: float, py: float, pz: float,
+                         avoid_xy: list[tuple[float, float]] | None = None) -> list[tuple[str, Pose, Pose]]:
     """某抓取点的 (标签, 接近位姿, 抓取位姿) 候选列表，最优在前。
-    接近位姿 = 抓取位姿再抬高 APPROACH_SAFE_M。先竖直(tilt=0)各 wrist yaw，再逐档倾斜。"""
+    接近位姿 = 抓取位姿再抬高 APPROACH_SAFE_M。先竖直(tilt=0)各 wrist yaw，再逐档倾斜。
+    avoid_xy（可选）= 邻近棋子的水平坐标：同一 tilt 内按「指尖离邻子净空」从大到小排 yaw——
+    指展方向避开有子的邻格（多子棋盘的防撞关键；世界=物理，用自己的真值做抓取规划是本分）。"""
     out: list[tuple[str, Pose, Pose]] = []
     tilts = [0.0] + [math.radians(t) for t in config.APPROACH_TILT_DEG if t != 0]
     yaws = [math.radians(y) for y in config.WRIST_ROLL_DEG]
     for tilt in tilts:
-        for yaw in yaws:
+        ordered = sorted(yaws, key=lambda yw: -_finger_clearance(px, py, yw, avoid_xy or []))
+        for yaw in ordered:
             (gx, gy, gz), q = link6_pose_for_grasp(px, py, pz, yaw, tilt)
             grasp = ((gx, gy, gz), q)
             approach = ((gx, gy, gz + config.APPROACH_SAFE_M), q)

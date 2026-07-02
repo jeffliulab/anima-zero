@@ -115,7 +115,10 @@ APPROACH_SAFE_M = _f("GZCHESS_APPROACH_SAFE_M", "0.10")   # 目标格上方安�
 # 夹住时每根手指的目标位置（joint 值）；据抓取点宽度算：joint=(W - GRIP_FACE_GAP_CLOSED)/2 再留点挤压余量。
 # 默认按 PIECE_GRASP_WIDTH=0.035 → (0.035-0.026)/2≈0.0045，挤压到 0.003。可被 env 直接覆盖。
 GRIP_CLOSE_M = _f("GZCHESS_GRIP_CLOSE_M", "0.003")
-GRIP_OPEN_M = _f("GZCHESS_GRIP_OPEN_M", "0.020")          # 张开放子/接近时的手指位置
+# 张开度的账（v0.5 实测撞邻子后收窄）：指尖跨度=±(GRIP_FACE_GAP_CLOSED+2*OPEN)/2。
+# 0.020 全开→±3.3cm，邻格子身表面只有 5-1.75=3.25cm 远→下探蹭到邻子（e2 旁的 e1 王被扫飞）。
+# 0.012 →±2.5cm：不出本格（半格 2.5cm），而开口 5.0cm 仍远大于腰宽 3.5cm。
+GRIP_OPEN_M = _f("GZCHESS_GRIP_OPEN_M", "0.012")          # 张开放子/接近时的手指位置
 PLACE_TOLERANCE_M = _f("GZCHESS_PLACE_TOLERANCE_M", "0.015")  # 落子到位容差 1.5cm
 
 # ---- 找抓取姿态的备用自由度（够不着/会撞时逐档试；0.4 主要用竖直 0°）----
