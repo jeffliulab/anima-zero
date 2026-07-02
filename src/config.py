@@ -93,5 +93,5 @@ def worlds() -> list[tuple[str, str]]:
             pairs.append((name, url))
     return pairs
 
-# （v0.6 起：对弈行为树 / 视觉 / 脑侧引擎的全部配置已随 game mode 删除——
+# （v0.5 重构起：对弈行为树 / 视觉 / 脑侧引擎的全部配置已随 game mode 删除——
 #   引擎可调项住引擎 service 自带 env（services/chess_engine_mcp.py），世界可调项住各世界自带 env。）

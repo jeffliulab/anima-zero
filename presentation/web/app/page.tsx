@@ -90,7 +90,7 @@ export default function Home() {
         <SensingArea streamUrl={streamUrl} worldName={current?.world ?? null} online={worldOnline} />
       )}
 
-      {/* 右栏：聊天面板（v0.6 起无对弈面板——下棋=普通对话）；非 session 视图只读(paused)。 */}
+      {/* 右栏：聊天面板（v0.5 重构起无对弈面板——下棋=普通对话）；非 session 视图只读(paused)。 */}
       <ChatPanel
         session={inSession ? current : null}
         brains={brains}

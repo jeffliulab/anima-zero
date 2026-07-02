@@ -223,7 +223,7 @@ cd presentation/web && npm install && npm run dev      # 默认 :3000
 
 ---
 
-## 九、下棋:LLM 亲自下每一步(v0.6 起,无任何"模式")
+## 九、下棋:LLM 亲自下每一步(无任何"模式")
 
 下棋不再是一个"模式"——**就是普通对话**。你说「该你了,你执黑」,ANIMA 自己看棋盘截图认局面、
 自己从画面和对话历史推出 FEN、自己调引擎顾问 `best_move(fen)` 拿最佳着法、再自己调世界的 `move` 落子、
@@ -291,12 +291,12 @@ cd world/camera && pip install -e . && uvicorn server:app --port 8104
 
 ## 状态
 
-**v0.6(Pre-alpha),持续迭代中。** v0.1 封版了顶层架构(世界独立 + 会话 + 主循环 + 外围 hook + 原生 tool-calling);
+**v0.5(Pre-alpha),持续迭代中。** v0.1 封版了顶层架构(世界独立 + 会话 + 主循环 + 外围 hook + 原生 tool-calling);
 v0.2 长出对弈技能与行为树;v0.3 接入真实摄像头世界 camera;v0.4 接口**采标 MCP** + 物理世界 gazebo-chess;
-v0.5 修正长动作通信语义(MCP progress + 生命迹象等待)+ 双层视觉桥;
-**v0.6 反向大简化**:删掉整个 game mode(行为树/技能/视觉栈),下棋回归普通对话、**每一步由 LLM 亲自决定**;
-端点分成 **world(现实)+ service(顾问,world 声明挂载)** 两类;主循环迁 **LangGraph** 骨架;
-三套日志统一成按会话的 **Session Logs**。真机安全硬检查、持续响应模式按依赖顺序后做。
+**v0.5 先修长动作通信语义(MCP progress + 生命迹象等待),随后反向大简化**:删掉整个 game mode
+(行为树/技能/视觉栈),下棋回归普通对话、**每一步由 LLM 亲自决定**;端点分成 **world(现实)+
+service(顾问,world 声明挂载)** 两类;主循环迁 **LangGraph** 骨架;三套日志统一成按会话的
+**Session Logs**。真机安全硬检查、持续响应模式按依赖顺序后做。
 `anima-zero` 是完全开源的 Zero 线展示版。
 
 ## License
