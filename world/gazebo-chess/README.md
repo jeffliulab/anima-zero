@@ -41,7 +41,12 @@ cd .../anima-zero/world/gazebo-chess && source .venv/bin/activate && uvicorn ser
 - [x] `arm_controller.py`（MoveIt `/compute_ik` + FK 复核 + `FollowJointTrajectory`）、`grasp_pose.py`
 - [x] `server.py` / `world.py` 接 MCP（`awi_mcp.py`，接口和 sim-chess 同款）
 - [x] **teleop 手动遥控（`:8110`）**：人可顺畅点动这条臂，物理底座已验通（见 `episode-ros-ws` 的 `episode_teleop` + 项目 `运行命令.md`「三 · teleop」）
-- [ ] **ANIMA 自主走子（大脑发 `move` → 世界内部真跑一趟夹取搬运）目前会 `TimeoutError` —— 待 v0.5**
-- [ ] 多子、失败补救、位置评估 —— v0.5（见 `~/.claude/plans/1-gazebo-chess-0-5-multi-piece-failure-recovery.md`）
+- [x] **ANIMA 自主走子（大脑发 `move` → 世界内部真跑一趟夹取搬运）——v0.5 wave 0 已修通**。
+      v0.4 的 `TimeoutError` 根因是框架级的：世界把几十秒的夹取同步跑在事件循环上（move 期间整个
+      服务器冻结、进度发不出去），大脑又用固定死线盲等。修法＝采标 MCP progress：世界把活儿放到
+      工作线程、分阶段报人话进度（「已夹取，正在移向 e4」），大脑「有进度就续命、失联才判死」。
+      实测：move ~26s 完成，期间 `/health` 全程 <2ms 响应，进度实时上 AWI 仪表盘与对弈面板。
+- [ ] 多子、失败补救、位置评估 —— v0.5 后续 wave（见 `~/.claude/plans/0-5-0-5-anima-zero-v0-5-woolly-rabin.md`）
 
-> v0.4 交付的是「物理世界基础设施 + 手动遥控」；**ANIMA 在物理世界自主下棋是 v0.5 的目标**，本版尚未跑通。
+> v0.4 交付的是「物理世界基础设施 + 手动遥控」；v0.5 wave 0 把「自主走子」这条链路修通，
+> **完整对弈（视觉读盘 + 多子 + 失败补救）是 v0.5 后续 wave 的目标**。
