@@ -13,6 +13,7 @@ class WorldRegistry:
     def __init__(self) -> None:
         self._worlds: dict[str, World] = {}
         self._bound: str | None = None
+        self._services: dict[str, object] = {}   # url -> RemoteService（多个 world 声明同一服务时共用客户端）
 
     def register_world(self, name: str, url: str) -> None:
         """注册一个远程世界(按给定名字;不在此握手)。"""
@@ -39,3 +40,31 @@ class WorldRegistry:
 
     def list_worlds(self) -> list[str]:
         return list(self._worlds)
+
+    # ---------- 挂载服务（world 声明，脑侧惰性连接）----------
+    def services_for(self, world) -> list:
+        """按该 world 能力自述里的 services 声明，返回（并缓存）service 客户端列表。
+
+        惰性：world 离线 / 没声明 → []。配对关系写在应用侧（world 声明 name+url），大脑不认识
+        任何具体服务——连上哪个 world 就挂它声明的清单。同一 URL 的服务只建一个客户端（共用缓存）。"""
+        from .service_client import RemoteService
+
+        try:
+            decls = world.capabilities().services if world is not None else []
+        except Exception:
+            return []
+        out = []
+        for d in decls or []:
+            url = (d.get("url") or "").strip()
+            if not url:
+                continue
+            svc = self._services.get(url)
+            if svc is None:
+                svc = RemoteService((d.get("name") or url).strip(), url)
+                self._services[url] = svc
+            out.append(svc)
+        return out
+
+    def list_services(self) -> list:
+        """已知的全部 service 客户端（/awi 仪表盘用；只含被某个 world 声明过、被问过的）。"""
+        return list(self._services.values())

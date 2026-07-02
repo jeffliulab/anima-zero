@@ -45,8 +45,14 @@ AWI_LOG_MAXLEN = int(os.getenv("SIMCHESS_AWI_LOG_MAXLEN", "400"))
 
 _CORS = [o.strip() for o in os.getenv("ANIMA_CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()]
 
+# 挂载服务声明：本世界配套的纯计算顾问（象棋引擎）——world+service 一起设计，配对关系属于应用侧，
+# 所以由世界声明（大脑握手读 anima://services 自动连接）；URL 走本世界自带 env。
+SIMCHESS_SERVICES = [{"name": "chess-engine",
+                      "url": os.getenv("SIMCHESS_ENGINE_URL", "http://localhost:8108")}]
+
 # AWI（脑↔世界）走标准 MCP：世界作 MCP server 挂在 /mcp。
-mcp_asgi, mcp_lifespan = build_awi_mcp(world, guidance=SIMCHESS_GUIDANCE, server_name="sim-chess")
+mcp_asgi, mcp_lifespan = build_awi_mcp(world, guidance=SIMCHESS_GUIDANCE,
+                                       services=SIMCHESS_SERVICES, server_name="sim-chess")
 
 
 @contextlib.asynccontextmanager

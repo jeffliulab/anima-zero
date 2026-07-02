@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 
 from . import config, context, intent, messages
 from .llm import LLM, ToolCall
@@ -21,6 +22,7 @@ from .session import Session, SessionStore
 from .skill import Skill, SkillRegistry
 
 DEFAULT_MAX_STEPS = config.MAX_STEPS  # ReAct 主循环最多转几轮（config，env 可覆盖）
+_log = logging.getLogger(__name__)
 
 ENTER_SKILL_TOOL = "enter_skill"      # 大脑用它进入某个 skill（orchestrator 拦截处理，不下发给世界）
 
@@ -164,7 +166,7 @@ class Orchestrator:
         return {"ok": True, "reply": reply}
 
     # ==================== 主循环 ====================
-    def _system(self, world) -> str:
+    def _system(self, world, has_services: bool = False) -> str:
         base = messages.system_prompt()
         if world is None:
             return base + "\n\n当前:未连接任何世界(纯聊天)。"
@@ -185,6 +187,8 @@ class Orchestrator:
         # 不为某个世界写死逻辑，改由世界自述、大脑读了就懂（这正是 v0.4 的核心：world 交声明、脑当引擎）。
         if guidance:
             s += f"\n\n【这个世界的说明书（它自己写的，教你怎么跟它打交道）】\n{guidance}"
+        if has_services:
+            s += messages.SERVICES_HINT
         if self._launchable(world):
             s += messages.SKILL_AVAILABILITY_HINT
         return s
@@ -193,6 +197,29 @@ class Orchestrator:
         if world is None:
             return ActionResult(False, "没连接世界,无法操作。")
         return world.invoke(name, **args)
+
+    def _service_toolbox(self, world, world_tool_names: set[str]) -> tuple[list[ToolSpec], dict]:
+        """挂载服务的工具单与路由表：tools 并进大脑工具单；routes(name→service) 供分发按来源路由。
+
+        - 服务离线/握手失败 → 它的工具这一轮不上单（等它起来即恢复；诚实呈现，不兜底）。
+        - 同名冲突 **world 优先**（约定：service 工具名不得与常见世界动作重名），冲突的服务工具
+          不上单并记警告——绝不让一个名字有两个去向。"""
+        tools: list[ToolSpec] = []
+        routes: dict = {}
+        if world is None:
+            return tools, routes
+        for svc in self.registry.services_for(world):
+            try:
+                caps = svc.capabilities()
+            except Exception:
+                continue
+            for t in caps.tools:
+                if t.name in world_tool_names:
+                    _log.warning("服务工具与世界工具同名，按约定世界优先：%s（来自 %s）", t.name, svc.name)
+                    continue
+                routes[t.name] = svc
+                tools.append(t)
+        return tools, routes
 
     def _maybe_enter(self, session: Session, reply, llm: LLM) -> str | None:
         """大脑这一拍若调了 enter_skill → 进入该技能、返回确认语（结束本轮）；否则 None。"""
@@ -220,7 +247,9 @@ class Orchestrator:
         #   enter_skill 由 orchestrator 拦截(不下发世界)、handle() 与 handle_stream() 是同一套循环的两个版本(改一个同步另一个)。
         for _ in range(max_steps):
             caps = world.capabilities() if world else None  # 握手:首轮拿能力并缓存
-            tools = (list(caps.tools) if caps else []) + self._enter_skill_tool(world)
+            world_tools = list(caps.tools) if caps else []
+            svc_tools, svc_routes = self._service_toolbox(world, {t.name for t in world_tools})
+            tools = world_tools + svc_tools + self._enter_skill_tool(world)
             kinds = {t.name: t.kind for t in tools}
 
             obs = world.perceive() if world else None
@@ -233,7 +262,7 @@ class Orchestrator:
                 })
 
             history = context.build(self.store.get(session.id).messages)
-            reply = llm.chat(self._system(world), history, tools, image)
+            reply = llm.chat(self._system(world, has_services=bool(svc_tools)), history, tools, image)
 
             if not reply.tool_calls:  # 出文字 → 最终回复,收尾
                 self.store.append(session.id, {"role": "assistant", "text": reply.text or "", "brain": session.brain})
@@ -253,6 +282,13 @@ class Orchestrator:
             trace["thinking"].append(step)
 
             for tc in reply.tool_calls:  # 执行;下一轮自动重感知(闭环)
+                svc = svc_routes.get(tc.name)
+                if svc is not None:      # 服务工具（顾问=只读）：路由给声明它的服务，不过安全闸
+                    result = svc.invoke(tc.name, **tc.arguments)
+                    self.store.append(session.id, {"role": "tool", "id": tc.id, "name": tc.name,
+                                       "content": result.message, "data": result.data})
+                    step["tool_results"].append({"name": tc.name, "ok": result.ok, "message": result.message})
+                    continue
                 changes_world = world is not None and kinds.get(tc.name, "tool") not in NON_MUTATING_KINDS
                 if changes_world:
                     ok, reason = self.safety.check(world, tc.name, tc.arguments)
@@ -287,7 +323,9 @@ class Orchestrator:
 
         for _ in range(max_steps):
             caps = world.capabilities() if world else None
-            tools = (list(caps.tools) if caps else []) + self._enter_skill_tool(world)
+            world_tools = list(caps.tools) if caps else []
+            svc_tools, svc_routes = self._service_toolbox(world, {t.name for t in world_tools})
+            tools = world_tools + svc_tools + self._enter_skill_tool(world)
             kinds = {t.name: t.kind for t in tools}
 
             obs = world.perceive() if world else None
@@ -300,7 +338,8 @@ class Orchestrator:
                 }
 
             history = context.build(self.store.get(session.id).messages)
-            reply = llm.chat(self._system(world), history, tools, obs.image_png if obs else None)
+            reply = llm.chat(self._system(world, has_services=bool(svc_tools)), history, tools,
+                             obs.image_png if obs else None)
 
             if not reply.tool_calls:  # 出文字 → 最终回复,收尾
                 self.store.append(session.id, {"role": "assistant", "text": reply.text or "", "brain": session.brain})
@@ -323,6 +362,13 @@ class Orchestrator:
 
             for tc in reply.tool_calls:
                 yield {"type": "tool_call", "name": tc.name, "args": tc.arguments}
+                svc = svc_routes.get(tc.name)
+                if svc is not None:      # 服务工具（顾问=只读）：路由给声明它的服务，不过安全闸
+                    result = svc.invoke(tc.name, **tc.arguments)
+                    self.store.append(session.id, {"role": "tool", "id": tc.id, "name": tc.name,
+                                               "content": result.message, "data": result.data})
+                    yield {"type": "tool_result", "name": tc.name, "ok": result.ok, "message": result.message}
+                    continue
                 changes_world = world is not None and kinds.get(tc.name, "tool") not in NON_MUTATING_KINDS
                 if changes_world:
                     ok, reason = self.safety.check(world, tc.name, tc.arguments)

@@ -44,7 +44,8 @@ WORLD_LIVENESS_TIMEOUT = _f("ANIMA_WORLD_LIVENESS_TIMEOUT", "20")    # 无生命
 WORLD_INVOKE_HARD_CAP = _f("ANIMA_WORLD_INVOKE_HARD_CAP", "180")     # 单次动作总上限（有进度也不无限等）
 BRIDGE_WATCHDOG_POLL_S = _f("ANIMA_BRIDGE_WATCHDOG_POLL_S", "0.25")  # 监督器巡检步长（也是取消响应延迟）
 BRIDGE_GRACE_S = _f("ANIMA_BRIDGE_GRACE_S", "5")                     # 外层后备宽限（监督器才是权威，这是安全带）
-ENGINE_MCP_TIMEOUT = _f("ANIMA_ENGINE_MCP_TIMEOUT", "15")            # 引擎 server 一次调用的死线（纯计算，秒回）
+ENGINE_MCP_TIMEOUT = _f("ANIMA_ENGINE_MCP_TIMEOUT", "15")            # 【W3 随 chess.py 删】旧引擎双路的死线
+SERVICE_MCP_TIMEOUT = _f("ANIMA_SERVICE_MCP_TIMEOUT", "15")          # 挂载服务一次问答的死线（顾问=纯计算，秒回）
 TITLE_MAX_LEN = _i("ANIMA_TITLE_MAX_LEN", "24")
 AWI_LOG_MAXLEN = _i("ANIMA_AWI_LOG_MAXLEN", "400")
 AWI_POLL_INTERVAL_S = _f("ANIMA_AWI_POLL_INTERVAL_S", "0.25")
