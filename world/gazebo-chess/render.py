@@ -1,7 +1,7 @@
 """相机画面：订阅 Gazebo 俯视相机（经 image_bridge 桥到 ROS 的 sensor_msgs/Image），
 缓存最近一帧，并按需编码成 JPEG/PNG，供世界的 /perceive（喂大脑）和 /stream（人类页）用。
 
-不自己起 executor——由世界进程在持锁时 spin 节点来刷新帧（见 world.py）。
+不自己起 executor——帧由世界的专职 ROS spin 线程持续送达（见 world.py 的 _spin_forever）。
 """
 from __future__ import annotations
 

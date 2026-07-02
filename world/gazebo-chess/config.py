@@ -98,6 +98,25 @@ PLACE_TOLERANCE_M = _f("GZCHESS_PLACE_TOLERANCE_M", "0.015")  # 落子到位容�
 APPROACH_TILT_DEG = _deg_list("GZCHESS_APPROACH_TILT_DEG", "0,15,30,45")
 WRIST_ROLL_DEG = _deg_list("GZCHESS_WRIST_ROLL_DEG", "0,45,90,-45,-90")
 
+# ---- 动作阶段预算 / 节奏（秒）——每个环节的等待上限，超了就如实报失败，绝不无限挂 ----
+# 背景（v0.5 wave 0）：一次 move 是长动作（几十秒），大脑靠 MCP progress「生命迹象」判活；
+# 世界侧的责任是每个阶段自己有预算、卡死快败，liveness 只是最后防线，不是常规失败路径。
+IK_TIMEOUT_S = _f("GZCHESS_IK_TIMEOUT_S", "1.0")            # MoveIt /compute_ik 的求解预算
+IK_WAIT_EXTRA_S = _f("GZCHESS_IK_WAIT_EXTRA_S", "2.0")      # 等 IK 服务应答的额外余量（网络/调度）
+FK_WAIT_S = _f("GZCHESS_FK_WAIT_S", "3.0")                  # FK 复核（IKFast 假解防线）的等待上限
+TRAJ_ACCEPT_S = _f("GZCHESS_TRAJ_ACCEPT_S", "10.0")         # 轨迹 goal 被控制器接受的等待上限
+TRAJ_EXTRA_S = _f("GZCHESS_TRAJ_EXTRA_S", "8.0")            # 轨迹执行完成的额外余量（叠在轨迹时长上）
+MOVE_TIME_APPROACH_S = _f("GZCHESS_MOVE_TIME_APPROACH_S", "3.0")  # 大段移动（到接近点/回驻位）的轨迹时长
+MOVE_TIME_SHORT_S = _f("GZCHESS_MOVE_TIME_SHORT_S", "2.0")  # 短段移动（下抓/抬起）的轨迹时长
+GRIP_TIME_S = _f("GZCHESS_GRIP_TIME_S", "1.0")              # 夹爪开合的轨迹时长
+GRIP_SETTLE_S = _f("GZCHESS_GRIP_SETTLE_S", "0.3")          # 夹爪动作后的短静置（等物理接触稳定）
+SETTLE_S = _f("GZCHESS_SETTLE_S", "1.0")                    # 放子后静置再核对落点（等物理稳定）
+SPAWN_SETTLE_S = _f("GZCHESS_SPAWN_SETTLE_S", "0.6")        # spawn 新子后静置（等实体落稳）
+READY_TIMEOUT_S = _f("GZCHESS_READY_TIMEOUT_S", "20.0")     # 启动时等 MoveIt/控制器就绪的上限
+SPIN_STEP_S = _f("GZCHESS_SPIN_STEP_S", "0.05")             # 每次 rclpy spin_once 的步长
+STATUS_POSE_WINDOW_S = _f("GZCHESS_STATUS_POSE_WINDOW_S", "0.8")  # /status 读位姿的采样窗（调试台要快）
+PIECE_MATCH_CELL_FRAC = _f("GZCHESS_PIECE_MATCH_CELL_FRAC", "0.6")  # 「格上有子」判定半径 = CELL_M × 此系数
+
 # ---- ROS / Gazebo 接口名（可配，别在代码里散落写死）----
 ARM_GROUP = os.getenv("GZCHESS_ARM_GROUP", "episode_arm")               # MoveIt 规划组(episode1_urdf_1113_moveit SRDF: base_link→link6)
 PLANNING_FRAME = os.getenv("GZCHESS_PLANNING_FRAME", "world")           # MoveIt 规划帧（孪生加了 world 链接）

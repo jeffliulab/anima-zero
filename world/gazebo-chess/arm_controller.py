@@ -6,9 +6,15 @@ v0.4 走法（务实、可靠）：用 MoveIt `/compute_ik` 把"末端到某位�
  桌面/棋子避障靠把接近点抬高 + 抓取点在板面上方，不往桌里扎。更强避障留 0.5 换 move_action。）
 
 抓取 = 真实夹爪物理夹取（闭合到夹持宽度，靠接触摩擦夹住子），不贴关节。
+
+线程模型（v0.5 wave 0）：本节点由世界的**专职 spin 线程**（world.py 起的 SingleThreadedExecutor）
+持续 spin——本文件里**任何方法都不自己 spin**，等 ROS future 一律「挂完成事件 + 带超时等待」
+（_wait_future）。背景：从请求工作线程做 rclpy spin 会和 DDS/executor 撞线程（实测卡死在
+take_message 里 100 秒不返回），spin 必须收敛到唯一一个专职线程（ROS 惯例）。
 """
 from __future__ import annotations
 
+import threading
 import time
 
 import rclpy
@@ -44,14 +50,22 @@ class ArmController(Node):
     def _on_js(self, msg: JointState) -> None:
         self._js = msg
 
+    def _wait_future(self, fut, timeout_s: float):
+        """等一个 rclpy future 完成（完成由专职 spin 线程驱动），超时返回 None——绝不自己 spin。"""
+        done = threading.Event()
+        fut.add_done_callback(lambda _f: done.set())
+        if not done.wait(timeout_s):
+            return None
+        return fut.result()
+
     def wait_ready(self, timeout: float = 15.0) -> bool:
         ok = (self._arm.wait_for_server(timeout_sec=timeout)
               and self._grip.wait_for_server(timeout_sec=timeout)
               and self._ik.wait_for_service(timeout_sec=timeout))
         self._fk.wait_for_service(timeout_sec=timeout)   # FK 用于复核 IK 解，不强制（缺了退化为信任 IK）
         t0 = time.time()
-        while self._js is None and time.time() - t0 < timeout:
-            rclpy.spin_once(self, timeout_sec=0.2)
+        while self._js is None and time.time() - t0 < timeout:   # /joint_states 由专职 spin 线程送达
+            time.sleep(config.SPIN_STEP_S)
         return ok and self._js is not None
 
     def current_arm_positions(self) -> dict[str, float]:
@@ -60,7 +74,7 @@ class ArmController(Node):
         return {n: p for n, p in zip(self._js.name, self._js.position)}
 
     # ---------- IK ----------
-    def compute_ik(self, pose: grasp_pose.Pose, timeout_s: float = 1.0) -> list[float] | None:
+    def compute_ik(self, pose: grasp_pose.Pose, timeout_s: float = config.IK_TIMEOUT_S) -> list[float] | None:
         """把 link6 的目标位姿（world 帧）解成 6 个臂关节角；解不出返回 None。"""
         (px, py, pz), (qx, qy, qz, qw) = pose
         req = GetPositionIK.Request()
@@ -79,9 +93,7 @@ class ArmController(Node):
         ps.pose.position.x, ps.pose.position.y, ps.pose.position.z = px, py, pz
         ps.pose.orientation.x, ps.pose.orientation.y, ps.pose.orientation.z, ps.pose.orientation.w = qx, qy, qz, qw
         r.pose_stamped = ps
-        fut = self._ik.call_async(req)
-        rclpy.spin_until_future_complete(self, fut, timeout_sec=timeout_s + 2.0)
-        res = fut.result()
+        res = self._wait_future(self._ik.call_async(req), timeout_s + config.IK_WAIT_EXTRA_S)
         if res is None or res.error_code.val != 1:   # 1 = SUCCESS
             return None
         sol = {n: p for n, p in zip(res.solution.joint_state.name, res.solution.joint_state.position)}
@@ -108,9 +120,7 @@ class ArmController(Node):
         js.name = list(ARM_JOINTS)
         js.position = [float(v) for v in joints]
         req.robot_state.joint_state = js
-        fut = self._fk.call_async(req)
-        rclpy.spin_until_future_complete(self, fut, timeout_sec=3.0)
-        res = fut.result()
+        res = self._wait_future(self._fk.call_async(req), config.FK_WAIT_S)
         if res is None or res.error_code.val != 1 or not res.pose_stamped:
             return None
         p = res.pose_stamped[0].pose.position
@@ -124,19 +134,15 @@ class ArmController(Node):
         pt.time_from_start = Duration(sec=int(duration_s), nanosec=int((duration_s % 1) * 1e9))
         jt.points = [pt]
         goal = FollowJointTrajectory.Goal(trajectory=jt)
-        f = client.send_goal_async(goal)
-        rclpy.spin_until_future_complete(self, f, timeout_sec=10.0)
-        gh = f.result()
+        gh = self._wait_future(client.send_goal_async(goal), config.TRAJ_ACCEPT_S)
         if gh is None or not gh.accepted:
             return False
-        rf = gh.get_result_async()
-        rclpy.spin_until_future_complete(self, rf, timeout_sec=duration_s + 8.0)
-        return rf.result() is not None
+        return self._wait_future(gh.get_result_async(), duration_s + config.TRAJ_EXTRA_S) is not None
 
-    def goto_arm(self, positions: list[float], duration_s: float = 3.0) -> bool:
+    def goto_arm(self, positions: list[float], duration_s: float = config.MOVE_TIME_APPROACH_S) -> bool:
         return self._send_traj(self._arm, ARM_JOINTS, positions, duration_s)
 
-    def set_gripper(self, finger_pos: float, duration_s: float = 1.0) -> bool:
+    def set_gripper(self, finger_pos: float, duration_s: float = config.GRIP_TIME_S) -> bool:
         return self._send_traj(self._grip, GRIPPER_JOINTS, [finger_pos, finger_pos], duration_s)
 
     def open_gripper(self) -> bool:
@@ -155,39 +161,53 @@ class ArmController(Node):
             return None
         return ja, jg
 
-    def pick_at(self, px: float, py: float, pz: float) -> tuple[bool, str]:
-        """在世界点 (px,py,pz) 抓一个子：选一个 IK 可达候选 → 开爪→到接近点→下到抓取点→闭爪→抬回接近点。"""
+    def pick_at(self, px: float, py: float, pz: float, progress=None) -> tuple[bool, str]:
+        """在世界点 (px,py,pz) 抓一个子：选一个 IK 可达候选 → 开爪→到接近点→下到抓取点→闭爪→抬回接近点。
+
+        progress: 可选的进度上报回调 `progress(message: str)`——每个候选/关键子步各报一句人话，
+        让上层（MCP progress → 大脑/仪表盘）看到"臂正在干什么"而不是黑等。不传则静默（行为不变）。
+        """
+        note = progress or (lambda m: None)
         for label, approach, grasp in grasp_pose.candidates_for_point(px, py, pz):
+            note(f"IK 求解抓取姿态（候选 {label}）")
             sol = self._solve_candidate(approach, grasp)
             if sol is None:
                 continue
             ja, jg = sol
+            note(f"抓取姿态可达（{label}），移向接近点")
             self.open_gripper()
-            if not self.goto_arm(ja, 3.0):
+            if not self.goto_arm(ja, config.MOVE_TIME_APPROACH_S):
                 return False, f"到接近点失败({label})"
-            if not self.goto_arm(jg, 2.0):
+            note("下探到抓取点")
+            if not self.goto_arm(jg, config.MOVE_TIME_SHORT_S):
                 return False, f"下到抓取点失败({label})"
+            note("闭合夹爪")
             self.close_gripper()
-            time.sleep(0.3)
-            if not self.goto_arm(ja, 2.0):
+            time.sleep(config.GRIP_SETTLE_S)
+            if not self.goto_arm(ja, config.MOVE_TIME_SHORT_S):
                 return False, f"抬起失败({label})"
             return True, f"抓取动作完成({label})"
         return False, "所有候选姿态都 IK 不可达"
 
-    def place_at(self, px: float, py: float, pz: float) -> tuple[bool, str]:
-        """在世界点放下：到接近点→下到放置点→开爪→抬回接近点。"""
+    def place_at(self, px: float, py: float, pz: float, progress=None) -> tuple[bool, str]:
+        """在世界点放下：到接近点→下到放置点→开爪→抬回接近点。progress 语义同 pick_at。"""
+        note = progress or (lambda m: None)
         for label, approach, grasp in grasp_pose.candidates_for_point(px, py, pz):
+            note(f"IK 求解放置姿态（候选 {label}）")
             sol = self._solve_candidate(approach, grasp)
             if sol is None:
                 continue
             ja, jg = sol
-            if not self.goto_arm(ja, 3.0):
+            note(f"放置姿态可达（{label}），移向放置接近点")
+            if not self.goto_arm(ja, config.MOVE_TIME_APPROACH_S):
                 return False, f"到放置接近点失败({label})"
-            if not self.goto_arm(jg, 2.0):
+            note("下探到放置点")
+            if not self.goto_arm(jg, config.MOVE_TIME_SHORT_S):
                 return False, f"下到放置点失败({label})"
+            note("张开夹爪放子")
             self.open_gripper()
-            time.sleep(0.3)
-            if not self.goto_arm(ja, 2.0):
+            time.sleep(config.GRIP_SETTLE_S)
+            if not self.goto_arm(ja, config.MOVE_TIME_SHORT_S):
                 return False, f"放后抬起失败({label})"
             return True, f"放置动作完成({label})"
         return False, "放置点所有候选姿态都 IK 不可达"
