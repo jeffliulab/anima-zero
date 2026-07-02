@@ -16,7 +16,7 @@ import chess
 
 from ... import config
 from . import _vision
-from .base import register_adapter
+from .base import OCC, PIECE, register_adapter
 
 
 def _load_engine():
@@ -32,7 +32,12 @@ class ChessAdapter:
     name = "国际象棋"
     world_action = "move"    # 这盘棋需要世界提供的落子能力（用于能力判断，不在别处写死）
 
-    def __init__(self, depth: int | None = None, time_limit: float | None = None) -> None:
+    def __init__(self, depth: int | None = None, time_limit: float | None = None,
+                 recognizer=None) -> None:
+        # 识别器注入（v0.5 视觉桥脚手架）：recognizer 有 `space`（OCC/PIECE）+ `read_detailed(png)`；
+        # 不注入 → 老 `_vision` 模板匹配（PIECE 空间，sim-chess 2D 合成图专用）——行为逐字节不变。
+        # 按世界选哪个识别器组合，在 skills launcher 接线（wave 5），这里只认抽象接口。
+        self.recognizer = recognizer
         # 引擎双路：配了 ANIMA_ENGINE_URL → 经 MCP 调独立引擎 server（棋理顾问，MCP 多 server 用法）；
         # 没配 → 进程内加载引擎（默认；单测 / 无额外进程时用）。棋力升级只换背后的引擎，行为树/skill 不动。
         self._engine_url = (os.getenv("ANIMA_ENGINE_URL") or "").strip() or None
@@ -47,24 +52,56 @@ class ChessAdapter:
     def new_state(self) -> chess.Board:
         return chess.Board()
 
-    # ---- 视觉 ----
+    # ---- 视觉（经注入的识别器；不注入 = 老 _vision，行为不变）----
+    @property
+    def space(self) -> str:
+        """当前识别器的观测空间（OCC/PIECE）。老 _vision 认子型 → PIECE。"""
+        return getattr(self.recognizer, "space", PIECE)
+
     def read_board(self, image_png: bytes) -> dict:
-        return _vision.read_board(image_png)
+        return self.read_board_detailed(image_png)[0]
 
     def read_board_detailed(self, image_png: bytes) -> tuple[dict, set]:
+        if self.recognizer is not None:
+            return self.recognizer.read_detailed(image_png)
         return _vision.read_board_detailed(image_png)
+
+    def read_board_occupancy(self, image_png: bytes) -> tuple[dict, set]:
+        """带置信度的占用读取（OCC 空间）。识别器原生在 OCC 就直接给；在 PIECE 就把子型盘塌成占用盘。"""
+        placement, uncertain = self.read_board_detailed(image_png)
+        if self.space == OCC:
+            return placement, uncertain
+        return self._collapse_occ(placement), uncertain
 
     def placement_of(self, state: chess.Board) -> dict:
         return _vision.placement_of_board(state)
 
+    # ---- 观测空间投影 ----
+    @staticmethod
+    def _collapse_occ(piece_board: dict) -> dict:
+        """子型盘 {sq:'P'/'n'} → 占用盘 {sq:'w'|'b'}（大写=白）。"""
+        return {sq: ("w" if sym.isupper() else "b") for sq, sym in piece_board.items()}
+
+    def _piece_of(self, state: chess.Board) -> dict:
+        return _vision.placement_of_board(state)
+
+    def _occ_of(self, state: chess.Board) -> dict:
+        return self._collapse_occ(self._piece_of(state))
+
+    def observed_of(self, state: chess.Board) -> dict:
+        """state 在【当前识别器观测空间】的投影。PIECE 空间下与 placement_of 逐字节等价（老行为不变）。"""
+        return self._occ_of(state) if self.space == OCC else self._piece_of(state)
+
     # ---- 轮次判断：观测摆放和 state 比，认出对手走的那一手 ----
     def diff_move(self, state: chess.Board, observed: dict) -> Optional[chess.Move]:
-        if observed == self.placement_of(state):
+        # 观测与期望的比较一律在【同一观测空间】里做（observed_of）。OCC 空间信息比子型少：
+        # 非吃子/非升变移动仍唯一可辨（from/to 占用变化唯一）；升变类同格多解 → 走下面的歧义返 None。
+        if observed == self.observed_of(state):
             return None                                   # 没变 → 对手还没走
         matches = []                                      # 找出所有能产生 observed 的合法着法
         for mv in state.legal_moves:
             state.push(mv)
-            same = self.placement_of(state) == observed
+            same = self.observed_of(state) == observed
             state.pop()
             if same:
                 matches.append(mv)

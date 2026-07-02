@@ -12,6 +12,13 @@ from __future__ import annotations
 
 from typing import Any, Optional, Protocol, runtime_checkable
 
+# ---- 观测空间（v0.5 视觉桥）：识别器"看"到的是哪种盘 ----
+# 读盘接口不再假定"总能认出子型"：便宜的追踪层只认每格「空/白/黑」（OCC），
+# 模板匹配/CNN 才认「具体子型」（PIECE）。适配器按当前识别器所在空间做投影（observed_of），
+# diff_move 等逻辑对两种空间通用。
+OCC = "occ"      # 占用+颜色：{square: 'w'|'b'}（空格不出现）
+PIECE = "piece"  # 子型：{square: 'P'/'n'/...}（大写白小写黑，空格不出现）
+
 
 @runtime_checkable
 class BoardGameAdapter(Protocol):
@@ -22,8 +29,15 @@ class BoardGameAdapter(Protocol):
     # 视觉：一帧画面 → 棋子摆放（与 placement_of 同格式，用于轮次判断/校准）
     def read_board(self, image_png: bytes) -> dict: ...
     # 带置信度的视觉：→ (摆放, 看不清的格子集合)。对弈树据此判"看清/看不清"三态。
+    # 摆放所在的观测空间 = 适配器当前识别器的空间（OCC 或 PIECE），由 observed_of 保证两侧一致。
     def read_board_detailed(self, image_png: bytes) -> tuple[dict, set]: ...
+    # 带置信度的【占用】读取（OCC 空间）：→ ({square: 'w'|'b'}, 看不清的格子集合)。
+    # 任何识别器都能给（子型盘塌成占用盘即可）；追踪层识别器原生就在这个空间。
+    def read_board_occupancy(self, image_png: bytes) -> tuple[dict, set]: ...
     def placement_of(self, state: Any) -> dict: ...
+    # state 在【当前识别器观测空间】里的投影（PIECE→placement_of 逐字节等价；OCC→占用+颜色盘）。
+    # diff_move 等"观测 vs 期望"的比较一律用它，保证两侧在同一空间。
+    def observed_of(self, state: Any) -> dict: ...
     # 在 state 的合法着法里，找出"使摆放变成 observed"的那一手（=对手走的）；没变→None；对不上→None
     def diff_move(self, state: Any, observed: dict) -> Optional[Any]: ...
     def apply(self, state: Any, move: Any) -> None: ...        # 就地把一手走到 state 上
