@@ -40,6 +40,8 @@ dependencies = [
     "mcp>=1.2",         # 官方 MCP SDK：大脑作 MCP host/client 连世界/引擎(v0.4 接口采标 MCP);先钉 v1.x
     "chess>=1.10",      # python-chess: 棋种策略用(规则/FEN/终局);引擎合法性也靠它
     "py-trees>=2.2",    # 行为树(对弈循环层)
+    "numpy>=1.26",      # v0.5 视觉桥·追踪层(占用识别)——脑侧首次引入数值运行时
+    "opencv-python-headless>=4.6",  # v0.5 视觉桥·板角检测/单应/采样(headless:服务器无 GUI)
 ]
 
 [project.optional-dependencies]

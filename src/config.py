@@ -73,6 +73,21 @@ GAME_RESIGN_CONFIRM = _i("ANIMA_GAME_RESIGN_CONFIRM", "3")  # 评分须连续这
 # 视觉(置信度/多帧确认)
 VISION_AMBIGUITY_RATIO = _f("ANIMA_VISION_AMBIGUITY_RATIO", "0.7")  # Lowe 比值:最近/次近 SAD 超此→该格"看不清"
 VISION_CONFIRM_FRAMES = _i("ANIMA_VISION_CONFIRM_FRAMES", "2")      # 多帧确认:候选局面连续几帧一致才采信
+# 视觉·追踪层(占用+颜色识别器,v0.5 视觉桥第一层;下述默认按 gazebo 绿板/白黑子标定,斜视真帧上可再调)
+VISION_OCC_WHITE_THRESH = _i("ANIMA_VISION_OCC_WHITE_THRESH", "150")  # 非绿像素灰度>此→算白子像素
+VISION_OCC_BLACK_THRESH = _i("ANIMA_VISION_OCC_BLACK_THRESH", "80")   # 非绿像素灰度<此→算黑子像素
+VISION_OCC_GREEN_MARGIN = _i("ANIMA_VISION_OCC_GREEN_MARGIN", "12")   # G 比 R/B 高出这么多→算板面绿
+# 判"格上有东西"的门槛：底带里非绿(非板面)像素占比达到此值→有物。子底座(直径3cm/格5cm)在底带
+# 的投影约占 1/4 上下，0.12 给一倍余量；低于它=板面为主=空格。
+VISION_OCC_OCCUPIED_MIN_FRAC = _f("ANIMA_VISION_OCC_OCCUPIED_MIN_FRAC", "0.12")
+VISION_OCC_DOMINANCE = _f("ANIMA_VISION_OCC_DOMINANCE", "0.55")  # 白/黑像素占非绿比须>此才敢判色,否则"看不清"
+VISION_OCC_BAND_FRAC = _f("ANIMA_VISION_OCC_BAND_FRAC", "0.45")  # 采样带=格投影靠相机一侧的这部分(子底座在格内、受遮挡最小)
+VISION_OCC_MIN_BAND_PX = _i("ANIMA_VISION_OCC_MIN_BAND_PX", "40")     # 底带里非绿像素少于此→样本不足,"看不清"
+VISION_OCC_MIN_BOARD_FRAC = _f("ANIMA_VISION_OCC_MIN_BOARD_FRAC", "0.02")  # 绿板面积占画面比低于此→没找到板
+VISION_OCC_RECT_CELL_PX = _i("ANIMA_VISION_OCC_RECT_CELL_PX", "48")   # 矫正(去斜视)后每格边长像素
+# 板方向约定:探测到的板四角(图中 左上/右上/右下/左下)与棋盘格坐标的对应,按 90° 一档旋转(0-3)。
+# 默认 0 = 相机从白方一侧看盘(图下缘=rank1、图左=a 列)。这是"一次性棋盘外参"级别的约定,换机位改它。
+VISION_OCC_QUARTER_TURNS = _i("ANIMA_VISION_OCC_QUARTER_TURNS", "0")
 
 # ---- 象棋引擎（ANIMA 自己的脑子）----
 CHESS_DEPTH = _i("ANIMA_CHESS_DEPTH", "3")
