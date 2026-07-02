@@ -1,12 +1,23 @@
-"""通用 agent loop = ANIMA 的 ReAct 主循环（按会话运行）。
+"""通用 agent loop = ANIMA 的 ReAct 主循环（按会话运行）——LangGraph StateGraph 骨架。
 
 v0.6 极简架构：**大脑里只剩两样东西——这个主循环 + 经 MCP 可调的工具**。
 - 一个会话绑定一个世界。感知入口 = 这个世界：没连世界 → 纯聊天；连了 → 每轮看它的画面。
 - 工具集 = 世界的能力（world 工具）+ 世界声明的挂载服务的能力（service 顾问工具）——
   合并成一张工具单，LLM 自己决定调哪个；分发按来源路由（服务=只读不过闸，世界动作过安全闸）。
-- 主循环：看 → 想 → 过安全闸 → 动 → 再看，转圈到出最终回复。能力握手一次走缓存；感知每轮真取。
 - 没有任何"模式/技能/任务循环"：多回合的长任务 = 一轮轮普通对话（用户说"该你了/继续"，LLM 自己
   看图认状态、自己调顾问工具算、自己调世界工具动）。HITL = 对话本身（拿不准就直接问用户）。
+
+【LangGraph 集成方式：骨架用它、内脏用自己的】
+图结构（一次编译，节点=普通方法，内部全是自有模块——LLM 协议层/MCP 桥不换 LangChain 抽象）：
+    START → perceive → agent ─(出文字)→ END
+                         └─(要调工具)→ act ─(步数没到)→ perceive（回环）
+                                          └─(步数到顶)→ overflow → END
+- 每条用户消息 = 一次图运行（种子从 SessionStore 读，会话真相始终在 SessionStore）；
+  **不启用跨轮 checkpointer**——LangGraph 的持久化/中断/认知子图留给将来（先别做）。
+- 流式：节点经 get_stream_writer() 发自定义事件（perception/thinking/tool_call/progress/
+  tool_result/reply），handle_stream 用 stream_mode="custom" 原样转发——SSE 事件形状不变，
+  前端零改动；非流式 invoke 下 writer 是安全的 no-op（已验证），handle 与 handle_stream 共用同一张图。
+- 步数上限用 config.MAX_STEPS 做条件边判断（不靠 recursion_limit 报错；limit 只按图深度放宽为安全带）。
 编排器完全通用，对各类世界与服务一视同仁——任务专属细节住在 world / service 侧，这里一行都不碰。
 """
 from __future__ import annotations
@@ -16,15 +27,20 @@ import contextvars
 import logging
 import queue
 import threading
+from typing import Any, TypedDict
+
+from langgraph.config import get_stream_writer
+from langgraph.graph import END, START, StateGraph
 
 from . import config, context, messages
 from .awi import ActionResult, NON_MUTATING_KINDS, ToolSpec
-from .llm import LLM, ToolCall
+from .llm import LLM, LLMReply, ToolCall
 from .registry import WorldRegistry
 from .safety import SafetyGate
 from .session import Session, SessionStore
 
 DEFAULT_MAX_STEPS = config.MAX_STEPS  # ReAct 主循环最多转几轮（config，env 可覆盖）
+_NODES_PER_STEP = 3                   # 每轮回环经过的节点数（perceive→agent→act），算 recursion_limit 安全带用
 _log = logging.getLogger(__name__)
 
 
@@ -32,16 +48,169 @@ def _tc_dict(tc: ToolCall) -> dict:
     return {"id": tc.id, "name": tc.name, "arguments": tc.arguments}
 
 
+class LoopState(TypedDict, total=False):
+    """一次图运行的状态（不序列化、不跨轮持久——会话真相在 SessionStore）。"""
+    session: Session
+    llm: Any                 # LLM 协议对象（自有层，非 LangChain 模型）
+    max_steps: int
+    step: int                # 已开始第几轮（perceive 时 +1）
+    world: Any               # RemoteWorld | None
+    svc_routes: dict         # 工具名 → service 客户端（本轮）
+    kinds: dict              # 工具名 → kind（本轮）
+    tools: list              # 本轮工具单
+    image: Any               # 本轮画面（bytes | None）
+    reply: Any               # 本轮 LLMReply
+    trace: dict              # handle() 返回的调试轨迹（inputs/thinking/reply）
+    final_reply: str
+    done: bool
+
+
 class Orchestrator:
     def __init__(self, registry: WorldRegistry, store: SessionStore, safety: SafetyGate | None = None):
         self.registry = registry
         self.store = store
         self.safety = safety or SafetyGate()
+        self._graph = self._build_graph()
 
     def _world(self, session: Session):
         return self.registry.get(session.world) if session.world else None
 
-    # ==================== 工具单组装 ====================
+    # ==================== 图组装 ====================
+    def _build_graph(self):
+        g = StateGraph(LoopState)
+        g.add_node("perceive", self._node_perceive)
+        g.add_node("agent", self._node_agent)
+        g.add_node("act", self._node_act)
+        g.add_node("overflow", self._node_overflow)
+        g.add_edge(START, "perceive")
+        g.add_edge("perceive", "agent")
+        g.add_conditional_edges("agent", lambda s: END if s.get("done") else "act",
+                                {END: END, "act": "act"})
+        g.add_conditional_edges("act",
+                                lambda s: "overflow" if s["step"] >= s["max_steps"] else "perceive",
+                                {"overflow": "overflow", "perceive": "perceive"})
+        g.add_edge("overflow", END)
+        return g.compile()
+
+    # ==================== 节点（看 → 想 → 动）====================
+    # 不变量(改动时务必保持):capabilities 走缓存、perceive 每轮真取、安全闸只拦「会改世界」的动作、
+    #   服务工具按来源路由(只读不过闸)、handle 与 handle_stream 共用同一张图(行为天然一致)。
+
+    def _node_perceive(self, state: LoopState) -> dict:
+        """看：拿本轮工具单（世界+服务）与画面；画面落会话历史并发 perception 事件。"""
+        emit = get_stream_writer()
+        session, world = state["session"], state["world"]
+        caps = world.capabilities() if world else None      # 握手:首轮拿能力并缓存
+        world_tools = list(caps.tools) if caps else []
+        svc_tools, svc_routes = self._service_toolbox(world, {t.name for t in world_tools})
+        tools = world_tools + svc_tools
+
+        obs = world.perceive() if world else None
+        image = obs.image_png if obs else None
+        if obs:
+            self.store.append_perception(session.id, obs.image_png, obs.state)
+            img_b64 = base64.b64encode(obs.image_png).decode() if obs.image_png else None
+            state["trace"]["inputs"].append({"image_b64": img_b64, "state": obs.state})
+            emit({"type": "perception", "image_b64": img_b64, "state": obs.state})
+        return {"step": state.get("step", 0) + 1, "tools": tools, "svc_routes": svc_routes,
+                "kinds": {t.name: t.kind for t in tools}, "image": image, "trace": state["trace"]}
+
+    def _node_agent(self, state: LoopState) -> dict:
+        """想：拼系统提示+历史+工具单 → 自有 LLM 层 chat()（LoggingLLM 记账不动）。"""
+        emit = get_stream_writer()
+        session, llm, world = state["session"], state["llm"], state["world"]
+        svc_tools_present = bool(state["svc_routes"])
+        history = context.build(self.store.get(session.id).messages)
+        reply: LLMReply = llm.chat(self._system(world, has_services=svc_tools_present),
+                                   history, state["tools"], state["image"])
+
+        if not reply.tool_calls:    # 出文字 → 最终回复,收尾
+            self.store.append(session.id, {"role": "assistant", "text": reply.text or "",
+                                           "brain": session.brain})
+            state["trace"]["reply"] = reply.text or ""
+            emit({"type": "reply", "text": reply.text or ""})
+            return {"reply": reply, "done": True, "final_reply": reply.text or "", "trace": state["trace"]}
+
+        tcs = [_tc_dict(tc) for tc in reply.tool_calls]
+        self.store.append(session.id, {"role": "assistant", "text": reply.text or "", "tool_calls": tcs,
+                                       "brain": session.brain})
+        state["trace"]["thinking"].append({"text": reply.text or "", "tool_calls": tcs, "tool_results": []})
+        if reply.text:
+            emit({"type": "thinking", "text": reply.text})
+        return {"reply": reply, "done": False, "trace": state["trace"]}
+
+    def _node_act(self, state: LoopState) -> dict:
+        """动：逐个执行本轮工具调用（服务→路由给顾问；世界→过安全闸），结果落历史+事件；下轮自动重感知（闭环）。"""
+        emit = get_stream_writer()
+        session, world = state["session"], state["world"]
+        step_trace = state["trace"]["thinking"][-1]
+        for tc in state["reply"].tool_calls:
+            emit({"type": "tool_call", "name": tc.name, "args": tc.arguments})
+            result = self._run_tool(session, world, state["svc_routes"], state["kinds"], tc, emit)
+            step_trace["tool_results"].append({"name": tc.name, "ok": result.ok, "message": result.message})
+        return {"trace": state["trace"]}
+
+    def _node_overflow(self, state: LoopState) -> dict:
+        """步数到顶：礼貌收尾（用户再说一句即可继续），防转圈。"""
+        emit = get_stream_writer()
+        state["trace"]["reply"] = messages.MAX_STEPS_REPLY
+        emit({"type": "reply", "text": messages.MAX_STEPS_REPLY})
+        return {"final_reply": messages.MAX_STEPS_REPLY, "done": True, "trace": state["trace"]}
+
+    # ==================== 工具执行 ====================
+    def _run_tool(self, session: Session, world, svc_routes: dict, kinds: dict,
+                  tc: ToolCall, emit) -> ActionResult:
+        """执行一个工具调用：服务工具（顾问=只读）路由给服务、不过安全闸；世界动作先过闸再发。
+        世界动作可能几十秒：放后台线程跑（contextvars 复制保 session 标签），MCP progress 经
+        队列转成 "progress" 事件实时发出（用户看到"已夹取，正在移向 e4"，不黑等）。
+        结果统一落会话历史（role=tool）+ 发 tool_result 事件。"""
+        svc = svc_routes.get(tc.name)
+        changes_world = svc is None and world is not None and kinds.get(tc.name, "tool") not in NON_MUTATING_KINDS
+        if changes_world:
+            ok, reason = self.safety.check(world, tc.name, tc.arguments)
+            if not ok:
+                result = ActionResult(False, f"安全闸拦截:{reason}")
+                self.store.append(session.id, {"role": "tool", "id": tc.id, "name": tc.name,
+                                               "content": result.message})
+                emit({"type": "tool_result", "name": tc.name, "ok": False, "message": result.message})
+                return result
+
+        q: queue.Queue = queue.Queue()
+        holder: dict = {}
+
+        def _on_progress(message, progress, total):
+            q.put({"type": "progress", "name": tc.name, "message": message or "", "progress": progress})
+
+        def _work():
+            if svc is not None:
+                holder["res"] = svc.invoke(tc.name, **tc.arguments)
+            else:
+                holder["res"] = self._dispatch(world, tc.name, tc.arguments, _on_progress=_on_progress)
+
+        ctx = contextvars.copy_context()             # 后台线程继承 session 标签（session_log 记账不丢归属）
+        th = threading.Thread(target=ctx.run, args=(_work,), daemon=True)
+        th.start()
+        while th.is_alive():
+            try:
+                emit(q.get(timeout=config.BRIDGE_WATCHDOG_POLL_S))
+            except queue.Empty:
+                pass
+        th.join()
+        while not q.empty():                          # 清掉收尾前最后一批进度
+            emit(q.get())
+        result: ActionResult = holder.get("res") or ActionResult(False, "（工具执行线程异常退出）")
+        self.store.append(session.id, {"role": "tool", "id": tc.id, "name": tc.name,
+                                       "content": result.message, "data": result.data})
+        emit({"type": "tool_result", "name": tc.name, "ok": result.ok, "message": result.message})
+        return result
+
+    def _dispatch(self, world, name: str, args: dict, _on_progress=None) -> ActionResult:
+        if world is None:
+            return ActionResult(False, "没连接世界,无法操作。")
+        if _on_progress is not None:
+            return world.invoke(name, _on_progress=_on_progress, **args)
+        return world.invoke(name, **args)
+
     def _service_toolbox(self, world, world_tool_names: set[str]) -> tuple[list[ToolSpec], dict]:
         """挂载服务的工具单与路由表：tools 并进大脑工具单；routes(name→service) 供分发按来源路由。
 
@@ -91,161 +260,29 @@ class Orchestrator:
             s += messages.SERVICES_HINT
         return s
 
-    # ==================== 分发 ====================
-    def _dispatch(self, world, name: str, args: dict, _on_progress=None) -> ActionResult:
-        if world is None:
-            return ActionResult(False, "没连接世界,无法操作。")
-        if _on_progress is not None:
-            return world.invoke(name, _on_progress=_on_progress, **args)
-        return world.invoke(name, **args)
-
-    # ==================== 主循环 ====================
-    def handle(self, session: Session, user_text: str, llm: LLM, max_steps: int = DEFAULT_MAX_STEPS) -> dict:
-        world = self._world(session)
+    # ==================== 公共接口（签名与 v0.5 一致）====================
+    def _init_state(self, session: Session, user_text: str, llm: LLM, max_steps: int) -> LoopState:
         self.store.append(session.id, {"role": "user", "text": user_text})
-        trace: dict = {"inputs": [], "thinking": [], "reply": "", "brain": session.brain, "model": llm.model}
+        return {"session": session, "llm": llm, "max_steps": max_steps, "step": 0,
+                "world": self._world(session), "done": False, "final_reply": "",
+                "trace": {"inputs": [], "thinking": [], "reply": "", "brain": session.brain,
+                          "model": llm.model}}
 
-        # ─────────── 主循环:看 → 想 →(过安全闸)→ 动 → 再看 ───────────
-        # 不变量(改动时务必保持):capabilities 走缓存、perceive 每轮真取、安全闸只拦「会改世界」的动作、
-        #   服务工具按来源路由(只读不过闸)、handle() 与 handle_stream() 是同一套循环的两个版本(改一个同步另一个)。
-        for _ in range(max_steps):
-            caps = world.capabilities() if world else None  # 握手:首轮拿能力并缓存
-            world_tools = list(caps.tools) if caps else []
-            svc_tools, svc_routes = self._service_toolbox(world, {t.name for t in world_tools})
-            tools = world_tools + svc_tools
-            kinds = {t.name: t.kind for t in tools}
+    def _graph_config(self, max_steps: int) -> dict:
+        # recursion_limit 只是安全带（真正的步数收口在 act 后的条件边），按图深度放宽到永不误伤。
+        return {"recursion_limit": max_steps * _NODES_PER_STEP + 8}
 
-            obs = world.perceive() if world else None
-            image = obs.image_png if obs else None
-            if obs:
-                self.store.append_perception(session.id, obs.image_png, obs.state)
-                trace["inputs"].append({
-                    "image_b64": base64.b64encode(obs.image_png).decode() if obs.image_png else None,
-                    "state": obs.state,
-                })
-
-            history = context.build(self.store.get(session.id).messages)
-            reply = llm.chat(self._system(world, has_services=bool(svc_tools)), history, tools, image)
-
-            if not reply.tool_calls:  # 出文字 → 最终回复,收尾
-                self.store.append(session.id, {"role": "assistant", "text": reply.text or "", "brain": session.brain})
-                trace["reply"] = reply.text or ""
-                return {"reply": reply.text or "", "trace": trace, "brain": session.brain, "model": llm.model}
-
-            tcs = [_tc_dict(tc) for tc in reply.tool_calls]
-            self.store.append(session.id, {"role": "assistant", "text": reply.text or "", "tool_calls": tcs,
-                                           "brain": session.brain})
-            step = {"text": reply.text or "", "tool_calls": tcs, "tool_results": []}
-            trace["thinking"].append(step)
-
-            for tc in reply.tool_calls:  # 执行;下一轮自动重感知(闭环)
-                result = self._run_tool(world, svc_routes, kinds, tc)
-                self.store.append(session.id, {"role": "tool", "id": tc.id, "name": tc.name,
-                                   "content": result.message, "data": result.data})
-                step["tool_results"].append({"name": tc.name, "ok": result.ok, "message": result.message})
-
-        trace["reply"] = messages.MAX_STEPS_REPLY
-        return {"reply": trace["reply"], "trace": trace, "brain": session.brain, "model": llm.model}
-
-    def _run_tool(self, world, svc_routes: dict, kinds: dict, tc: ToolCall, _on_progress=None) -> ActionResult:
-        """执行一个工具调用：服务工具（顾问=只读）路由给服务、不过安全闸；世界动作先过闸再发。"""
-        svc = svc_routes.get(tc.name)
-        if svc is not None:
-            return svc.invoke(tc.name, **tc.arguments)
-        changes_world = world is not None and kinds.get(tc.name, "tool") not in NON_MUTATING_KINDS
-        if changes_world:
-            ok, reason = self.safety.check(world, tc.name, tc.arguments)
-            if not ok:
-                return ActionResult(False, f"安全闸拦截:{reason}")
-        return self._dispatch(world, tc.name, tc.arguments, _on_progress=_on_progress)
+    def handle(self, session: Session, user_text: str, llm: LLM, max_steps: int = DEFAULT_MAX_STEPS) -> dict:
+        state = self._init_state(session, user_text, llm, max_steps)
+        out = self._graph.invoke(state, config=self._graph_config(max_steps))
+        return {"reply": out.get("final_reply", ""), "trace": out["trace"],
+                "brain": session.brain, "model": llm.model}
 
     def handle_stream(self, session: Session, user_text: str, llm: LLM, max_steps: int = DEFAULT_MAX_STEPS):
-        """流式版:边跑边 yield 事件。循环逻辑与 handle() 完全一致(改这里务必同步改 handle())。
-
-        长动作进度：世界工具在后台线程里执行，其 MCP progress 经队列转成 "progress" 事件实时下发
-        （用户看到"已夹取，正在移向 e4"而不是黑等几十秒）。"""
-        world = self._world(session)
-        self.store.append(session.id, {"role": "user", "text": user_text})
+        """流式版：节点发的自定义事件（perception/thinking/tool_call/progress/tool_result/reply）
+        经 LangGraph custom 流原样转发——事件形状与 v0.5 相同，前端零改动。"""
+        state = self._init_state(session, user_text, llm, max_steps)
         yield {"type": "start", "brain": session.brain, "model": llm.model}
-
-        for _ in range(max_steps):
-            caps = world.capabilities() if world else None
-            world_tools = list(caps.tools) if caps else []
-            svc_tools, svc_routes = self._service_toolbox(world, {t.name for t in world_tools})
-            tools = world_tools + svc_tools
-            kinds = {t.name: t.kind for t in tools}
-
-            obs = world.perceive() if world else None
-            if obs:
-                self.store.append_perception(session.id, obs.image_png, obs.state)
-                yield {
-                    "type": "perception",
-                    "image_b64": base64.b64encode(obs.image_png).decode() if obs.image_png else None,
-                    "state": obs.state,
-                }
-
-            history = context.build(self.store.get(session.id).messages)
-            reply = llm.chat(self._system(world, has_services=bool(svc_tools)), history, tools,
-                             obs.image_png if obs else None)
-
-            if not reply.tool_calls:  # 出文字 → 最终回复,收尾
-                self.store.append(session.id, {"role": "assistant", "text": reply.text or "", "brain": session.brain})
-                yield {"type": "reply", "text": reply.text or ""}
-                yield {"type": "done"}
-                return
-
-            tcs = [_tc_dict(tc) for tc in reply.tool_calls]
-            self.store.append(session.id, {"role": "assistant", "text": reply.text or "", "tool_calls": tcs,
-                                           "brain": session.brain})
-            if reply.text:
-                yield {"type": "thinking", "text": reply.text}
-
-            for tc in reply.tool_calls:
-                yield {"type": "tool_call", "name": tc.name, "args": tc.arguments}
-                yield from self._run_tool_streaming(session, world, svc_routes, kinds, tc)
-
-        yield {"type": "reply", "text": messages.MAX_STEPS_REPLY}
+        for ev in self._graph.stream(state, config=self._graph_config(max_steps), stream_mode="custom"):
+            yield ev
         yield {"type": "done"}
-
-    def _run_tool_streaming(self, session: Session, world, svc_routes: dict, kinds: dict, tc: ToolCall):
-        """流式执行一个工具调用：进度事件实时 yield，最后 yield tool_result（结果同时落会话历史）。
-
-        世界动作可能几十秒：invoke 放后台线程跑（contextvars 复制保 session 标签），
-        MCP progress 回调进队列 → 这里实时转成 "progress" 事件；服务/被拦截的调用即时返回，无进度。"""
-        svc = svc_routes.get(tc.name)
-        changes_world = svc is None and world is not None and kinds.get(tc.name, "tool") not in NON_MUTATING_KINDS
-        if changes_world:
-            ok, reason = self.safety.check(world, tc.name, tc.arguments)
-            if not ok:
-                msg = f"安全闸拦截:{reason}"
-                self.store.append(session.id, {"role": "tool", "id": tc.id, "name": tc.name, "content": msg})
-                yield {"type": "tool_result", "name": tc.name, "ok": False, "message": msg}
-                return
-
-        q: queue.Queue = queue.Queue()
-        holder: dict = {}
-
-        def _on_progress(message, progress, total):
-            q.put({"type": "progress", "name": tc.name, "message": message or "", "progress": progress})
-
-        def _work():
-            if svc is not None:
-                holder["res"] = svc.invoke(tc.name, **tc.arguments)
-            else:
-                holder["res"] = self._dispatch(world, tc.name, tc.arguments, _on_progress=_on_progress)
-
-        ctx = contextvars.copy_context()             # 后台线程继承 session 标签（session_log 记账不丢归属）
-        th = threading.Thread(target=ctx.run, args=(_work,), daemon=True)
-        th.start()
-        while th.is_alive():
-            try:
-                yield q.get(timeout=config.BRIDGE_WATCHDOG_POLL_S)
-            except queue.Empty:
-                pass
-        th.join()
-        while not q.empty():                          # 清掉收尾前最后一批进度
-            yield q.get()
-        result: ActionResult = holder.get("res") or ActionResult(False, "（工具执行线程异常退出）")
-        self.store.append(session.id, {"role": "tool", "id": tc.id, "name": tc.name,
-                                       "content": result.message, "data": result.data})
-        yield {"type": "tool_result", "name": tc.name, "ok": result.ok, "message": result.message}

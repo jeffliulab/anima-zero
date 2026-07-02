@@ -36,7 +36,8 @@ class _ChessWorld:
     def perceive(self):
         return Observation(image_png=b"\x89PNG-fake", state={})
 
-    def invoke(self, name, **a):
+    def invoke(self, name, *, _on_progress=None, _should_abort=None, **a):
+        # World 协议的客户端旁路参数（进度/取消）：假世界按协议接受并忽略
         self.invoked.append((name, a))
         return ActionResult(True, "已走 e7e5")
 
