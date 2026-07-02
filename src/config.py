@@ -49,6 +49,12 @@ TITLE_MAX_LEN = _i("ANIMA_TITLE_MAX_LEN", "24")
 AWI_LOG_MAXLEN = _i("ANIMA_AWI_LOG_MAXLEN", "400")
 AWI_POLL_INTERVAL_S = _f("ANIMA_AWI_POLL_INTERVAL_S", "0.25")
 
+# ---- 日志留痕（session_log）----
+# 留痕文本的最大留存长度（字符）——只是给写盘一个上界防失控，正常条目都远短于此 = 等同"留全文"。
+LOG_MAX_SYSTEM = _i("ANIMA_LOG_MAX_SYSTEM", "8000")
+LOG_MAX_USER = _i("ANIMA_LOG_MAX_USER", "8000")
+LOG_MAX_REPLY = _i("ANIMA_LOG_MAX_REPLY", "20000")
+
 # ---- LLM ----
 MAX_TOKENS = _i("ANIMA_MAX_TOKENS", "1024")
 OLLAMA_PROBE_TIMEOUT = _f("ANIMA_OLLAMA_PROBE_TIMEOUT", "0.6")

@@ -10,7 +10,7 @@ import os
 import time
 from collections import deque
 
-from . import config
+from . import config, session_log
 
 # 脑端保留多少条 AWI 流量历史（config，env 可覆盖）。世界端有自己的同名 env;前端显示数须 ≤ 此值。
 AWI_LOG_MAXLEN = config.AWI_LOG_MAXLEN
@@ -32,25 +32,35 @@ def _persist(entry: dict) -> None:
         pass  # 落盘失败绝不能影响主流程
 
 
-def record(world: str, method: str, summary: str, ms: float, resp: dict | None = None) -> None:
-    """记一笔脑↔世界的往返。
-    - summary：出方向(ANIMA→世界)发了什么(方法+参数)。
-    - resp：回方向(世界→ANIMA)返回的【结构化】信息(图片字节数、ok/message、回程 state…)。
+def record(world: str, method: str, summary: str, ms: float, resp: dict | None = None,
+           kind: str = "world_call") -> None:
+    """记一笔脑↔世界（或脑↔服务，kind="service_call"）的往返。
+    - summary：出方向(ANIMA→server)发了什么(方法+参数)。
+    - resp：回方向(server→ANIMA)返回的【结构化】信息(图片字节数、ok/message、回程 state…)。
       给 /awi 仪表盘双向展示用，也是审计点：世界违约偷传棋盘真值(FEN/legal_moves)在这能看出来。
+    每条同时**转发一份进 session_log**（统一日志=单一真相，本文件的内存 deque + 日文件只是
+    /awi 实时区与 eval 的投影）；session 标签由 session_log 的请求级上下文自动带上。
     """
     global _SEQ
     _SEQ += 1
     entry = {
         "id": _SEQ,
         "ts": time.strftime("%H:%M:%S"),
+        "session": session_log.current_session(),   # 归属会话（空=非会话场景，如探活）
         "world": world,
         "method": method,
-        "summary": summary,        # 出方向(ANIMA→世界)
-        "resp": resp or {},        # 回方向(世界→ANIMA)结构化
+        "summary": summary,        # 出方向(ANIMA→server)
+        "resp": resp or {},        # 回方向(server→ANIMA)结构化
         "ms": round(ms, 1),
     }
     _LOG.append(entry)
     _persist(entry)
+    try:
+        peer_key = "server" if kind == "service_call" else "world"
+        session_log.record(kind, {peer_key: world, "method": method, "summary": summary,
+                                  "resp": resp or {}, "ms": round(ms, 1)})
+    except Exception:
+        pass  # 统一日志落盘失败绝不能影响主流程
 
 
 def recent(after: int = 0) -> list[dict]:

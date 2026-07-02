@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
-from anima import awi_log, config
+from anima import awi_log, config, session_log
 from anima.behavior.manager import RunnerManager
 from anima.llm import LLM, DEFAULT_BRAIN, list_brains, make_llm
 from anima.llm_log import LoggingLLM, bound_stream, recent as _llm_recent, sessions as _llm_sessions, session_scope
@@ -369,10 +369,15 @@ async def awi_events_stream() -> StreamingResponse:
     return StreamingResponse(gen(), media_type="text/event-stream")
 
 
-@app.get("/api/anima-logs")  # 脑↔大模型流量（anima-logs 调试页用）：读 logs/anima 文件夹的最新一天
+@app.get("/api/anima-logs")  # 【W5 删除】旧调试页端点：现从统一日志取 kind=llm_call（经 llm_log 兼容层）
 def anima_logs(limit: int = 300, session: str = "") -> dict:
-    # session 非空 → 只看那一盘/那个会话的全部 LLM 调用；sessions = 今天出现过的会话列表（给下拉）
+    # session 非空 → 只看那一盘/那个会话的全部 LLM 调用；sessions = 有日志的会话列表（给下拉）
     return {"entries": _llm_recent(limit, session), "sessions": _llm_sessions()}
+
+
+@app.get("/api/session-logs")  # Session Logs：本会话全部行为流水（llm_call / world_call / service_call 按时间合并）
+def session_logs(limit: int = 500, session: str = "") -> dict:
+    return {"entries": session_log.recent(limit, session), "sessions": session_log.sessions()}
 
 
 # ===================== 对弈（skill / 行为树）HTTP 端点 =====================
