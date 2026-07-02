@@ -14,10 +14,6 @@
   <strong>ANIMA 是一台具身机器人的「脑」:它只想、不动手。它决定「做什么」,身体决定「怎么动」。</strong>
 </p>
 
-<p>
-  <a href="https://github.com/jeffliulab/soma-zero"><img src="https://img.shields.io/badge/身体-SOMA_Zero-purple" alt="SOMA Zero"></a>
-</p>
-
 </div>
 
 > 这份 README 讲的是**顶层思维**:ANIMA 是什么、怎么运转、为什么这么设计。代码细节以仓库为准。
@@ -33,7 +29,7 @@ ANIMA 本质是一个 **agent(智能体)**——和 Claude Code、Codex 这类�
 
 这就是认知科学的 **System 1 / System 2** 分工:**ANIMA 是 System 2**——慢、深思,每个决策跑一次;
 身体是 **System 1**——快、反射、高频闭环。这套切分是当下主流机器人大脑的共识(π0.5、GR00T N1、Figure Helix)。
-配套的身体在另一个仓库:[`soma-zero`](https://github.com/jeffliulab/soma-zero)。
+身体侧不在本仓——任何实现 AWI(MCP) 的身体都能作为「世界」接入(见「四、怎么接入一个世界」),大脑一行不改。
 
 ### 这个项目在证明什么(定位)
 

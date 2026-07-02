@@ -50,7 +50,6 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/jeffliulab/anima-zero"
-"SOMA Zero (body)" = "https://github.com/jeffliulab/soma-zero"
 
 # 扁平 src/ 映射成 anima 包(不建 src/anima);llm/ 是子包
 [tool.setuptools]

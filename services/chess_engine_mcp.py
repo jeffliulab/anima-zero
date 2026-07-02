@@ -29,7 +29,7 @@ _ENGINE_TIME = float(os.getenv("ANIMA_ENGINE_TIME", "1.5"))
 
 
 def _engine_path() -> str:
-    """引擎源码路径：默认从仓库结构派生（services/ → anima-zero → 1-vla-project-soma-chess → 项目根，
+    """引擎源码路径：默认从仓库结构派生（services/ → 仓库根 → 再上两级到项目根，
     再拼 3-anima-chess-engine/chess/engine.py），env ANIMA_CHESS_ENGINE_PATH 覆盖。"""
     env = os.getenv("ANIMA_CHESS_ENGINE_PATH")
     if env:
