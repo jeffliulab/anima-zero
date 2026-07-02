@@ -88,6 +88,12 @@ CAM_FPS = _i("GZCHESS_CAM_FPS", "15")
 # 非空 → 启动按 FEN（只用摆放字段）摆多子；空 → 只摆一枚演示子（GZCHESS_DEMO_PIECE，v0.4 路径保留）。
 SETUP_FEN = os.getenv("GZCHESS_SETUP_FEN", "")
 
+# ---- 失败注入（v0.5：测大脑补救链路用；默认全关，绝不影响正常运行）----
+# 语义：off=关 / once=注入一次后自动归 off / always=每次都注入。
+FAIL_GRIP_MISS = os.getenv("GZCHESS_FAIL_GRIP_MISS", "off")        # 夹空：走完动作但不闭爪（子留原地）
+FAIL_PLACE_MODE = os.getenv("GZCHESS_FAIL_PLACE_MODE", "off")      # 放偏：放置点注入偏移
+FAIL_PLACE_OFFSET_M = _f("GZCHESS_FAIL_PLACE_OFFSET_M", "0.05")    # 放偏量（默认一格=5cm，落到邻格）
+
 # ---- 合成数据管线（scripts/gen_dataset.py：CNN 训练数据，世界真值自动打标签）----
 DATASET_OUT_DIR = os.getenv("GZCHESS_DATASET_OUT_DIR", "")   # 空→脚本默认仓外 ~/gzchess-dataset
 DATASET_N = _i("GZCHESS_DATASET_N", "300")                   # 采多少帧（ChessCog 量级是 5000，先小跑验管线）

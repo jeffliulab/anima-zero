@@ -161,11 +161,13 @@ class ArmController(Node):
             return None
         return ja, jg
 
-    def pick_at(self, px: float, py: float, pz: float, progress=None) -> tuple[bool, str]:
+    def pick_at(self, px: float, py: float, pz: float, progress=None,
+                inject_miss: bool = False) -> tuple[bool, str]:
         """在世界点 (px,py,pz) 抓一个子：选一个 IK 可达候选 → 开爪→到接近点→下到抓取点→闭爪→抬回接近点。
 
         progress: 可选的进度上报回调 `progress(message: str)`——每个候选/关键子步各报一句人话，
         让上层（MCP progress → 大脑/仪表盘）看到"臂正在干什么"而不是黑等。不传则静默（行为不变）。
+        inject_miss: 失败注入（测补救链路）：动作全走、但**不闭爪**——物理后果=夹空，子留在原地。
         """
         note = progress or (lambda m: None)
         for label, approach, grasp in grasp_pose.candidates_for_point(px, py, pz):
@@ -181,8 +183,11 @@ class ArmController(Node):
             note("下探到抓取点")
             if not self.goto_arm(jg, config.MOVE_TIME_SHORT_S):
                 return False, f"下到抓取点失败({label})"
-            note("闭合夹爪")
-            self.close_gripper()
+            if inject_miss:
+                note("（失败注入：不闭爪，模拟夹空）")
+            else:
+                note("闭合夹爪")
+                self.close_gripper()
             time.sleep(config.GRIP_SETTLE_S)
             if not self.goto_arm(ja, config.MOVE_TIME_SHORT_S):
                 return False, f"抬起失败({label})"

@@ -48,6 +48,7 @@ class BoardGameBlackboard(Blackboard):
     running_streak: int = 0                  # 连续多少拍停在 RUNNING(看不清/确认中)——用于"卡住"报警
     pending_move: Any = None
     pending_san: str = ""
+    pending_recovery: Optional[dict] = None  # 上次动作失败的补救计划 {uci, op_index, from}（世界自检给的实际落点）
     move_count: int = 0
     resign_streak: int = 0                   # 连续多少拍评分都极差（够久才认输，避免兑子瞬间误判）
     last_uci: str = ""
@@ -300,6 +301,7 @@ class SendMove(Behaviour):
             return Status.FAILURE
         mv = c.pending_move
         ops = c.adapter.expand_move(c.belief, mv, c.prims)
+        ops = self._apply_recovery(c, c.adapter.move_uci(mv), ops)
         for i, op in enumerate(ops):
             kind = op["op"]
             args = {k: v for k, v in op.items() if k != "op"}
@@ -314,7 +316,9 @@ class SendMove(Behaviour):
             if not res.ok:
                 c.act_fail += 1
                 step = f"（第 {i + 1}/{len(ops)} 步 {kind}）" if len(ops) > 1 else ""
-                c.emit("fail", f"这手没走成{step}：{res.message}，重看重走。")
+                self._plan_recovery(c, c.adapter.move_uci(mv), i, res)
+                extra = "，下拍从实际落点补救" if c.pending_recovery else "，重看重走"
+                c.emit("fail", f"这手没走成{step}：{res.message}{extra}。")
                 return Status.FAILURE
         uci = c.adapter.move_uci(mv)
         c.adapter.apply(c.belief, mv)
@@ -323,6 +327,37 @@ class SendMove(Behaviour):
         c.last_uci, c.last_san = uci, c.pending_san
         c.pending_move = None
         return Status.SUCCESS
+
+    @staticmethod
+    def _plan_recovery(c, uci: str, op_index: int, res) -> None:
+        """按世界的【执行自检】报告规划下一拍的补救（红线不破：这是动作结果自检，不是感知真值）。
+
+        - grip_miss（夹空，子还在原格）→ 从失败的那一步原样重试（跳过已成功的前序原语）；
+        - place_offset / drop 且世界报了实际落格 → 下一拍把「起点」改成实际落格、从那步继续
+          （放偏的子从真实位置夹回目标格）；
+        - 其它/没报落点 → 不规划（走整条重来 + act_fail 超限升级退出的老路径）。
+        每次重试前 Perceive 都会先重新感知（树序：感知在前）——「重试必重感知」由结构保证。
+        """
+        data = res.data or {}
+        kind = data.get("fail")
+        if kind == "grip_miss":
+            c.pending_recovery = {"uci": uci, "op_index": op_index, "from": None}
+        elif kind in ("place_offset", "drop") and data.get("piece_square"):
+            c.pending_recovery = {"uci": uci, "op_index": op_index, "from": data["piece_square"]}
+        else:
+            c.pending_recovery = None
+
+    @staticmethod
+    def _apply_recovery(c, uci: str, ops: list) -> list:
+        """消费上一拍规划的补救：跳过已成功的前序原语、必要时把失败那步的起点换成实际落格。
+        补救只对同一手棋有效（uci 对得上才用；引擎换了主意就作废）。"""
+        rec, c.pending_recovery = c.pending_recovery, None
+        if not rec or rec["uci"] != uci or rec["op_index"] >= len(ops):
+            return ops
+        rest = [dict(op) for op in ops[rec["op_index"]:]]
+        if rec["from"] and "from" in rest[0]:
+            rest[0]["from"] = rec["from"]                 # 从实际落点夹回（世界自检给的位置）
+        return rest
 
 
 class Narrate(Behaviour):

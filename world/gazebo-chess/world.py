@@ -78,6 +78,9 @@ class GazeboChessWorld:
         self.lock = threading.RLock()
         self.last = ""
         self._discard_n = 0                 # 已用掉几个弃子槽（remove 递增）
+        # 失败注入状态（once 模式注入一次即耗尽；见 config.FAIL_*）
+        self._fail_grip = config.FAIL_GRIP_MISS
+        self._fail_place = config.FAIL_PLACE_MODE
         # ROS：一个节点（ArmController）+ 挂相机订阅
         if not rclpy.ok():
             rclpy.init()
@@ -195,6 +198,14 @@ class GazeboChessWorld:
             self.arm.goto_arm(PARK, config.MOVE_TIME_APPROACH_S)
             self._spin(10)
 
+    def _consume_inject(self, attr: str) -> bool:
+        """失败注入调度：off→False；once→注入一次后自动关；always→每次注入。"""
+        mode = getattr(self, attr)
+        if mode == "once":
+            setattr(self, attr, "off")
+            return True
+        return mode == "always"
+
     # ---------- move = 裸搬（真夹真放，不判棋规）----------
     def _move(self, args: dict, note=lambda p, m="": None) -> dict:
         frm = (args.get("from", "") or "").strip().lower()
@@ -211,11 +222,14 @@ class GazeboChessWorld:
                 return {"ok": False, "message": f"{frm} 格上没有子"}
             note(_P_LOCATE, f"已定位 {frm} 上的棋子，正在规划抓取")
             gx, gy, gz = p[0], p[1], p[2] + config.PIECE_GRASP_WAIST_M
-            ok, msg = self.arm.pick_at(gx, gy, gz, progress=lambda m: note(_P_PICK, m))
+            ok, msg = self.arm.pick_at(gx, gy, gz, progress=lambda m: note(_P_PICK, m),
+                                       inject_miss=self._consume_inject("_fail_grip"))
             if not ok:
                 self._park(); return {"ok": False, "message": f"抓取失败：{msg}"}
             note(_P_CARRY, f"已夹取，正在移向 {to}")
             dx, dy, dz = geometry.grasp_xyz(to)
+            if self._consume_inject("_fail_place"):     # 放偏注入：放置点加偏移（物理后果如实保留）
+                dx += config.FAIL_PLACE_OFFSET_M
             ok, msg = self.arm.place_at(dx, dy, dz, progress=lambda m: note(_P_PLACE, m))
             if not ok:
                 self._park(); return {"ok": False, "message": f"放置失败：{msg}"}
@@ -228,7 +242,25 @@ class GazeboChessWorld:
             if err <= config.PLACE_TOLERANCE_M:
                 self.last = f"move {frm}->{to}"
                 return {"ok": True, "message": f"已把子从 {frm} 搬到 {to}（落点误差 {err * 100:.1f}cm）"}
-            return {"ok": False, "message": f"放偏了：落点离 {to} 中心 {err * 100:.1f}cm"}
+            return self._classify_move_failure(name, frm, to, p2, err)
+
+    def _classify_move_failure(self, name: str, frm: str, to: str, p2, err: float) -> dict:
+        """执行自检分类（v1.1：自检是早停提示，最终判据仍是大脑的视觉裁判）。
+        返回的 data 是【动作结果自检】——失败类别 + 子的实际落格，供大脑规划补救；
+        不是感知通道，不泄露整盘真值（红线不破）。物理后果如实保留，绝不摆回去装成功。"""
+        if p2 is None:
+            return {"ok": False, "message": f"放完找不到这枚子了（{frm}→{to}），可能掉出场地",
+                    "data": {"fail": "drop", "piece_square": None}}
+        actual = geometry.base_xy_to_square(p2[0], p2[1])
+        fx, fy, _ = geometry.square_surface_xyz(frm)
+        if math.hypot(p2[0] - fx, p2[1] - fy) <= config.CELL_M * config.PIECE_MATCH_CELL_FRAC:
+            return {"ok": False, "message": f"夹空了：子还留在 {frm}（没夹起来）",
+                    "data": {"fail": "grip_miss", "piece_square": frm}}
+        if actual is None:
+            return {"ok": False, "message": f"子掉到棋盘外了（{frm}→{to} 途中）",
+                    "data": {"fail": "drop", "piece_square": None}}
+        return {"ok": False, "message": f"放偏了：落点离 {to} 中心 {err * 100:.1f}cm（实际在 {actual}）",
+                "data": {"fail": "place_offset", "piece_square": actual}}
 
     # ---------- remove = 夹起丢弃子区 ----------
     def _remove(self, square: str, note=lambda p, m="": None) -> dict:
