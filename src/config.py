@@ -25,6 +25,11 @@ def _s(key: str, default: str) -> str:
 MAX_STEPS = _i("ANIMA_MAX_STEPS", "8")                   # ReAct 主循环最多转几轮
 CONTEXT_TOKEN_BUDGET = _i("ANIMA_CONTEXT_BUDGET", "6000")  # 上下文滑窗 token 预算
 
+# ---- 开发自测接口（仅开发用，默认关）----
+# 开着时后端暴露 POST /api/dev/turn：一次调用跑完整一轮对话并返回该轮的全部 Session Logs 流水，
+# 供开发者/agent 自测断言 llm_call→service_call→world_call 链。生产/演示环境保持默认关闭。
+DEV_API = os.getenv("ANIMA_DEV_API", "0") not in ("0", "false", "False")
+
 # ---- 世界客户端 / 会话 / AWI 日志 ----
 # WORLD_TIMEOUT 只管【快速读操作】（capabilities 握手 / perceive）的死线——读操作本该秒回，死线语义正确。
 WORLD_TIMEOUT = _f("ANIMA_WORLD_TIMEOUT", "30")
@@ -62,6 +67,31 @@ MODEL_HAIKU = _s("ANIMA_CLAUDE_HAIKU_MODEL", "claude-haiku-4-5")
 MODEL_GPT = _s("ANIMA_OPENAI_GPT_MODEL", "gpt-5.5")
 MODEL_GPT_NANO = _s("ANIMA_OPENAI_NANO_MODEL", "gpt-4.1-nano")
 MODEL_QWEN = _s("ANIMA_QWEN3VL_MODEL", "qwen3-vl:8b")
+
+# ---- 世界清单（单一来源：后端 server 与 dev_turn CLI 都从这里读）----
+# ⛔ T0：默认清单必须含所有已知世界——加世界=往这份默认里【追加】,绝不替换
+#    (2026-06-28 教训：加 sim-chess 时只写了它,把 sim-desk 挤没了)。
+def worlds() -> list[tuple[str, str]]:
+    """可连的世界清单 [(name, url)]。env ANIMA_WORLDS="name=url,name2=url2" 覆盖；没设=全部已知世界。
+    在【调用时】读 env（不在 import 时）——调用方通常先 load_dotenv，.env 里的地址才生效。"""
+    raw = os.getenv("ANIMA_WORLDS", "").strip()
+    if not raw:
+        # 各世界默认地址(env 可覆盖)：sim-desk :8100、sim-chess :8102、camera :8104、gazebo-chess :8106
+        return [
+            ("sim-desk", _s("SIM_DESK_URL", "http://localhost:8100")),
+            ("sim-chess", _s("SIM_CHESS_URL", "http://localhost:8102")),
+            ("camera", _s("CAMERA_URL", "http://localhost:8104")),
+            ("gazebo-chess", _s("GAZEBO_CHESS_URL", "http://localhost:8106")),
+        ]
+    pairs: list[tuple[str, str]] = []
+    for item in raw.split(","):
+        item = item.strip()
+        if "=" not in item:
+            continue
+        name, url = (s.strip() for s in item.split("=", 1))
+        if name and url:
+            pairs.append((name, url))
+    return pairs
 
 # （v0.6 起：对弈行为树 / 视觉 / 脑侧引擎的全部配置已随 game mode 删除——
 #   引擎可调项住引擎 service 自带 env（services/chess_engine_mcp.py），世界可调项住各世界自带 env。）

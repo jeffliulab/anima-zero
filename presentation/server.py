@@ -26,44 +26,10 @@ from anima.session import SessionStore
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 # 世界是独立进程,anima 按 URL 连它;注册时不握手(不硬依赖世界先起)。
-# 配置驱动:ANIMA_WORLDS="name=url,name2=url2" 声明世界清单(加世界=加一行配置);
+# 世界清单的单一来源在 config.worlds()（ANIMA_WORLDS env 覆盖；默认含所有已知世界，追加不替换——T0）；
 # DEFAULT_WORLD 指定启动默认绑哪个(没设 / 无效就绑清单第一个)。
-#
-# ⛔ 回归教训(2026-06-28):加新世界 sim-chess 时,曾把启动命令写成只 ANIMA_WORLDS="sim-chess=..."
-#    → 把旧世界 sim-desk 从清单里挤掉了。从此:**默认清单必须含所有已知世界,加世界=往这份默认里追加,
-#    绝不替换**;改 ANIMA_WORLDS / README / .env.example 时同理,保留所有既有世界。
-# 各世界默认地址(env 可覆盖,不写死散落):sim-desk :8100、sim-chess :8102、camera :8104、gazebo-chess :8106。
-SIM_DESK_URL = os.getenv("SIM_DESK_URL", "http://localhost:8100")
-SIM_CHESS_URL = os.getenv("SIM_CHESS_URL", "http://localhost:8102")
-CAMERA_URL = os.getenv("CAMERA_URL", "http://localhost:8104")
-GAZEBO_CHESS_URL = os.getenv("GAZEBO_CHESS_URL", "http://localhost:8106")
-# 没设 ANIMA_WORLDS 时的默认清单 = 所有已知世界(都注册,在线与否由前端按 online() 标注)
-# ⚠️ T0:加世界=往这份默认里【追加】,绝不替换(gazebo-chess 是 v0.4 新增,前三个必须保留)。
-_DEFAULT_WORLDS: list[tuple[str, str]] = [
-    ("sim-desk", SIM_DESK_URL),
-    ("sim-chess", SIM_CHESS_URL),
-    ("camera", CAMERA_URL),
-    ("gazebo-chess", GAZEBO_CHESS_URL),
-]
-
-
-def _parse_worlds() -> list[tuple[str, str]]:
-    raw = os.getenv("ANIMA_WORLDS", "").strip()
-    if not raw:
-        return list(_DEFAULT_WORLDS)
-    pairs: list[tuple[str, str]] = []
-    for item in raw.split(","):
-        item = item.strip()
-        if "=" not in item:
-            continue
-        name, url = (s.strip() for s in item.split("=", 1))
-        if name and url:
-            pairs.append((name, url))
-    return pairs
-
-
 registry = WorldRegistry()
-_worlds = _parse_worlds()
+_worlds = config.worlds()
 for _name, _url in _worlds:
     registry.register_world(_name, _url)
 _default_world = os.getenv("DEFAULT_WORLD", "").strip()
@@ -359,5 +325,32 @@ async def awi_events_stream() -> StreamingResponse:
 @app.get("/api/session-logs")  # Session Logs：本会话全部行为流水（llm_call / world_call / service_call 按时间合并）
 def session_logs(limit: int = 500, session: str = "") -> dict:
     return {"entries": session_log.recent(limit, session), "sessions": session_log.sessions()}
+
+
+# ---- 开发自测接口（config.DEV_API=1 才开；默认关，生产/演示环境不暴露）----
+class DevTurnIn(BaseModel):
+    world: str | None = None       # 新建会话连哪个世界（复用 session_id 时忽略）
+    message: str
+    brain: str = ""                # 空=默认脑
+    session_id: str | None = None  # 传了就在既有会话上续一轮
+
+
+@app.post("/api/dev/turn")  # 跑完整一轮对话，返回回复 + 该轮新增的全部 Session Logs 流水
+def dev_turn(inp: DevTurnIn) -> dict:
+    """开发者/agent 自测钩子：一次调用拿到「回复 + llm_call/world_call/service_call 完整链」，
+    可直接断言行为（如 best_move→move 两连跳）。要求目标世界/服务已在跑。"""
+    if not config.DEV_API:
+        return {"error": "dev api 未开启（设 ANIMA_DEV_API=1 后重启后端；仅开发用）"}
+    if inp.session_id and store.exists(inp.session_id):
+        session = store.get(inp.session_id)
+    else:
+        session, _ = store.new(inp.world, inp.brain or _DEFAULT_BRAIN)
+    prior = session_log.recent(1, session=session.id)
+    marker = (prior[-1].get("t", 0.0), prior[-1].get("id", 0)) if prior else (0.0, 0)
+    with session_scope(session.id):
+        out = orchestrator.handle(session, inp.message, get_llm(session.brain))
+    log = [e for e in session_log.recent(1000, session=session.id)
+           if (e.get("t", 0.0), e.get("id", 0)) > marker]
+    return {"session_id": session.id, "reply": out["reply"], "log": log}
 
 

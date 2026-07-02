@@ -71,6 +71,8 @@ ANIMA 不认识任何具体世界,只认一套 **AWI** 加几个外围件:
 | **会话**(`src/session.py`) | 一次任务一个会话,**按世界单活 + 冻结**(同一个世界同时只允许一个活跃会话,安全);记忆存本地 |
 | **上下文**(`src/context.py`) | 发给大脑的历史 = 滑动窗口 + 只发最新一张图(老图只存不发,防上下文腐烂) |
 | **安全闸**(`src/safety.py`) | 动作下发前一道**不经过 LLM 的确定性检查**;只拦「会改世界」的动作(仿真默认放行,上真机把 `default_allow` 显式关掉、再填硬检查) |
+| **挂载服务**(`src/service_client.py`) | **world 之外的第二类端点:顾问**——纯计算、无画面、无副作用(如象棋引擎),问答拿反馈;由 world 自己声明(`anima://services`),脑握手后自动连接、工具并进同一张工具单 |
+| **统一日志**(`src/session_log.py`) | **Session Logs**:每会话一条流水(`logs/sessions/<sid>.jsonl`),LLM 调用/世界往返/服务调用按时间合并——「看到什么→想了什么→调了什么」一条链可查、可一键复制 |
 | **裁判** | 是世界提供的一个**确定性工具**,LLM 学会去调它确认成没成——不靠 LLM 自己看图说「做好了」 |
 | **编排器**(`src/orchestrator.py`) | 把上面这些串成一个简单的主循环 |
 
@@ -78,9 +80,10 @@ ANIMA 不认识任何具体世界,只认一套 **AWI** 加几个外围件:
 
 ## 三、请求处理链路:一条消息从进到出
 
-顶级 agent 的一条共识:**主循环简单到就是个 while 循环,复杂度全在外围**(记忆、验证、安全)。
+顶级 agent 的一条共识:**主循环简单到就是个循环,复杂度全在外围**(记忆、验证、安全)。
 ANIMA 照这个来——一条用户消息进来,主循环最多转 N 轮(`DEFAULT_MAX_STEPS`),每一轮就是
-「**看 → 想 →(过安全闸)→ 动 → 再看**」,直到大脑只出文字 = 收尾。不上行为树这类重型框架。
+「**看 → 想 →(过安全闸)→ 动 → 再看**」,直到大脑只出文字 = 收尾。骨架用 **LangGraph** StateGraph
+(为未来长出反思/规划等认知节点留好图结构),节点内脏全是自有模块——LLM 层与 MCP 桥不换 LangChain 抽象。
 
 ```
    用户发一句话
@@ -122,8 +125,10 @@ Resource (resources/read)              ->  anima://observation = 当前画面(pn
 Prompt   (prompts/get "guidance")      ->  世界的「说明书」:自我介绍怎么跟它打交道；大脑读它进系统提示
 ```
 
-引擎(棋理顾问)也是**同一种 MCP server**,只是纯计算——只填 Tools(`best_move`/`evaluate`/`legal_moves`),
-没有 Resource / Prompt。大脑一个 host 同时连 world server + engine server(MCP 多 server)。
+**挂载服务(顾问)也是同一种 MCP server**,只是纯计算——只填 Tools,没有 Resource / Prompt。
+例:象棋引擎 service(`services/chess_engine_mcp.py`,`best_move`/`evaluate`/`legal_moves`)。
+**配对关系写在应用侧**:world 在能力自述里声明配套服务(资源 `anima://services`,如 sim-chess 声明
+chess-engine),大脑握手读到就自动连接——大脑不认识任何具体服务,连几百个也不增加认知负荷。
 
 **视频流永远带外**:世界另推一条 `GET /stream`(MJPEG)给网页看——MCP 只跑 JSON-RPC 文本、传不了视频,所以
 它和 `GET /health`(探活)、`GET /status`(上帝视角真值,绝不进感知)一样走普通 HTTP,不进 MCP(红线)。
@@ -218,28 +223,31 @@ cd presentation/web && npm install && npm run dev      # 默认 :3000
 
 ---
 
-## 九、Chess Mode：下棋(行为树 + 视觉 + 通用对弈 skill)
+## 九、下棋:LLM 亲自下每一步(v0.6 起,无任何"模式")
 
-ANIMA 的第一个 **skill**:陪你下国际象棋。它示范了几层新概念(全程仿真,为将来接真摄像头+机械臂铺路)。
+下棋不再是一个"模式"——**就是普通对话**。你说「该你了,你执黑」,ANIMA 自己看棋盘截图认局面、
+自己从画面和对话历史推出 FEN、自己调引擎顾问 `best_move(fen)` 拿最佳着法、再自己调世界的 `move` 落子、
+回你一句话。没有循环、没有技能、没有视觉模块兜底——**读错棋盘就读错,这本身就是对模型能力的测量**
+(8B 级小模型基本认不对整盘;演示请用 GPT-5.5 / Claude 这类强脑)。
 
-- **world `sim-chess`**(`world/sim-chess/`):一套独立可运行的棋具——握唯一真值、渲染棋盘、内置电脑棋手。**对大脑只暴露一个动作 `move`,perceive 只给画面、state 空 `{}`**,绝不给棋盘真值(局面/FEN/轮次/胜负);ANIMA 靠**看图**读盘、直接走 `move(from,to,piece)`,世界查合法后落子、回 success/fail。**没有选边/开局仪式**——对手(人点子 / 内置电脑走哪方)是世界自己网页上配的事,不对大脑暴露(v0.4 简化,去掉了旧的 take_seat/start_game/phase/controllers)。
-- **ANIMA 的眼睛 `read_board`**(`src/tools/boardgame/_vision.py`):对画面做**图像识别**认出局面(吃像素、不读内部数据);接口=图→局面,以后换真视觉模型即可。
-- **对弈行为树 = Chess Mode**(`src/behavior/trees/boardgame.py`,py_trees):**skill 之上的循环层**,每秒 tick 自主维持对弈、判进入/退出/中断、轮次判断。走子管线全确定性(看盘→引擎出手→发命令→看成败);**LLM 只在「解说」和高层判断介入**。
-- **skill = 说明书**(`src/skill.py` + `src/skills/boardgame.py`):游戏无关的"对弈陪伴"指令(不含循环、不挑棋);进对局**一句话到位**——大脑从对话理解你执哪方,launcher 自动就座+开局+起树。**可插拔棋种适配器**(`src/tools/boardgame/{base,chess}.py`)让同一棵树支持象棋/五子棋/围棋;**引擎解耦**——只有 `chess.py` 适配器碰你自己的引擎,升级棋力只换它。
+- **world `sim-chess`**(`world/sim-chess/`):独立棋具——握唯一真值、判合法、渲染棋盘、内置电脑棋手。
+  对大脑只暴露一个动作 `move`,perceive 只给画面、state 空 `{}`,绝不给局面/FEN/轮次/胜负。
+  它同时**声明配套的 chess-engine 服务**(挂载关系属于应用侧)。
+- **service `chess-engine`**(`services/chess_engine_mcp.py`,`:8108`,下棋必起):纯计算顾问,给 FEN
+  回最佳着法/评估/合法着;FEN 不合法会报可读错误,让大脑自我修正后重试。
+- 一回合的真实链路:看图 → `best_move(fen=自己推的)` → 重新看图 → `move(from,to)` → 出文字。
+  全过程在 **Session Logs** 里一条链可查(llm_call → service_call → world_call)。
 
-> 概念边界:**world**=物理接口(只看与动)、**行为树**=循环层(怎么转/何时停)、**skill**=说明书(怎么用工具)、**tool**=原子能力(一进一出)、**棋种适配器**=每棋的眼睛+引擎。skill ≠ tool。
-
-**跑法**:先把 sim-chess 世界起起来,后端**同时**注册各世界(sim-desk + sim-chess + camera),会话连 sim-chess,然后在聊天里说「我们下棋吧」即可:
+**跑法**:起 sim-chess 世界 + 引擎服务 + 后端,会话连 sim-chess,聊天里直接说「该你了」:
 ```bash
-# 终端1:起棋具世界(独立进程)
+# 终端1:棋具世界(独立进程)
 cd world/sim-chess && pip install -e . && uvicorn server:app --port 8102
-# 终端2:后端同时注册所有世界 —— ⚠️ 加新世界要追加,别把已有的写没了
-ANIMA_WORLDS="sim-desk=http://localhost:8100,sim-chess=http://localhost:8102,camera=http://localhost:8104" uvicorn presentation.server:app --port 8000
-# (其实不设 ANIMA_WORLDS 也行:默认清单已含 sim-desk + sim-chess + camera)
-# 网页新建会话(世界选 sim-chess)→ 说"我们下棋吧,我执黑"→ 自动选边+开局,浮现 Chess Mode 面板
+# 终端2:象棋引擎服务(下棋必起;sim-chess 声明了它,大脑会自动连接)
+./.venv/bin/uvicorn services.chess_engine_mcp:app --port 8108     # 在 anima-zero 根
+# 终端3:后端(默认清单已含全部世界)
+uvicorn presentation.server:app --port 8000
+# 网页新建会话(世界选 sim-chess)→ 在 sim-chess 网页(:8102)人执白走一步 → 聊天说"该你了,你执黑"
 ```
-
----
 
 ## 十、Camera World：让 ANIMA 看真实摄像头(v0.3)
 
@@ -283,12 +291,13 @@ cd world/camera && pip install -e . && uvicorn server:app --port 8104
 
 ## 状态
 
-**v0.5(Pre-alpha),持续迭代中。** v0.1 封版了顶层架构(世界独立 + 会话 + 主循环 + 外围 hook + 原生 tool-calling);
-v0.2 在这套框架上长出第一个**技能 = Chess Mode**(技能 + 对弈行为树 + 只给画面的 sim-chess 世界 + 通用运行时 HITL/分级安全闸 + 独立 eval 记分台);
-v0.3 接入第一个**真实摄像头世界 camera**(零动作:只能看、能聊、不能操作),让 ANIMA 第一次看真实物理世界;
-v0.4 把接口**采标 MCP**,并起第一个**物理世界 gazebo-chess** + **teleop 手动遥控**(物理底座验通);
-v0.5 修正长动作通信语义(MCP progress + 生命迹象等待),建成**双层视觉桥 + 多子 + 失败补救**——ANIMA 第一次在物理仿真世界完整地"看盘—走子—认对手"。
-真机安全硬检查、吃子/升变识别、扶正倒子按依赖顺序后做。`anima-zero` 是完全开源的 Zero 线展示版。
+**v0.6(Pre-alpha),持续迭代中。** v0.1 封版了顶层架构(世界独立 + 会话 + 主循环 + 外围 hook + 原生 tool-calling);
+v0.2 长出对弈技能与行为树;v0.3 接入真实摄像头世界 camera;v0.4 接口**采标 MCP** + 物理世界 gazebo-chess;
+v0.5 修正长动作通信语义(MCP progress + 生命迹象等待)+ 双层视觉桥;
+**v0.6 反向大简化**:删掉整个 game mode(行为树/技能/视觉栈),下棋回归普通对话、**每一步由 LLM 亲自决定**;
+端点分成 **world(现实)+ service(顾问,world 声明挂载)** 两类;主循环迁 **LangGraph** 骨架;
+三套日志统一成按会话的 **Session Logs**。真机安全硬检查、持续响应模式按依赖顺序后做。
+`anima-zero` 是完全开源的 Zero 线展示版。
 
 ## License
 
