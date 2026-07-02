@@ -160,7 +160,7 @@ export default function SessionSidebar({
           className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-neutral-300 transition-colors hover:bg-neutral-800 hover:text-neutral-100"
         >
           <LogsIcon />
-          <span>anima-logs</span>
+          <span>Session Logs</span>
           <span className="ml-auto text-neutral-600">›</span>
         </button>
         <div className="mt-1 flex items-center gap-2 border-t border-neutral-800 px-2 pt-2 text-xs text-neutral-500">

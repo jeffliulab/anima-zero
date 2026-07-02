@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { getAwi, awiEventsUrl, AWI_LOG_SHOWN, POLL_AWI_MS, type AwiOverview, type AwiWorld, type AwiEngine, type AwiTool } from "@/lib/api";
+import { getAwi, awiEventsUrl, AWI_LOG_SHOWN, POLL_AWI_MS, type AwiOverview, type AwiWorld, type AwiService, type AwiTool } from "@/lib/api";
 
-// 回方向(世界→ANIMA)的结构化返回；不同 method 用不同字段
+// 回方向(server→ANIMA)的结构化返回；不同 method 用不同字段
 type Resp = {
   n_tools?: number;
   tools?: string[];
@@ -12,7 +12,7 @@ type Resp = {
   message?: string;
   has_data?: boolean;
 };
-type Ev = { id: number; ts: string; world: string; method: string; summary: string; resp?: Resp; ms: number };
+type Ev = { id: number; ts: string; session?: string; world: string; method: string; summary: string; resp?: Resp; ms: number };
 
 const OVERVIEW_POLL_MS = POLL_AWI_MS; // /api/awi 概览多久刷一次（env 可覆盖）
 
@@ -22,8 +22,7 @@ const METHOD_COLOR: Record<string, string> = {
   invoke: "text-green-400",
 };
 
-// ---- /awi 世界卡片：风格2「色条分区」。TOOLS/STATE 同构卡片：描述 + 原始 schema/内容（不渲染花哨色子）----
-// 原始 JSON 代码块（直接展示 schema / 内容，所见即所得）
+// ---- 卡片风格：色条分区（沿用既有主题）。原始 JSON 一律折叠，正文只留人话。----
 function Json({ value }: { value: unknown }) {
   return (
     <pre className="mt-1 overflow-x-auto rounded-md border border-neutral-800 bg-black/50 p-2 text-[10px] leading-relaxed text-neutral-400">
@@ -67,9 +66,8 @@ function Region({ title, color, sub, children }: {
   );
 }
 
-// 把回方向(世界→ANIMA)格式化成一句人话；perceive 的回程 state 是审计点：
-// 现在 state 允许带【角色 meta】(如 controllers=谁坐哪一方)，但红线仍是【绝不许夹带棋盘真值】(FEN/局面/着法)。
-// 所以非空不再一律告警；只有当 state 看起来含棋盘真值时才标 ⚠，请人工确认。
+// 把回方向(server→ANIMA)格式化成一句人话；perceive 的回程 state 是审计点：
+// state 允许带角色 meta，但红线是【绝不许夹带棋盘真值】(FEN/局面/着法)。疑似含真值才标 ⚠。
 function fmtResp(method: string, resp?: Resp): { text: string; warn: boolean } {
   if (!resp) return { text: "(无)", warn: false };
   if (method === "capabilities")
@@ -86,8 +84,8 @@ function fmtResp(method: string, resp?: Resp): { text: string; warn: boolean } {
   }
   if (method === "invoke")
     return {
-      text: `${resp.ok ? "ok ✓" : "FAIL ✗"} · ${resp.message ?? ""}${resp.has_data ? " · ⚠ 回了 data" : ""}`,
-      warn: !!resp.has_data,
+      text: `${resp.ok ? "ok ✓" : "FAIL ✗"} · ${resp.message ?? ""}${resp.has_data ? " · 带 data" : ""}`,
+      warn: false,
     };
   return { text: JSON.stringify(resp), warn: false };
 }
@@ -101,12 +99,10 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-// 一张 server 卡（world / engine 通用）：MCP 里两者都是"一个 server"，区别只在填了哪几个原语。
-// 上半 = MCP 契约(脑经此调它)：Tools / Resource / Prompt；下半 = 带外(不走 MCP·普通 HTTP·仅人看/探活)。
-function ServerCard({ s }: { s: AwiWorld | AwiEngine }) {
-  const isEngine = s.kind === "engine";
-  const online = s.online;
-  const w = s as AwiWorld;
+// 🌍 世界卡：ANIMA 栖身的现实——动作（会改世界）/ 画面（感知）/ 说明书（世界自述）三区齐全；
+// 调试真值与探活是"仅人看"的旁路，折叠收起、不占正文。
+function WorldCard({ w }: { w: AwiWorld }) {
+  const online = w.online;
   const stateSchema = w.state_schema;
   const guidance = w.guidance ?? "";
   const hasStatus =
@@ -115,44 +111,36 @@ function ServerCard({ s }: { s: AwiWorld | AwiEngine }) {
     <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
       <div className="flex items-center justify-between">
         <span className="font-medium">
-          {isEngine ? "🧮" : "🌐"} {s.name}{" "}
-          <span className="text-xs text-neutral-500">
-            {isEngine ? "engine server · 纯计算顾问" : `world server · 有感知的现实${w.version ? ` v${w.version}` : ""}`}
-          </span>
+          🌍 {w.name}{" "}
+          <span className="text-xs text-neutral-500">世界 · ANIMA 栖身的现实{w.version ? ` v${w.version}` : ""}</span>
         </span>
         <span className={`text-xs ${online ? "text-green-400" : "text-red-400"}`}>● {online ? "在线" : "离线"}</span>
       </div>
-      <div className="mt-1 text-[11px] text-neutral-500">{s.url}</div>
+      <div className="mt-1 text-[11px] text-neutral-500">{w.url}</div>
 
-      {/* ① MCP 契约：这个 server 经 MCP 对大脑声明的三原语 */}
-      <div className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">MCP 契约（脑经此调它）</div>
-      <div className="mt-1 space-y-3">
-        <Region title="Tools" color="#3fb950" sub="动作 · tools/list · tools/call">
-          {s.tools.map((t) => (
+      <div className="mt-3 space-y-3">
+        <Region title="动作" color="#3fb950" sub="ANIMA 可调用的工具（会改世界的过安全闸）">
+          {w.tools.map((t) => (
             <CapCard key={t.name} name={t.name} kind={(t as AwiTool).kind} desc={t.description}
               schema={t.parameters} accent="text-green-300" />
           ))}
-          {s.tools.length === 0 && (
-            <div className="text-xs text-neutral-500">{online ? "(无动作，只读)" : "(离线，拿不到)"}</div>
+          {w.tools.length === 0 && (
+            <div className="text-xs text-neutral-500">{online ? "(无动作，只能看)" : "(离线，拿不到)"}</div>
           )}
         </Region>
 
-        <Region title="Resource" color="#58a6ff" sub="感知 · resources/read anima://observation">
-          {isEngine ? (
-            <div className="text-xs text-neutral-500">(无 · 纯计算 server 不感知世界，只给 FEN 算)</div>
-          ) : !online ? (
+        <Region title="画面" color="#58a6ff" sub="ANIMA 的感知：一张快照 + 结构 state">
+          {!online ? (
             <div className="text-xs text-neutral-500">(离线，拿不到)</div>
           ) : (
             <CapCard name="anima://observation" kind="读一次给一份" accent="text-sky-300"
-              desc="世界经 MCP 给大脑的感知：一张离散画面快照(png) + 结构 state。下面是世界声明的 state 契约（键→含义），绝不含棋盘真值。"
+              desc="世界给大脑看的东西：画面快照(png) + 结构 state（下面是 state 里有什么；绝不含棋盘真值）。"
               schema={stateSchema && Object.keys(stateSchema).length ? stateSchema : (w.state ?? {})} />
           )}
         </Region>
 
-        <Region title="Prompt" color="#f59e0b" sub="说明书 · prompts/get &quot;guidance&quot;">
-          {isEngine ? (
-            <div className="text-xs text-neutral-500">(无 · engine 不需要说明书)</div>
-          ) : !online ? (
+        <Region title="说明书" color="#f59e0b" sub="世界写给大脑的自我介绍（大脑读它进系统提示）">
+          {!online ? (
             <div className="text-xs text-neutral-500">(离线，拿不到)</div>
           ) : guidance ? (
             <div className="whitespace-pre-wrap rounded-md border border-neutral-800 bg-neutral-950/50 p-2 text-[12px] leading-relaxed text-[var(--text-accent-amber)]">
@@ -164,30 +152,59 @@ function ServerCard({ s }: { s: AwiWorld | AwiEngine }) {
         </Region>
       </div>
 
-      {/* ② 带外：不走 MCP，普通 HTTP，仅人看/探活 */}
-      <div className="mt-4 border-t border-neutral-800/70 pt-3">
-        <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-600">带外（不走 MCP · 普通 HTTP · 仅人看/探活）</div>
-        {isEngine ? (
-          <div className="mt-1 text-xs text-neutral-500">(engine 无带外：不渲染、不探活，只算。)</div>
-        ) : (
-          <div className="mt-1.5 space-y-1.5">
-            <div className="text-[12px] text-neutral-400">
-              🔒 <span className="text-neutral-300">调试真值 /status</span>（上帝视角，大脑绝对看不到，如 FEN/棋子真实位置）：
-              {hasStatus ? <Json value={w.status} /> : <span className="text-neutral-500"> (无 /status，如 sim-desk)</span>}
-            </div>
-            <div className="text-[11px] leading-relaxed text-neutral-500">
-              🎬 视频流 <code className="rounded bg-neutral-800 px-1">/stream</code>：连续 MJPEG，给人看（≠ Resource 的离散快照）。
-              · 🔌 探活 <code className="rounded bg-neutral-800 px-1">/health</code>：右上角在线点就来自它。
-            </div>
+      {/* 仅人看的旁路（不走 MCP）：调试真值折叠收起，不占正文 */}
+      <details className="mt-3 border-t border-neutral-800/70 pt-2">
+        <summary className="cursor-pointer text-[11px] text-neutral-500">
+          🔒 调试真值 /status（人的上帝视角，大脑绝对看不到）· 🎬 视频流 /stream · 🔌 探活 /health
+        </summary>
+        <div className="mt-1.5 space-y-1.5">
+          <div className="text-[12px] text-neutral-400">
+            调试真值（如 FEN/棋子真实位置）：
+            {hasStatus ? <Json value={w.status} /> : <span className="text-neutral-500"> (这个世界没有 /status)</span>}
           </div>
+          <div className="text-[11px] leading-relaxed text-neutral-500">
+            视频流是给人看的连续画面（≠ 大脑的离散快照）；右上角在线点来自探活，每约 {OVERVIEW_POLL_MS / 1000} 秒一次、不计入流量。
+          </div>
+        </div>
+      </details>
+    </div>
+  );
+}
+
+// 🧠 服务卡：ANIMA 请教的顾问（由世界声明挂载）——只渲染它真有的东西：状态、工具、谁声明的。
+// 没有画面、没有说明书就不渲染那两栏（顾问=纯计算，本来就没有）。
+function ServiceCard({ s }: { s: AwiService }) {
+  return (
+    <div className="rounded-xl border border-emerald-900/60 bg-neutral-900 p-4">
+      <div className="flex items-center justify-between">
+        <span className="font-medium">
+          🧠 {s.name} <span className="text-xs text-neutral-500">服务 · ANIMA 请教的顾问（纯计算）</span>
+        </span>
+        <span className={`text-xs ${s.online ? "text-green-400" : "text-red-400"}`}>● {s.online ? "在线" : "离线"}</span>
+      </div>
+      <div className="mt-1 text-[11px] text-neutral-500">
+        {s.url}
+        {s.declared_by?.length > 0 && (
+          <span> · 由 {s.declared_by.join("、")} 声明挂载</span>
         )}
+      </div>
+      <div className="mt-3">
+        <Region title="工具" color="#34d399" sub="问答拿反馈：给它编码好的问题，它回答案">
+          {s.tools.map((t) => (
+            <CapCard key={t.name} name={t.name} kind={(t as AwiTool).kind} desc={t.description}
+              schema={t.parameters} accent="text-emerald-300" />
+          ))}
+          {s.tools.length === 0 && (
+            <div className="text-xs text-neutral-500">{s.online ? "(没有声明工具)" : "(离线，拿不到工具清单)"}</div>
+          )}
+        </Region>
       </div>
     </div>
   );
 }
 
 // embedded=true：内嵌在主页中间区（h-full 滚动、隐藏顶部回主界面导航）；false：作为 /awi 整页独立版。
-// onOpenLogs：内嵌时点正文里的 anima-logs 链接 → 切到内嵌 logs 视图（而非整页跳出 SPA）。
+// onOpenLogs：内嵌时点正文里的 Session Logs 链接 → 切到内嵌 logs 视图（而非整页跳出 SPA）。
 export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedded?: boolean; onOpenLogs?: () => void }) {
   const [data, setData] = useState<AwiOverview | null>(null);
   const [events, setEvents] = useState<Ev[]>([]);
@@ -208,6 +225,8 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
     termRef.current?.scrollTo(0, termRef.current.scrollHeight);
   }, [events]);
 
+  const services = data?.services ?? [];
+
   return (
     <main className={`${embedded ? "h-full min-w-0 overflow-y-auto" : "min-h-screen"} bg-neutral-950 p-6 text-neutral-200`}>
       <div className="mx-auto max-w-6xl space-y-6">
@@ -215,68 +234,74 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
           <h1 className="text-xl font-semibold">AWI 仪表盘 · Anima World Interface</h1>
           {!embedded && (
             <div className="space-x-3 text-sm">
-              <a href="/anima-logs" className="text-blue-400 hover:underline">anima-logs（脑↔大模型）</a>
+              <a href="/session-logs" className="text-blue-400 hover:underline">Session Logs（行为流水）</a>
               <a href="/" className="text-blue-400 hover:underline">← 回主界面</a>
             </div>
           )}
         </div>
+
+        {/* 一句人话说明 + 细节全部折叠（想深究再点开） */}
         <p className="text-sm leading-relaxed text-neutral-400">
-          接口走标准 <b className="text-neutral-200">MCP</b>：ANIMA 是 <b>host</b>，连若干 <b className="text-neutral-200">server</b>（世界 + 引擎）——全程<b>脑发起、server 应答</b>。
-          每个 server 用 MCP 的<b className="text-neutral-200">三原语</b>自我描述：
-          <b className="text-green-300">Tools</b>(动作，<code className="mx-1 rounded bg-neutral-800 px-1">tools/call</code>)、
-          <b className="text-sky-300">Resource</b>(感知，<code className="mx-1 rounded bg-neutral-800 px-1">resources/read anima://observation</code> = 一张画面快照 + 结构 state)、
-          <b className="text-amber-300">Prompt</b>(说明书，<code className="mx-1 rounded bg-neutral-800 px-1">prompts/get guidance</code>)。
-          <b className="text-neutral-200">世界 server</b> = 三样都有的现实；<b className="text-neutral-200">引擎 server</b> = 只有 Tools 的纯计算顾问。
-          另有<b className="text-neutral-200">带外</b>（不走 MCP、普通 HTTP）：<code className="mx-1 rounded bg-neutral-800 px-1">/status</code>(上帝视角真值·仅人看)、
-          <code className="mx-1 rounded bg-neutral-800 px-1">/stream</code>(连续视频)、<code className="mx-1 rounded bg-neutral-800 px-1">/health</code>(探活)——每张卡下半单独一块。
-        </p>
-        <p className="text-xs leading-relaxed text-neutral-500">
-          注意：<b>skill（剧本）和行为树是 ANIMA 脑内的结构、不在 AWI 线上</b>（世界根本不知道它们存在），所以这里看不到——
-          要看 ANIMA 的思考（进入判定 / 解说 / 意图分类…）请去{" "}
+          ANIMA 连接两类东西：<b className="text-neutral-200">🌍 世界</b>——它栖身的现实（有画面，动作会改变现实）；
+          <b className="text-neutral-200">🧠 服务</b>——它请教的顾问（纯计算，问答拿反馈，由世界声明挂载）。
+          这页展示这些连接的契约与实时流量；要看「ANIMA 看到什么→想了什么→调了什么」的完整链，去{" "}
           {embedded && onOpenLogs ? (
-            <button onClick={onOpenLogs} className="text-blue-400 hover:underline">anima-logs</button>
+            <button onClick={onOpenLogs} className="text-blue-400 hover:underline">Session Logs</button>
           ) : (
-            <a href="/anima-logs" className="text-blue-400 hover:underline">anima-logs</a>
+            <a href="/session-logs" className="text-blue-400 hover:underline">Session Logs</a>
           )}
           。
         </p>
-        <p className="text-xs leading-relaxed text-neutral-500">
-          另外世界还提供一个轻量探活端点
-          <code className="mx-1 rounded bg-neutral-800 px-1">GET /health</code>:这个仪表盘<b>每约 {OVERVIEW_POLL_MS / 1000} 秒</b>探一次,
-          用它判断世界在不在线——就是下面每张世界卡片右上角的状态点:
-          <span className="text-green-400">● 在线</span> / <span className="text-red-400">● 离线</span>。
-          它<b>不计入下面的「AWI 实时流量」</b>——故意的,免得每隔几秒的探活把流量刷屏。真正的脑↔世界调用(capabilities / perceive / invoke)才会出现在流量里。
-        </p>
+        <details className="text-xs leading-relaxed text-neutral-500">
+          <summary className="cursor-pointer text-neutral-400">这页怎么读（MCP 细节，点开看）</summary>
+          <div className="mt-2 space-y-2">
+            <p>
+              接口走标准 <b className="text-neutral-300">MCP</b>：ANIMA 是发起方（host），每个世界/服务都是一个 MCP server——全程脑发起、server 应答。
+              每个 server 用三样东西自我描述：<b className="text-green-300">工具</b>（<code className="mx-1 rounded bg-neutral-800 px-1">tools/call</code>，动作或问答）、
+              <b className="text-sky-300">画面</b>（<code className="mx-1 rounded bg-neutral-800 px-1">resources/read anima://observation</code>，一张快照 + 结构 state），
+              <b className="text-amber-300">说明书</b>（<code className="mx-1 rounded bg-neutral-800 px-1">prompts/get guidance</code>）。
+              世界三样齐全；服务只有工具（顾问不感知世界）。挂载关系也是世界声明的（<code className="mx-1 rounded bg-neutral-800 px-1">anima://services</code> 资源）。
+            </p>
+            <p>
+              每张世界卡还折叠着几个不走 MCP、仅人看的旁路：/status（调试真值，上帝视角）、/stream（连续视频）、/health（探活，
+              每约 {OVERVIEW_POLL_MS / 1000} 秒一次；不计入下面的实时流量，免得刷屏——流量里只有真正的脑↔server 调用）。
+            </p>
+          </div>
+        </details>
 
         {data && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat label="server 总数" value={data.worlds.length + (data.engines?.length ?? 0)} />
-            <Stat label="世界 server" value={data.worlds.length} />
-            <Stat label="引擎 server" value={data.engines?.length ?? 0} />
-            <Stat label="AWI 调用" value={data.stats.total} />
+            <Stat label="世界" value={data.worlds.length} />
+            <Stat label="服务" value={services.length} />
+            <Stat label="在线" value={data.worlds.filter((w) => w.online).length + services.filter((s) => s.online).length} />
+            <Stat label="调用总数" value={data.stats.total} />
           </div>
         )}
 
         <section>
-          <h2 className="mb-2 text-sm font-medium text-neutral-400">
-            servers（世界 + 引擎；MCP 里都是"一个 server"，只是填了哪几个原语不同）
-          </h2>
+          <h2 className="mb-2 text-sm font-medium text-neutral-400">🌍 世界 <span className="text-xs font-normal text-neutral-600">· ANIMA 栖身的现实，每个会话连一个</span></h2>
           <div className="space-y-3">
-            {data?.worlds.map((w) => <ServerCard key={`w:${w.name}`} s={w} />)}
-            {data?.engines?.map((e) => <ServerCard key={`e:${e.name}`} s={e} />)}
+            {data?.worlds.map((w) => <WorldCard key={`w:${w.name}`} w={w} />)}
           </div>
         </section>
 
         <section>
-          <h2 className="mb-2 text-sm font-medium text-neutral-400">AWI 实时流量(ANIMA ↔ 世界 / 引擎，走 MCP)</h2>
+          <h2 className="mb-2 text-sm font-medium text-neutral-400">🧠 服务 <span className="text-xs font-normal text-neutral-600">· ANIMA 请教的顾问，由世界声明挂载</span></h2>
+          <div className="space-y-3">
+            {services.map((s) => <ServiceCard key={`s:${s.url}`} s={s} />)}
+            {services.length === 0 && (
+              <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 text-xs text-neutral-500">
+                (暂无——在线世界都没有声明挂载服务，或声明的服务还没被握手到)
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section>
+          <h2 className="mb-2 text-sm font-medium text-neutral-400">实时流量 <span className="text-xs font-normal text-neutral-600">· ANIMA ↔ 世界/服务 的每次调用（走 MCP）</span></h2>
           <p className="mb-2 text-xs leading-relaxed text-neutral-500">
-            每条都拆成两半:<span className="text-neutral-300">→ 出方向</span>(ANIMA 发的命令+参数)、
-            <span className="text-neutral-300">← 回方向</span>(返回的:图片字节数、ok/message、回程 state / 引擎着法)。
-            这里能看到大脑↔世界的 <code className="rounded bg-neutral-800 px-1">capabilities/perceive/invoke</code>，也能看到大脑↔引擎的
-            <code className="rounded bg-neutral-800 px-1">best_move</code>(world=chess-engine)。
-            <b className="text-neutral-400">审计点</b>:<code className="rounded bg-neutral-800 px-1">perceive</code> 的回程 state 是世界给脑的结构化数据，
-            <b>绝不许夹带棋盘真值</b>(FEN/局面/着法)；sim-chess 简化后 state 就是空 {"{}"}，真值只走 /status。疑似含真值才标 <span className="text-amber-400">⚠</span>，请人工确认。
-            (世界的完整真值在上面每张卡片的<b>STATUS</b>里——那是走 /status 的人类上帝视角,ANIMA 看不到。)
+            每条两半：<span className="text-neutral-300">→ 发出</span>（命令+参数）、<span className="text-neutral-300">← 返回</span>（图片字节数、成败、回程 state、答案）。
+            审计点：<code className="rounded bg-neutral-800 px-1">perceive</code> 的回程 state <b>绝不许夹带棋盘真值</b>（FEN/局面/着法）——疑似含真值会标 <span className="text-amber-400">⚠</span>。
           </p>
           <div
             ref={termRef}
@@ -296,6 +321,7 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
                     <span className="text-blue-400">→</span>
                     <span className="text-neutral-300"> {e.summary}</span>
                     <span className="text-neutral-600"> ({e.ms}ms)</span>
+                    {e.session && <span className="text-neutral-700"> ·{e.session.slice(0, 10)}</span>}
                   </div>
                   <div className="pl-14">
                     <span className="text-fuchsia-400">←</span>

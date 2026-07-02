@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import contextvars
 
-from anima import awi_log, llm_log, session_log
+from anima import awi_log, session_log
 from anima.llm import LLMReply
 
 
@@ -89,14 +89,13 @@ def test_bound_stream_keeps_session_across_yields(tmp_path, monkeypatch):
     assert [e["last_user"] for e in tagged] == ["step1", "step2"]
 
 
-def test_kinds_filter_and_llm_log_shim(tmp_path, monkeypatch):
-    """llm_log 兼容层：recent() 只回 kind=llm_call（旧 /api/anima-logs 语义）。"""
+def test_kinds_filter(tmp_path, monkeypatch):
+    """kinds 过滤：recent(kinds=...) 只回指定类别。"""
     monkeypatch.setattr(session_log, "_DIR", str(tmp_path))
     session_log.record("world_call", {"world": "w", "method": "invoke", "summary": "x", "resp": {}, "ms": 1.0})
     session_log.record_llm("m", "sys", [{"role": "user", "text": "hi"}], [], False, LLMReply(text="ok"), 1.0)
     assert len(session_log.recent(10)) == 2
     assert [e["kind"] for e in session_log.recent(10, kinds=("llm_call",))] == ["llm_call"]
-    assert [e["kind"] for e in llm_log.recent(10)] == ["llm_call"], "兼容层只透出 llm_call"
 
 
 def test_merge_order_survives_seq_reset(tmp_path, monkeypatch):

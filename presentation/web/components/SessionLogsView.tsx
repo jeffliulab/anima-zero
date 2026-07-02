@@ -1,50 +1,59 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import {
-  getAnimaLogs,
+  getSessionLogs,
   listSessions,
-  POLL_ANIMA_LOGS_MS,
-  type AnimaLogEntry,
+  POLL_SESSION_LOGS_MS,
+  type SessionLogEntry,
   type SessionSummary,
 } from "@/lib/api";
 
-// 据系统提示前缀粗分"这次调用是干嘛的"。tag=文字标签；dot=类别色点（用色点而非彩色文字，
-// 这样深/浅主题下文字都用中性色、始终可读，类别靠左边的小圆点区分）。
-function source(system: string): { tag: string; dot: string } {
-  const s = system || "";
-  if (s.includes("意图分类器") || s.includes("意图判断")) return { tag: "意图分类", dot: "bg-amber-400" };
-  if (s.includes("对弈伙伴")) return { tag: "对弈陪聊", dot: "bg-sky-400" };
-  if (s.includes("对弈陪伴") || s.includes("解说")) return { tag: "解说", dot: "bg-emerald-400" };
-  if (s.includes("ANIMA")) return { tag: "主循环", dot: "bg-purple-400" };
-  return { tag: "其它", dot: "bg-neutral-500" };
+// 三类流水的标签与色点（色点区分类别，文字保持中性色、深浅主题都可读）：
+// LLM=大脑↔大模型；世界=大脑↔世界(MCP)；服务=大脑↔挂载服务(顾问，如引擎)。
+function kindTag(kind: string): { tag: string; dot: string } {
+  if (kind === "llm_call") return { tag: "LLM", dot: "bg-purple-400" };
+  if (kind === "world_call") return { tag: "世界", dot: "bg-sky-400" };
+  if (kind === "service_call") return { tag: "服务", dot: "bg-emerald-400" };
+  return { tag: kind || "其它", dot: "bg-neutral-500" };
 }
 
-// 把一条日志拍平成"带每一个信息要素"的可读文本（给一键复制用）——存了什么字段，这里就带什么，
-// 不只复制界面摘要。配合后端放宽留存上限，复制出来即"所有信息要素"。
-function fmtEntry(e: AnimaLogEntry): string {
-  const tok = e.tokens
-    ? `输入 ${e.tokens.input} / 输出 ${e.tokens.output} / 合计 ${e.tokens.total}`
-    : "（无）";
-  const lines = [
-    `#${e.id}  ${e.ts}  [${source(e.system).tag}]  ${e.model}`,
-    `会话：${e.session || "（无会话）"}`,
-    `上下文 ${e.n_history} 条 · 可用工具 ${e.n_tools} 个 · ${e.has_image ? "含截图" : "无截图"} · 耗时 ${e.ms}ms`,
-    `tokens：${tok}`,
-    `用户：${e.last_user || "（无）"}`,
-    `回复：${e.reply || "（无）"}`,
-    `工具调用：${e.tool_calls.length ? e.tool_calls.join(", ") : "（无）"}`,
-    e.error ? `错误：${e.error}` : "",
-    `system 提示：\n${e.system}`,
-  ];
-  return lines.filter(Boolean).join("\n");
+// 把一条流水拍平成"带每一个信息要素"的可读文本（一键复制用）——存了什么字段就带什么。
+function fmtEntry(e: SessionLogEntry): string {
+  const head = `#${e.id}  ${e.ts}  [${kindTag(e.kind).tag}]`;
+  const sess = `会话：${e.session || "（无会话）"}`;
+  if (e.kind === "llm_call") {
+    const tok = e.tokens
+      ? `输入 ${e.tokens.input} / 输出 ${e.tokens.output} / 合计 ${e.tokens.total}`
+      : "（无）";
+    return [
+      `${head}  ${e.model}`,
+      sess,
+      `上下文 ${e.n_history} 条 · 可用工具 ${e.n_tools} 个 · ${e.has_image ? "含截图" : "无截图"} · 耗时 ${e.ms}ms`,
+      `tokens：${tok}`,
+      `用户：${e.last_user || "（无）"}`,
+      `回复：${e.reply || "（无）"}`,
+      `工具调用：${e.tool_calls.length ? e.tool_calls.join(", ") : "（无）"}`,
+      e.error ? `错误：${e.error}` : "",
+      `system 提示：\n${e.system}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+  const peer = e.kind === "world_call" ? e.world : e.server;
+  return [
+    `${head}  ${peer} · ${e.method} · ${e.ms}ms`,
+    sess,
+    `发出：${e.summary}`,
+    `返回：${JSON.stringify(e.resp)}`,
+  ].join("\n");
 }
 
 const ALL = ""; // 选中值为空串=看全部（合并所有会话）
 
-// anima-logs 内嵌面板（定稿版，原 logs3 设计）：无自带会话栏，顶部一个会话下拉自选。
-// 默认选【当前会话】（由 sessionId 传入）；它没日志就退到第一个有日志的会话；都没有才退「全部」。
-// embedded=true：内嵌主页中间区（h-full）；false：/anima-logs 整页独立版（h-screen）。
-export default function AnimaLogsView({
+// Session Logs：本会话全部行为流水（LLM 调用 / MCP 世界往返 / 服务调用，按时间合并）。
+// 会话下拉与一键复制沿自 anima-logs（逐行保留）；默认选【当前会话】，没日志就退到第一个有日志的。
+// embedded=true：内嵌主页中间区（h-full）；false：/session-logs 整页独立版（h-screen）。
+export default function SessionLogsView({
   embedded = false,
   sessionId = "",
 }: {
@@ -54,7 +63,7 @@ export default function AnimaLogsView({
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [logged, setLogged] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<string>(sessionId || ALL);
-  const [entries, setEntries] = useState<AnimaLogEntry[]>([]);
+  const [entries, setEntries] = useState<SessionLogEntry[]>([]);
   const termRef = useRef<HTMLDivElement>(null);
   const resolvedRef = useRef(false); // 默认会话只自动定一次，之后听用户的下拉
   const [copied, setCopied] = useState(false);
@@ -76,14 +85,14 @@ export default function AnimaLogsView({
     const load = async () => {
       const [ss, logs] = await Promise.all([
         listSessions().catch(() => [] as SessionSummary[]),
-        getAnimaLogs(500, selected).catch(() => ({ entries: [], sessions: [] as string[] })),
+        getSessionLogs(500, selected).catch(() => ({ entries: [], sessions: [] as string[] })),
       ]);
       setSessions(ss);
       setLogged(new Set(logs.sessions));
       setEntries(logs.entries);
     };
     load();
-    const id = setInterval(load, POLL_ANIMA_LOGS_MS);
+    const id = setInterval(load, POLL_SESSION_LOGS_MS);
     return () => clearInterval(id);
   }, [selected]);
 
@@ -112,7 +121,7 @@ export default function AnimaLogsView({
       {/* 顶部：会话下拉 + 标题/计数（固定，不随日志滚动） */}
       <div className="shrink-0 border-b border-neutral-800 p-3">
         <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-neutral-500">anima-logs · 会话：</span>
+          <span className="text-neutral-500">Session Logs · 会话：</span>
           <select
             value={selected}
             onChange={(e) => {
@@ -149,12 +158,15 @@ export default function AnimaLogsView({
         </div>
         <div className="flex items-baseline gap-2">
           <h1 className="truncate text-sm font-semibold">
-            {selected === ALL ? "全部 LLM 调用（合并所有会话）" : cur ? cur.title : selected ? `会话 ${selected.slice(0, 12)}…` : "（未选会话）"}
+            {selected === ALL ? "全部行为流水（合并所有会话）" : cur ? cur.title : selected ? `会话 ${selected.slice(0, 12)}…` : "（未选会话）"}
           </h1>
         </div>
         <p className="mt-1 text-[11px] leading-relaxed text-neutral-500">
-          ANIMA ↔ 大模型 的详细思考流量（与 <code className="rounded bg-neutral-800 px-1">/awi</code> 看的"脑↔世界"互补）：
-          主循环 / 意图分类 / 解说 / 对弈陪聊每一次 LLM 调用都在这里。
+          本会话的全部行为流水，按时间合并：
+          <span className="mx-1 inline-block h-2 w-2 rounded-full bg-purple-400" />LLM 调用（想）·
+          <span className="mx-1 inline-block h-2 w-2 rounded-full bg-sky-400" />世界往返（看/动，MCP）·
+          <span className="mx-1 inline-block h-2 w-2 rounded-full bg-emerald-400" />服务调用（问顾问，如引擎）
+          ——「ANIMA 看到什么、想了什么、调了什么」一条链看全。
         </p>
       </div>
 
@@ -163,14 +175,40 @@ export default function AnimaLogsView({
         {entries.length === 0 ? (
           <div className="text-xs text-neutral-600">
             {selected === ALL
-              ? "(暂无流量；去主界面发条消息、或开一盘棋，这里就会出现每一次 LLM 调用)"
-              : "(这个会话还没有 LLM 调用)"}
+              ? "(暂无流水；去主界面发条消息，这里就会出现完整的行为链)"
+              : "(这个会话还没有流水)"}
           </div>
         ) : (
           entries.map((e) => {
-            const src = source(e.system);
+            const src = kindTag(e.kind);
+            if (e.kind !== "llm_call") {
+              // 世界 / 服务往返：单行紧凑条（summary 直给；返回体折叠）
+              const peer = e.kind === "world_call" ? e.world : e.server;
+              return (
+                <div key={`${e.kind}-${e.id}-${e.t ?? e.ts}`} className="mb-1.5 rounded-md border border-neutral-800/70 bg-neutral-900/30 px-2.5 py-1.5">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
+                    <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${src.dot}`} />
+                    <span className="font-medium text-neutral-300">{src.tag}</span>
+                    <span className="text-neutral-600">#{e.id}</span>
+                    <span className="text-neutral-500">{e.ts}</span>
+                    <span className="text-neutral-400">{peer}</span>
+                    <span className="font-mono text-neutral-300">{e.summary}</span>
+                    {selected === ALL && e.session && (
+                      <span className="text-neutral-600">·{e.session.slice(0, 8)}</span>
+                    )}
+                    <span className="ml-auto text-neutral-600">{e.ms}ms</span>
+                  </div>
+                  <details className="mt-0.5">
+                    <summary className="cursor-pointer text-[10px] text-neutral-600">返回</summary>
+                    <pre className="mt-1 overflow-x-auto whitespace-pre-wrap rounded border border-neutral-800 bg-neutral-950 p-2 font-mono text-[10px] leading-relaxed text-neutral-500">
+                      {JSON.stringify(e.resp, null, 2)}
+                    </pre>
+                  </details>
+                </div>
+              );
+            }
             return (
-              <div key={e.id} className="mb-2 rounded-lg border border-neutral-800 bg-neutral-900/50 p-2.5">
+              <div key={`${e.kind}-${e.id}-${e.t ?? e.ts}`} className="mb-2 rounded-lg border border-neutral-800 bg-neutral-900/50 p-2.5">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
                   <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${src.dot}`} />
                   <span className="font-medium text-neutral-300">{src.tag}</span>

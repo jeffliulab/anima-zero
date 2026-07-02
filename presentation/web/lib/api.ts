@@ -78,19 +78,19 @@ export type AwiWorld = {
   state_schema: Record<string, string>; // 世界【声明】的 perceive.state 契约（键→含义）——面板据此显示，不靠缓存上次 perceive 猜
   guidance: string; // 世界的「说明书」（= MCP prompt）：自我介绍怎么跟它打交道；大脑读它进系统提示，面板第四区显示
 };
-// 引擎 server（棋理顾问）：MCP 里和 world 一样都是"一个 server"，只是纯计算 tool server——只有 tools，
-// 无感知(resource)、无说明书(prompt)。
-export type AwiEngine = {
+// 挂载服务（顾问，如象棋引擎）：MCP 里和 world 一样都是"一个 server"，只是纯计算 tool server——
+// 只有 tools，无画面(resource)、无说明书(prompt)。挂载关系由世界声明（anima://services 资源）。
+export type AwiService = {
   name: string;
   url: string;
-  kind: string;      // "engine"
+  kind: string;      // "service"
   online: boolean;
   tools: AwiTool[];
-  note: string;      // 一句说明：纯计算、无感知/无说明书
+  declared_by: string[]; // 哪些（在线）世界声明了它
 };
 export type AwiOverview = {
   worlds: AwiWorld[];
-  engines?: AwiEngine[];   // 配了 ANIMA_ENGINE_URL 才有；否则引擎在后端进程内、不作为独立 server 展示
+  services?: AwiService[]; // 在线世界声明的挂载服务（顾问）
   brains: Brain[];
   sessions: SessionSummary[];
   stats: { total: number; by_method: Record<string, number>; by_world: Record<string, number> };
@@ -103,14 +103,18 @@ export async function getAwi(): Promise<AwiOverview> {
 
 export const awiEventsUrl = () => `${BASE}/api/awi/events`;
 
-// ---- anima-logs（脑↔大模型流量调试页）----
-export const POLL_ANIMA_LOGS_MS = Number(process.env.NEXT_PUBLIC_POLL_ANIMA_LOGS_MS) || 2000;
-export type AnimaLogEntry = {
+// ---- Session Logs（本会话全部行为流水：LLM / 世界 / 服务，按时间合并）----
+export const POLL_SESSION_LOGS_MS = Number(process.env.NEXT_PUBLIC_POLL_SESSION_LOGS_MS) || 2000;
+type SessionLogBase = {
   id: number;
+  t?: number; // unix 秒（合并排序键；旧条目可能没有）
   ts: string;
-  session: string; // 这次调用属于哪个 session（空=非会话场景，如连通自检）
+  session: string; // 这次调用属于哪个会话（空=非会话场景，如连通自检）
+};
+export type LlmCallEntry = SessionLogBase & {
+  kind: "llm_call"; // 脑↔大模型
   model: string;
-  system: string; // 系统提示（完整留存）——据此分辨 主循环/意图分类/解说/陪聊
+  system: string; // 系统提示（完整留存）
   last_user: string;
   n_history: number;
   n_tools: number;
@@ -121,13 +125,31 @@ export type AnimaLogEntry = {
   ms: number;
   error: string;
 };
-export async function getAnimaLogs(
-  limit = 300,
+export type WorldCallEntry = SessionLogBase & {
+  kind: "world_call"; // 脑↔世界（MCP：capabilities/perceive/invoke/progress）
+  world: string;
+  method: string;
+  summary: string; // 出方向(ANIMA→世界)
+  resp: Record<string, unknown>; // 回方向(世界→ANIMA)结构化
+  ms: number;
+};
+export type ServiceCallEntry = SessionLogBase & {
+  kind: "service_call"; // 脑↔挂载服务（顾问，如象棋引擎）
+  server: string;
+  method: string;
+  summary: string;
+  resp: Record<string, unknown>;
+  ms: number;
+};
+export type SessionLogEntry = LlmCallEntry | WorldCallEntry | ServiceCallEntry;
+
+export async function getSessionLogs(
+  limit = 500,
   session = "",
-): Promise<{ entries: AnimaLogEntry[]; sessions: string[] }> {
+): Promise<{ entries: SessionLogEntry[]; sessions: string[] }> {
   const q = `limit=${limit}` + (session ? `&session=${encodeURIComponent(session)}` : "");
-  const r = await fetch(`${BASE}/api/anima-logs?${q}`);
-  const j = (await r.json()) as { entries: AnimaLogEntry[]; sessions?: string[] };
+  const r = await fetch(`${BASE}/api/session-logs?${q}`);
+  const j = (await r.json()) as { entries: SessionLogEntry[]; sessions?: string[] };
   return { entries: j.entries, sessions: j.sessions ?? [] };
 }
 

@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 from anima import awi_log, config, session_log
 from anima.llm import LLM, DEFAULT_BRAIN, list_brains, make_llm
-from anima.llm_log import LoggingLLM, bound_stream, recent as _llm_recent, sessions as _llm_sessions, session_scope
+from anima.session_log import LoggingLLM, bound_stream, session_scope
 from anima.orchestrator import Orchestrator
 from anima.registry import WorldRegistry
 from anima.session import SessionStore
@@ -78,7 +78,7 @@ _llm_cache: dict[str, LLM] = {}
 
 def get_llm(name: str) -> LLM:
     if name not in _llm_cache:
-        # 收口：所有 LLM 调用都经这里构造 → 包一层 LoggingLLM，把脑↔大模型流量留痕到 logs/anima（anima-logs 页看）
+        # 收口：所有 LLM 调用都经这里构造 → 包一层 LoggingLLM，llm_call 留痕进统一日志（Session Logs 页看）
         _llm_cache[name] = LoggingLLM(make_llm(name), name)
     return _llm_cache[name]
 
@@ -228,7 +228,7 @@ def chat(inp: ChatIn) -> dict:
         return {"reply": f"(大脑「{info['label']}」还没配置好,请在 anima-zero/.env 配置后重启后端再用。)",
                 "trace": None}
     try:
-        with session_scope(inp.session_id):   # 这次请求里的所有 LLM 调用都标上 session（anima-logs 可筛）
+        with session_scope(inp.session_id):   # 这次请求的全部留痕（LLM/世界/服务）都标上 session（Session Logs 可筛）
             return orchestrator.handle(session, inp.message, get_llm(session.brain))
     except Exception as e:  # 大脑调用出错 → 在聊天里如实显示,不让 demo 崩
         return {"reply": f"(大脑调用出错:{type(e).__name__}: {e})", "trace": None}
@@ -264,7 +264,7 @@ def chat_stream(inp: ChatIn) -> StreamingResponse:
             yield _sse({"type": "done"})
 
     # bound_stream 给整条生成器套上一个带 session 的固定上下文逐步迭代——保证流式期间每次 LLM 调用
-    # （连同行为树 copy_context()）都读得到 session、正确写进 session-<id>.jsonl。详见 llm_log.bound_stream。
+    # 都读得到 session、正确写进 session-<id>.jsonl。详见 session_log.bound_stream。
     return StreamingResponse(bound_stream(inp.session_id, gen()), media_type="text/event-stream")
 
 
@@ -336,9 +336,7 @@ def awi_overview() -> dict:
             except Exception:
                 info["online"] = False
         worlds_info.append(info)
-    services = _service_servers()
-    return {"worlds": worlds_info, "services": services,
-            "engines": services,   # 【W5 删】旧前端字段名兼容（AwiDashboard 现读 engines）
+    return {"worlds": worlds_info, "services": _service_servers(),
             "brains": list_brains(), "sessions": store.list(), "stats": awi_log.stats()}
 
 
@@ -356,12 +354,6 @@ async def awi_events_stream() -> StreamingResponse:
                 yield _sse(e)
 
     return StreamingResponse(gen(), media_type="text/event-stream")
-
-
-@app.get("/api/anima-logs")  # 【W5 删除】旧调试页端点：现从统一日志取 kind=llm_call（经 llm_log 兼容层）
-def anima_logs(limit: int = 300, session: str = "") -> dict:
-    # session 非空 → 只看那一盘/那个会话的全部 LLM 调用；sessions = 有日志的会话列表（给下拉）
-    return {"entries": _llm_recent(limit, session), "sessions": _llm_sessions()}
 
 
 @app.get("/api/session-logs")  # Session Logs：本会话全部行为流水（llm_call / world_call / service_call 按时间合并）
