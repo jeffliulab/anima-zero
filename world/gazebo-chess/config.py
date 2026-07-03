@@ -39,6 +39,11 @@ BOARD_FILES = 8                                       # 域常量：列 a-h
 BOARD_RANKS = 8                                       # 域常量：行 1-8
 CELL_M = BOARD_SIZE_M / BOARD_FILES                   # 派生：每格边长（默认 0.05）
 BOARD_THICKNESS_M = _f("GZCHESS_BOARD_THICKNESS_M", "0.008")  # 棋盘底板厚度（坐在桌面 z=0 上）
+# 印坐标的边框宽度：板总尺寸 = 格区(BOARD_SIZE_M) + 2×边框。格中心坐标不受边框影响（格区始终居中）。
+BOARD_MARGIN_M = _f("GZCHESS_BOARD_MARGIN_M", "0.03")
+# 贴图最终整体旋转（90° 一档，0-3）：补偿 gz box 顶面 UV 的取向差——金标准（/status 真值 ↔ 印刷坐标）
+# 实测定档；换 gz 版本若 UV 约定变了改这一个数即可。
+BOARD_TEX_QUARTER_TURNS = _i("GZCHESS_BOARD_TEX_QUARTER_TURNS", "1")
 # 棋盘中心在 world 里的位姿（默认摆臂正前方、桌面上）。可达性按格自检，远格够不着就把这个挪近。
 # 背景：episode 桌面碰撞体中心 x≈0.35、臂展≈0.43；默认放近一点，保证演示格轻松够得着。
 BOARD_ORIGIN_X = _f("GZCHESS_BOARD_ORIGIN_X", "0.28")
@@ -60,12 +65,17 @@ PIECE_GRASP_WIDTH_M = _f("GZCHESS_PIECE_GRASP_WIDTH_M", "0.035")  # 抓取点处
 # remove(square)：把吃掉的子从盘上夹起，放到【弃子区】的下一个空槽（在棋盘一侧排开）。
 # place(square,piece)：在【备用子区】spawn 一枚该色的子，再夹起来摆到目标格（模拟"从备用盒取子摆上盘"）。
 # ⚠️ 下面坐标是首版默认（env 可覆盖）；实际可达性/不压盘要对着仿真在 W6 里校准（占位登记，见 world.py 注释）。
-DISCARD_ORIGIN_X = _f("GZCHESS_DISCARD_ORIGIN_X", str(BOARD_ORIGIN_X - 0.10))  # 弃子区第 0 槽的 x
-DISCARD_ORIGIN_Y = _f("GZCHESS_DISCARD_ORIGIN_Y", "0.24")                     # 棋盘 y 半幅≈0.20，再外移一点到盘外
+# 弃子槽从靠近臂的一端排起（x 小→大）：臂展上限实测 ≈0.44m（h 列/远槽 IK 不可达），
+# 槽位半径必须 ≤ 上限。首槽 x=0.10、每排 6 槽（x 至 0.30，臂距 ≤0.40 全可达）。
+DISCARD_ORIGIN_X = _f("GZCHESS_DISCARD_ORIGIN_X", str(BOARD_ORIGIN_X - 0.18))  # 弃子区第 0 槽的 x
+DISCARD_ORIGIN_Y = _f("GZCHESS_DISCARD_ORIGIN_Y", "0.27")                     # 板半幅=格区0.20+边框0.03=0.23，再留子底座半径+间隙
 DISCARD_PITCH_M = _f("GZCHESS_DISCARD_PITCH_M", "0.04")                       # 相邻弃子槽间距
-DISCARD_SLOTS_PER_ROW = _i("GZCHESS_DISCARD_SLOTS_PER_ROW", "8")             # 每排几个槽，满了换下一排（沿 y 外扩）
+DISCARD_SLOTS_PER_ROW = _i("GZCHESS_DISCARD_SLOTS_PER_ROW", "6")             # 每排几个槽，满了换下一排（沿 y 外扩；排满 2 排后更远的槽可能超臂展）
 RESERVOIR_ORIGIN_X = _f("GZCHESS_RESERVOIR_ORIGIN_X", str(BOARD_ORIGIN_X))    # 备用子区取子点 x
-RESERVOIR_ORIGIN_Y = _f("GZCHESS_RESERVOIR_ORIGIN_Y", "-0.24")               # 放在棋盘另一侧（和弃子区分开）
+RESERVOIR_ORIGIN_Y = _f("GZCHESS_RESERVOIR_ORIGIN_Y", "-0.27")               # 棋盘另一侧（和弃子区分开）；同样避开加宽后的板边
+# 盘外支撑面高度：备用区/弃子区在棋盘外面，脚下是桌面(z=0)而不是棋盘面(BOARD_ORIGIN_Z)。
+# 2026-07-03 实测抓出的老 bug：按棋盘面高度在盘外生成子 → 子掉到桌面、夹爪按高 28mm 去抓 → 必抓空。
+OFFBOARD_SURFACE_Z = _f("GZCHESS_OFFBOARD_SURFACE_Z", "0.0")
 
 # ---- 相机 ----
 # 默认**双相机**（both = 斜视 oblique + 正俯视 overhead 同时开，各自独立话题——
@@ -170,4 +180,4 @@ GZ_WORLD_NAME = os.getenv("GZCHESS_GZ_WORLD", "episode_world")          # Gazebo
 ARM_CONTROLLER = os.getenv("GZCHESS_ARM_CONTROLLER", "episode_arm_controller")
 GRIPPER_CONTROLLER = os.getenv("GZCHESS_GRIPPER_CONTROLLER", "gripper_controller")
 # 俯视相机的朝向（rpy 弧度）：默认 pitch=+90° 让相机 +x 轴朝下(-z)拍。图像上下/左右朝向需对着仿真确认。
-CAM_RPY = [float(x) for x in os.getenv("GZCHESS_CAM_RPY", "0,1.5708,0").split(",")]
+CAM_RPY = [float(x) for x in os.getenv("GZCHESS_CAM_RPY", "0,1.5708,1.5708").split(",")]

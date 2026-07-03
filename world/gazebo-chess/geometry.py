@@ -67,8 +67,9 @@ def approach_xyz(name: str) -> tuple[float, float, float]:
 
 
 def reservoir_spawn_xyz() -> tuple[float, float, float]:
-    """备用子区里 spawn 一枚新子时的落点（棋盘上表面高度，子底面贴面）。"""
-    return config.RESERVOIR_ORIGIN_X, config.RESERVOIR_ORIGIN_Y, config.BOARD_ORIGIN_Z
+    """备用子区里 spawn 一枚新子时的落点。⚠️ 备用区在棋盘外，支撑面是桌面（OFFBOARD_SURFACE_Z），
+    不是棋盘面——按棋盘面高度生成会掉 28mm、夹爪随之抓空（2026-07-03 实测教训）。"""
+    return config.RESERVOIR_ORIGIN_X, config.RESERVOIR_ORIGIN_Y, config.OFFBOARD_SURFACE_Z
 
 
 def reservoir_grasp_xyz() -> tuple[float, float, float]:
@@ -78,12 +79,12 @@ def reservoir_grasp_xyz() -> tuple[float, float, float]:
 
 
 def discard_slot_xyz(index: int) -> tuple[float, float, float]:
-    """第 index 个弃子槽的落点（棋盘上表面高度）：沿 x 排开，满一排(DISCARD_SLOTS_PER_ROW)沿 y 外扩下一排。"""
+    """第 index 个弃子槽的落点（桌面高度，盘外）：沿 x 排开，满一排(DISCARD_SLOTS_PER_ROW)沿 y 外扩下一排。"""
     row = index // config.DISCARD_SLOTS_PER_ROW
     col = index % config.DISCARD_SLOTS_PER_ROW
     x = config.DISCARD_ORIGIN_X + col * config.DISCARD_PITCH_M
     y = config.DISCARD_ORIGIN_Y + row * config.DISCARD_PITCH_M
-    return x, y, config.BOARD_ORIGIN_Z
+    return x, y, config.OFFBOARD_SURFACE_Z          # 弃子区同样在盘外=桌面高度
 
 
 def discard_grasp_xyz(index: int) -> tuple[float, float, float]:

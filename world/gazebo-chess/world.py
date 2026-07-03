@@ -37,7 +37,8 @@ from arm_controller import ArmController
 # ---- AWI 工具声明：三个物理原语（大脑侧靠这仨的 expand_move 拆一手棋）----
 MOVE_TOOL = {
     "name": "move",
-    "description": "把 from 格的子搬到 to 格——机械臂真夹真放（裸搬，不判棋规）。放完核对落点，只回成败。",
+    "description": "把盘上 from 格的子搬到 to 格（目标格必须是空格；有子会拒绝并提示——想换掉它就先 remove(to) 再 move）。"
+                   "机械臂真夹真放（裸搬，不判棋规），放完核对落点，只回成败。",
     "parameters": {"type": "object",
                    "properties": {"from": {"type": "string", "description": "起格，如 e2"},
                                   "to": {"type": "string", "description": "目标格，如 e4"}},
@@ -46,7 +47,7 @@ MOVE_TOOL = {
 }
 REMOVE_TOOL = {
     "name": "remove",
-    "description": "把某格的子从盘上夹起、放到棋盘一侧的弃子区（吃子/清子时用）。只回成败。",
+    "description": "把某格的子**从棋盘上拿下去**（夹到盘边弃子区）。用户说\"拿走/拿下去/清掉某格的子\"就是这个。只回成败。",
     "parameters": {"type": "object",
                    "properties": {"square": {"type": "string", "description": "要清掉的格，如 e5"}},
                    "required": ["square"]},
@@ -54,7 +55,8 @@ REMOVE_TOOL = {
 }
 PLACE_TOOL = {
     "name": "place",
-    "description": "从备用子区取一枚棋子、摆到某格（摆盘/升变时用）。piece 用棋子字母：大写=白、小写=黑（如 Q/q）。只回成败。",
+    "description": "**拿一枚新子上盘**：从盘边备用子区取一枚、摆到某个空格。用户说\"放一个子上来/在某格摆个子\"就是这个。"
+                   "piece 用棋子字母：大写=白、小写=黑（如 Q/q/P/p）。只回成败。",
     "parameters": {"type": "object",
                    "properties": {"square": {"type": "string", "description": "要摆到的格，如 e1"},
                                   "piece": {"type": "string", "description": "棋子字母，大写白/小写黑，如 Q/q/P/p"}},
@@ -249,6 +251,10 @@ class GazeboChessWorld:
             name, p = self._piece_at(frm)          # 按当前位置找（子走一步后名字不变、位置才准）
             if name is None:
                 return {"ok": False, "message": f"{frm} 格上没有子"}
+            occ, _ = self._piece_at(to)            # 目标格占用检查：叠子=物理事故，如实拒绝、指路两步走
+            if occ is not None and occ != name:
+                return {"ok": False,
+                        "message": f"{to} 格上已经有子——想换掉它就先 remove({to}) 再 move；想放旁边就换个空格。"}
             note(_P_LOCATE, f"已定位 {frm} 上的棋子，正在规划抓取")
             gx, gy, gz = p[0], p[1], p[2] + config.PIECE_GRASP_WAIST_M
             avoid = self._others_xy(name)

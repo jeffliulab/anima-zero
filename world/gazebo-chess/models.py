@@ -28,9 +28,18 @@ def _inertia_cyl(m: float, r: float, h: float) -> str:
 def board_sdf(name: str = "chessboard") -> tuple[str, tuple[float, float, float]]:
     """棋盘底板：薄长方体，坐在桌面(z=0)上，上表面在 BOARD_ORIGIN_Z。
     返回 (sdf 字符串, spawn 世界坐标 xyz=模型原点)。模型原点在板几何中心。
+
+    板总尺寸 = 格区(BOARD_SIZE_M) + 2×边框(BOARD_MARGIN_M)；顶面另加一层**贴图薄皮 visual**
+    （board_texture 生成的 格纹+四边坐标 图——LLM 就是视觉系统，棋盘必须画成人读得懂的样子）。
+    只给顶面薄皮贴图（不贴整个 box）：box 六面共享 UV，整贴会把侧面拉花。
+    薄皮无碰撞体，物理不变；格中心坐标也不变（格区始终居中，geometry 按中心对称展开）。
     """
-    size = config.BOARD_SIZE_M
+    import board_texture
+
+    size = config.BOARD_SIZE_M + 2 * config.BOARD_MARGIN_M
     th = config.BOARD_THICKNESS_M
+    skin = 0.001                                   # 顶面薄皮厚度（纯视觉，防 z-fighting 微凸 0.5mm）
+    tex = board_texture.ensure()
     # 模型原点在板中心 → spawn z = 上表面 - 厚度/2
     spawn_xyz = (config.BOARD_ORIGIN_X, config.BOARD_ORIGIN_Y, config.BOARD_ORIGIN_Z - th / 2.0)
     sdf = f"""<sdf version="1.10">
@@ -41,9 +50,17 @@ def board_sdf(name: str = "chessboard") -> tuple[str, tuple[float, float, float]
         <geometry><box><size>{size} {size} {th}</size></box></geometry>
         <surface><friction><ode><mu>0.9</mu><mu2>0.9</mu2></ode></friction></surface>
       </collision>
-      <visual name="vis">
+      <visual name="body">
         <geometry><box><size>{size} {size} {th}</size></box></geometry>
         <material><ambient>0.20 0.25 0.20 1</ambient><diffuse>0.25 0.32 0.25 1</diffuse></material>
+      </visual>
+      <visual name="top_skin">
+        <pose>0 0 {th / 2.0} 0 0 0</pose>
+        <geometry><box><size>{size} {size} {skin}</size></box></geometry>
+        <material>
+          <diffuse>1 1 1 1</diffuse>
+          <pbr><metal><albedo_map>{tex}</albedo_map><roughness>0.9</roughness><metalness>0.0</metalness></metal></pbr>
+        </material>
       </visual>
     </link>
   </model>
