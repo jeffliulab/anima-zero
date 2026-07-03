@@ -14,7 +14,9 @@ state（perceive 随画面给大脑的结构化部分）= **空 `{}`**：这个�
 线程（v0.5 wave 0）：ROS 的 spin 收敛到**唯一一个专职线程**（SingleThreadedExecutor，init 时启动）——
 相机帧、/joint_states、service/action 回包全由它持续送达；请求工作线程对 ROS future 只「挂事件+带超时等」
 （见 arm_controller._wait_future），**绝不自己 spin**（从请求线程 spin 会和 DDS/executor 撞线程，实测卡死）。
-世界状态的互斥仍靠 self.lock（move 期间 observe 等锁属已知残余，登记在案）。
+世界状态的互斥仍靠 self.lock。observe（喂大脑）**故意**等锁——动作没做完不该把"半空中的子"当棋盘状态；
+stream_jpeg（人类直播）**故意不**等锁——帧由 spin 线程持续写入 CameraFeed，读一下是原子引用读，
+人就是要看臂动的全程（v0.5 前直播也抢锁，臂一动画面就冻成"前后快照"，实锤修掉）。
 长动作进度（v0.5 wave 0）：`invoke` 声明了 keyword-only `_progress`——awi_mcp 签名探测到它，就把
 MCP progress 上报函数传进来；三个原语分阶段报人话进度（定位→抓取→搬运→放置→核对），大脑靠这些
 "生命迹象"续命等待，用户在仪表盘/对弈面板实时看到臂在干什么。不带 _progress 调用（如测试）行为不变。
@@ -181,11 +183,11 @@ class GazeboChessWorld:
         return {"cameras": [n for n, _ in images]}, images
 
     def stream_jpeg(self, cam: str = "") -> bytes | None:
-        """某一路相机的直播帧（人类页用）。cam 空 = 第一路。"""
-        with self.lock:
-            self._spin(3)
-            feed = self.cams.get(cam) or next(iter(self.cams.values()), None)
-            return render.to_jpeg(feed.frame) if feed else None
+        """某一路相机的直播帧（人类页用）。cam 空 = 第一路。
+        **不取 self.lock、不等节拍**：帧由专职 spin 线程持续更新，读 feed.frame 是原子引用读；
+        直播若等锁，机械臂动作（几十秒持锁）期间画面会整段冻结——人恰恰要看臂动的全程。"""
+        feed = self.cams.get(cam) or next(iter(self.cams.values()), None)
+        return render.to_jpeg(feed.frame) if feed else None
 
     def cleanup_cameras(self) -> None:
         """进程退出前把本世界 spawn 的相机模型删净（uvicorn 重启也走这里——防残留相机抢话题）。"""
