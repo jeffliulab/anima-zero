@@ -1,17 +1,29 @@
-# Changelog
+# Anima Zero Changelog
 
-ANIMA Zero 版本记录。**保持简洁——每版只说重点;具体改了什么,查 git commit。** 格式参考 [Keep a Changelog](https://keepachangelog.com)。
+ANIMA Zero 版本记录。**版本记录要点：保持简洁，每版只说重点，比如具体改了什么。**（格式参考 [Keep a Changelog](https://keepachangelog.com)）
 
-## [0.4.0] — 2026-07-02
+## [0.5.0] — 2026-07-03
 
-Main: 把脑↔世界/引擎的接口从自研 HTTP（AWI）换成业界标准 MCP；并第一次把「世界」从合成画面推进到真实物理仿真——新世界 gazebo-chess（Gazebo 物理棋盘 + 真实六轴臂）跑通了基础设施，配一个网页手动遥控 teleop。注：ANIMA 自主走子（大脑发 move）目前会超时，本版不修，留到 v0.5。
+Main: 大重构——删除 game mode 等人为编排，最小化框架来考察智能：LLM 亲自看画面、亲自决定每一步、亲自调用工具。
 
 Features:
 
-1. 接口采标 MCP：世界＝标准 MCP server，脑＝host。MCP 三原语 Tools / Resources / Prompts 对应 动作 / 感知 / 说明书；新增「说明书」（prompts/get guidance）注入脑的系统提示。
-2. 下棋引擎从下棋 skill 里独立成一个 MCP server（:8108，只有 Tools 的纯计算顾问）；顺带简化 sim-chess 的 state。
-3. 新增物理世界 gazebo-chess（:8106）：Gazebo 物理仿真 + 真实机械臂，spawn/位姿/俯视相机出图/MoveIt 解 IK + 发轨迹这条 infra 已通（单子、真实夹爪的完整夹取与失败补救留 v0.5）。
-4. teleop 手动遥控（网页 GUI，:8110）：ROS2 + MoveIt IK + joint_trajectory_controller 插值，人可顺畅点动这条臂（关节/笛卡尔/夹爪/回 home）——先把物理底座验通。
+1. 改用LangGraph作为ReAct架构编排的底层框架，不再使用自研naive版ReAct框架。
+2. Chess engine改为service；service和world的区别在于：service为anima提供问答帮助（顾问），world接受anima的命令输出（现实）。service由world自己声明（anima://services），anima握手时自动挂载。
+3. 删除game mode/行为树/skill整套任务编排：下棋回归普通对话（说"该你了"即可），认盘、算棋、拆步全由LLM当场决策；观察-思考-行动成为唯一主循环。
+4. 统一Session Logs：LLM调用、world流量、service调用三类留痕按会话合并为一条流水，前端可按会话查看/一键复制。
+5. 多相机一等公民：一次感知可含多张命名画面，前端多路直播并列展示；gazebo-chess升级双相机+可读棋盘（格纹+四边坐标），"拿下去/放上来/放到那儿"语言→动作全链实测通过。
+
+## [0.4.0] — 2026-07-02
+
+Main: 接入gazebo仿真下棋界面，配置遥操teleop并实现末端夹爪的笛卡尔移动。
+
+Features:
+
+1. 不再使用自研HTTP作为AWI，改用MCP server标准。旧的perceive, invoke, guidance体系改为Tools/Resources/Prompts.
+2. 下棋引擎不再属于下棋skill，独立为一个MCP server.
+3. 新增world: gazebo-chess. 该世界使用Soma Zero的替代机Episode1的模型，构建了Gazebo仿真，并模拟出夹爪和棋子。
+4. 实现笛卡尔移动，teleop测试抓取棋子成功。
 
 ## [0.3.0] — 2026-06-30
 
@@ -22,7 +34,6 @@ Features:
 1. 添加新的world：camera。可以设置分辨率。
 2. 修改下棋skill的一些细节。
 3. 调试与界面：anima-logs 调试页修了「按会话查永远空」的会话归属 bug，加一键复制整会话全字段 + 完整展示；前端加亮色主题与切换、把 AWI / anima-logs 改成主页内嵌面板。
-
 
 ## [0.2.0] — 2026-06-30
 
@@ -46,6 +57,6 @@ Features:
 3. 设计初步的anima聊天ux界面，设立session机制，记忆保存在本地；可以在对话中切换大脑。
 4. 实现首个示例world sim-desk，包含一个虚拟桌面、笔、画布等，提供移动笔、绘制、擦除三种能力，用于验证整套协议；通过流式传输将画面传递给anima查看。
 
-## [Anima O1]
+## [Anima O1] — Before 2026-06-27
 
 Anima O1是早期的设计版本，在Anima Zero开发中被全部推倒，完全重建，因此不再记录Anima O1的相关内容。Anima O1和早期Soma实践基本确定了System1/System2的路线，为Anima Zero和Soma Zero奠定了思想理论基础。
