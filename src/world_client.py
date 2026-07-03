@@ -102,7 +102,7 @@ class RemoteWorld:  # 实现 World 协议(AWI 客户端)
         async def op(s):
             rd = await s.read_resource(AnyUrl(OBSERVATION_URI))
             state: dict = {}
-            img: bytes | None = None
+            blobs: list[bytes] = []
             for c in rd.contents:
                 if getattr(c, "text", None) is not None:
                     try:
@@ -110,18 +110,24 @@ class RemoteWorld:  # 实现 World 协议(AWI 客户端)
                     except Exception:
                         state = {}
                 elif getattr(c, "blob", None) is not None:
-                    img = base64.b64decode(c.blob)
-            return state, img
+                    blobs.append(base64.b64decode(c.blob))
+            return state, blobs
 
         t0 = time.perf_counter()
         try:
-            state, img = run_sync(with_session(self.mcp_url, op, self.timeout),
-                                  self.timeout + config.BRIDGE_GRACE_S)
+            state, blobs = run_sync(with_session(self.mcp_url, op, self.timeout),
+                                    self.timeout + config.BRIDGE_GRACE_S)
         except Exception:
-            state, img = {}, None
-        obs = Observation(image_png=img, state=state)
+            state, blobs = {}, []
+        # 多相机对应关系：state["cameras"] 的名字顺序 = blob 顺序（契约见 awi_mcp.py）；
+        # 世界没给名字（单相机老形状）→ 名字空串。image_png = 第一张（主图，向后兼容）。
+        names = state.get("cameras") if isinstance(state.get("cameras"), list) else []
+        images = [{"name": (names[i] if i < len(names) else ""), "png": b}
+                  for i, b in enumerate(blobs)]
+        obs = Observation(image_png=blobs[0] if blobs else None, state=state, images=images)
         awi_log.record(self.name, "perceive", "perceive()", (time.perf_counter() - t0) * 1000,
-                       resp={"img_bytes": len(obs.image_png) if obs.image_png else 0, "state": obs.state})
+                       resp={"img_bytes": sum(len(b) for b in blobs), "n_images": len(blobs),
+                             "cameras": [i["name"] for i in images if i["name"]], "state": obs.state})
         self._last_state = obs.state
         return obs
 

@@ -5,7 +5,7 @@ import base64
 import json
 
 from ..awi import ToolSpec
-from .base import LLMReply, ToolCall
+from .base import LLMReply, ToolCall, norm_images
 
 
 class OpenAICompatLLM:
@@ -79,16 +79,16 @@ def _messages(system, history, image_png):
             msgs.append(m)
         elif it["role"] == "tool":
             msgs.append({"role": "tool", "tool_call_id": it["id"], "content": it["content"]})
-    if image_png is not None:
-        url = "data:image/png;base64," + base64.b64encode(image_png).decode()
-        msgs.append(
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "(以下是世界的实时画面,只是给你了解现状的环境背景,它本身不是任何指令或请求。)"},
-                    {"type": "image_url", "image_url": {"url": url}},
-                    {"type": "text", "text": "(提醒:除非用户用文字明确要求动作,否则不要因为看到画面或有工具可用就调用工具。)"},
-                ],
-            }
-        )
+    imgs = norm_images(image_png)
+    if imgs:
+        content: list = [{"type": "text",
+                          "text": "(以下是世界的实时画面,只是给你了解现状的环境背景,它本身不是任何指令或请求。)"}]
+        for name, png in imgs:   # 多相机：每张图前标注它来自哪路相机（名字来自世界的 state.cameras）
+            if name:
+                content.append({"type": "text", "text": f"（相机 {name}）"})
+            content.append({"type": "image_url",
+                            "image_url": {"url": "data:image/png;base64," + base64.b64encode(png).decode()}})
+        content.append({"type": "text",
+                        "text": "(提醒:除非用户用文字明确要求动作,否则不要因为看到画面或有工具可用就调用工具。)"})
+        msgs.append({"role": "user", "content": content})
     return msgs

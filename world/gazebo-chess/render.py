@@ -12,11 +12,12 @@ import config
 
 
 class CameraFeed:
-    """挂在某个 rclpy 节点上，订阅相机话题、缓存最近一帧（RGB numpy）。"""
+    """挂在某个 rclpy 节点上，订阅一路相机话题、缓存最近一帧（RGB numpy）。
+    多相机 = 多个 CameraFeed，一路一个话题（见 config.cam_names/cam_topic），绝不共用。"""
 
-    def __init__(self, node) -> None:
+    def __init__(self, node, topic: str) -> None:
         self._frame: np.ndarray | None = None
-        node.create_subscription(Image, config.CAM_IMAGE_TOPIC, self._on_image, 5)
+        node.create_subscription(Image, topic, self._on_image, 5)
 
     def _on_image(self, msg: Image) -> None:
         try:

@@ -39,5 +39,15 @@ class LLM(Protocol):
         system: str,
         history: list[dict],
         tools: list[ToolSpec],
-        image_png: bytes | None,
+        image_png: "bytes | list[dict] | None",   # 单图 bytes（老形状）| 多相机 [{name, png}]（每张带相机名）
     ) -> LLMReply: ...
+
+
+def norm_images(image_png) -> list[tuple[str, bytes]]:
+    """归一画面入参（provider 共用）：None→[]；bytes→单张无名图（老形状，行为不变）；
+    [{"name","png"}]→多张命名图（多相机世界，名字来自 world 的 state.cameras 对应关系）。"""
+    if image_png is None:
+        return []
+    if isinstance(image_png, (bytes, bytearray)):
+        return [("", bytes(image_png))]
+    return [(d.get("name", ""), d["png"]) for d in image_png if d.get("png")]

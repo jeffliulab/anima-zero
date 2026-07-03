@@ -63,8 +63,8 @@ PLACE_TOOL = {
 }
 _TOOLS = [MOVE_TOOL, REMOVE_TOOL, PLACE_TOOL]
 
-# perceive 的 state 契约声明（给 /awi 面板读）——这个世界没有该给大脑的结构化 state，故为空。
-STATE_SCHEMA: dict = {}
+# perceive 的 state 契约声明（给 /awi 面板读）——只有相机名单（图↔相机的对应关系），绝无棋盘真值。
+STATE_SCHEMA: dict = {"cameras": "本帧包含哪几路相机画面（名字顺序 = 图片顺序）"}
 
 # 停臂驻位（让出俯视相机视野；和 _tune_camera 一致）
 PARK = [float(x) for x in os.getenv("GZCHESS_PARK_JOINTS", "2.5,0,0,0,0,0").split(",")]
@@ -85,7 +85,8 @@ class GazeboChessWorld:
         if not rclpy.ok():
             rclpy.init()
         self.arm = ArmController()
-        self.cam = render.CameraFeed(self.arm)
+        # 多相机：一路一个 CameraFeed、一路一个独立话题（config.cam_names 定几路；顺序=observation 图片顺序）
+        self.cams = {n: render.CameraFeed(self.arm, config.cam_topic(n)) for n in config.cam_names()}
         # 专职 ROS spin 线程：唯一允许 spin 这个节点的地方（回调异常只记日志，不许杀线程）。
         self._executor = rclpy.executors.SingleThreadedExecutor()
         self._executor.add_node(self.arm)
@@ -106,10 +107,20 @@ class GazeboChessWorld:
         """等专职 spin 线程送达新数据的节拍（历史名保留：以前是自己 spin，现在只等）。"""
         time.sleep(n * config.SPIN_STEP_S)
 
+    _ALL_CAM_KINDS = ("oblique", "overhead")   # 已知相机全集（换模式重启后要把不用的残留也清掉）
+
     def _setup(self, demo_square: str) -> None:
         with self.lock:
             spawn.spawn_board()
-            spawn.spawn_camera()
+            # 相机：先把**所有已知相机名**的残留删净（含换模式前留下的），再按本模式逐路 spawn。
+            for kind in self._ALL_CAM_KINDS:
+                spawn.purge_model(f"{kind}_cam")
+            for kind in config.cam_names():
+                spawn.spawn_camera(kind)
+                n_pub = spawn.publisher_count(config.cam_topic(kind))
+                if n_pub != 1:   # 发布者数自检：>1 = 残留相机/孤儿 gz 进程在抢话题（画面会交替混流）
+                    print(f"[gazebo-chess] ⚠️ 话题 {config.cam_topic(kind)} 有 {n_pub} 个发布者"
+                          f"（应为 1）——查残留相机模型或孤儿 gz sim 进程（pgrep -af 'gz sim'）")
             fen = config.SETUP_FEN.strip()
             if fen:                                     # v0.5 多子：按 FEN 摆放字段摆盘
                 self._spawn_fen(fen)
@@ -155,17 +166,29 @@ class GazeboChessWorld:
                               "xyz": [round(v, 4) for v in pp]}
             return {"pieces": pieces, "discard_used": self._discard_n}
 
-    def observe(self) -> tuple[dict, bytes | None]:
-        """给画面（俯视相机帧 PNG）+ 空 state。绝不给棋盘真值。"""
+    def observe(self) -> tuple[dict, list[tuple[str, bytes]]]:
+        """给画面 + 极简 state。多相机：每路一张命名图，state.cameras 按序列名字（这就是图↔相机的
+        对应关系，交给大脑）。绝不给棋盘真值——state 里只有相机名单，没有任何局面信息。"""
         with self.lock:
             self._spin(6)
-            png = render.to_png(self.cam.frame)
-        return {}, png
+            images = []
+            for name, feed in self.cams.items():
+                png = render.to_png(feed.frame)
+                if png:
+                    images.append((name, png))
+        return {"cameras": [n for n, _ in images]}, images
 
-    def stream_jpeg(self) -> bytes | None:
+    def stream_jpeg(self, cam: str = "") -> bytes | None:
+        """某一路相机的直播帧（人类页用）。cam 空 = 第一路。"""
         with self.lock:
             self._spin(3)
-            return render.to_jpeg(self.cam.frame)
+            feed = self.cams.get(cam) or next(iter(self.cams.values()), None)
+            return render.to_jpeg(feed.frame) if feed else None
+
+    def cleanup_cameras(self) -> None:
+        """进程退出前把本世界 spawn 的相机模型删净（uvicorn 重启也走这里——防残留相机抢话题）。"""
+        for kind in self._ALL_CAM_KINDS:
+            spawn.purge_model(f"{kind}_cam")
 
     def invoke(self, name: str, *, _progress=None, **args) -> dict:
         # `_progress(比例, 人话消息)` 由 awi_mcp 签名探测注入（MCP progress 上报）；没有就静默。

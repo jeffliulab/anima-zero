@@ -135,7 +135,16 @@ def build_awi_mcp(world=None, *, guidance: str = "", services: list | None = Non
         # 感知同样下工作线程（gazebo 的 observe 要拿世界锁 + spin ROS，不许堵循环）。
         state, image = await anyio.to_thread.run_sync(_observe)
         out = [ReadResourceContents(content=json.dumps(state or {}), mime_type="application/json")]
-        if image:  # 没画面就不给 blob（大脑据此知道"暂时没画面"，绝不伪造一张图）
+        # 画面两种形状（多相机是一等公民）：
+        #   bytes                     单相机（老形状，向后兼容，单相机世界零改动）
+        #   list[(name, bytes)]       多相机：依序回多个 png blob，名字顺序 = world 放进 state["cameras"] 的顺序
+        #     （MCP blob 本身不带名字，顺序即对应关系——world 侧必须用同一个列表生成两者）
+        # 没画面就不给 blob（大脑据此知道"暂时没画面"，绝不伪造一张图）。
+        if isinstance(image, list):
+            for _name, blob in image:
+                if blob:
+                    out.append(ReadResourceContents(content=blob, mime_type="image/png"))
+        elif image:
             out.append(ReadResourceContents(content=image, mime_type="image/png"))
         return out
 

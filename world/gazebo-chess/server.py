@@ -8,6 +8,7 @@ AWI(脑↔世界): GET /capabilities  GET /perceive  POST /invoke  GET /health
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 
 from fastapi import FastAPI
@@ -30,7 +31,8 @@ GAZEBO_GUIDANCE = (
     "我给你三个物理原语：move（把一个子从 from 格夹到 to 格）、remove（把某格的子夹走丢进弃子区）、"
     "place（在某格摆上一个新子）。吃子=先 remove 再 move；升变=move+remove+place；易位=两次 move——"
     "怎么把一步棋拆成这些原语，由你自己按棋规想清楚、按顺序逐个调用。\n"
-    "感知（perceive）只给你相机画面；state 为空 {}（棋盘真值绝不给你，你靠看）。\n"
+    "感知（perceive）给你**多路相机画面**（默认两路：oblique 斜视、overhead 正俯视——"
+    "state.cameras 按序标注每张图是哪路相机），除相机名单外 state 不含任何东西（棋盘真值绝不给你，你靠看）。\n"
     "一个原语要几十秒（真机械臂在动），失败了看我的报错决定怎么补救。"
 )
 
@@ -43,7 +45,18 @@ GZCHESS_SERVICES = [{"name": "chess-engine",
 mcp_asgi, mcp_lifespan = build_awi_mcp(world, guidance=GAZEBO_GUIDANCE,
                                        services=GZCHESS_SERVICES, server_name="gazebo-chess")
 
-app = FastAPI(title="gazebo-chess world", lifespan=mcp_lifespan)
+# lifespan：包住 MCP 的 lifespan，进程退出时把本世界 spawn 的相机模型删净——
+# uvicorn 重启/热重载也走这里，防「残留相机抢同一话题 → 画面交替混流」（2026-07-02 实锤根因之一）。
+@contextlib.asynccontextmanager
+async def _lifespan(app):
+    async with mcp_lifespan(app):
+        try:
+            yield
+        finally:
+            await asyncio.to_thread(world.cleanup_cameras)
+
+
+app = FastAPI(title="gazebo-chess world", lifespan=_lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=_CORS, allow_methods=["*"], allow_headers=["*"])
 app.mount("/mcp", mcp_asgi)   # 大脑经此 list_tools / read_resource(感知) / call_tool / get_prompt(说明书)
 
@@ -62,11 +75,16 @@ def status() -> dict:
 
 
 # ===== 人类页 / 流（世界本地，不进 AWI）=====
-@app.get("/stream")
-async def stream() -> StreamingResponse:
+@app.get("/streams")  # 有哪几路相机直播（前端据此并列展示多画面；单相机世界没有此端点=回退单 /stream）
+def streams() -> list[dict]:
+    return [{"name": n, "url": f"/stream?cam={n}"} for n in config.cam_names()]
+
+
+@app.get("/stream")   # 某一路相机的 MJPEG 直播；?cam=<名字>，缺省=第一路
+async def stream(cam: str = "") -> StreamingResponse:
     async def gen():
         while True:
-            jpg = await asyncio.to_thread(world.stream_jpeg)
+            jpg = await asyncio.to_thread(world.stream_jpeg, cam)
             if jpg is not None:
                 yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpg + b"\r\n"
             await asyncio.sleep(1 / config.STREAM_FPS)

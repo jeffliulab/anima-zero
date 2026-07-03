@@ -32,11 +32,11 @@ def _run(cmd: list[str], timeout: float = 20.0) -> tuple[bool, str]:
 def _create(sdf: str, name: str, xyz: tuple[float, float, float],
             rpy: tuple[float, float, float] = (0.0, 0.0, 0.0), replace: bool = True) -> tuple[bool, str]:
     """用 ros_gz create 把一段 SDF spawn 进世界（写临时文件再 -file，避开 -string 的引号坑）。
-    replace=True：先删掉同名模型再 spawn——**幂等**，避免反复 spawn 堆出一堆同名重复体污染世界
-    （昨晚就因没删干净，5 个 overhead_cam 叠在一起，错以为 remove 坏了）。"""
+    replace=True：先**删净**同名模型再 spawn（purge_model：反复删+确认消失）——幂等，
+    避免反复 spawn 堆出一堆同名重复体污染世界（前科：5 个 overhead_cam 叠在一起；
+    以及 gz remove 是异步的，单次 remove+固定 sleep 在慢机器上会删不干净）。"""
     if replace:
-        remove_model(name)
-        time.sleep(0.3)
+        purge_model(name)
     with tempfile.NamedTemporaryFile("w", suffix=".sdf", delete=False) as f:
         f.write(sdf)
         path = f.name
@@ -68,14 +68,34 @@ def remove_model(name: str) -> tuple[bool, str]:
     return ok, out
 
 
+def purge_model(name: str, tries: int = 5) -> bool:
+    """删净一个模型：反复 remove 并用位姿流确认它真的消失了才罢休（gz 删除是异步的）。
+    返回是否确认删净；删不净也不抛——调用方 spawn 后自有发布者数自检兜底。"""
+    for _ in range(tries):
+        remove_model(name)
+        time.sleep(0.3)
+        if name not in all_model_poses(window_s=0.5):
+            return True
+    return False
+
+
+def publisher_count(topic: str) -> int:
+    """一个 gz 话题上有几个 Image 发布者。健康值=1；>1 说明有残留相机/孤儿 gz 进程在抢话题
+    （两份不同画面会交替混流——2026-07-02 实锤过一次：15 小时的孤儿 gz sim server）。"""
+    _, out = _run(["gz", "topic", "-i", "-t", topic], timeout=6)
+    # 只数 Publishers 段——输出里 Subscribers 段（如 image_bridge）也带 gz.msgs.Image，不能算进来
+    return out.split("Subscribers")[0].count("gz.msgs.Image")
+
+
 def spawn_board(name: str = "chessboard") -> tuple[bool, str]:
     sdf, xyz = models.board_sdf(name)
     return _create(sdf, name, xyz)
 
 
-def spawn_camera(name: str = "overhead_cam") -> tuple[bool, str]:
-    sdf, xyz, rpy = models.camera_sdf(name)
-    return _create(sdf, name, xyz, rpy)
+def spawn_camera(kind: str = "oblique") -> tuple[bool, str]:
+    """spawn 一路相机（kind=oblique/overhead，模型名 <kind>_cam，话题 config.cam_topic(kind)）。"""
+    sdf, xyz, rpy = models.camera_sdf(kind)
+    return _create(sdf, f"{kind}_cam", xyz, rpy)
 
 
 def spawn_piece(square: str, color: str = "white", name: str | None = None,

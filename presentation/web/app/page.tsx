@@ -50,7 +50,6 @@ export default function Home() {
   const current = sessions.find((x) => x.id === currentId) || null;
   const currentWorld = current?.world ? worlds.find((w) => w.name === current.world) ?? null : null;
   const worldUrl = currentWorld?.url ?? null;
-  const streamUrl = worldUrl ? `${worldUrl}/stream` : null;
   // 该会话所连世界在不在线：null = 纯聊天/无世界；true/false = 在线/离线
   const worldOnline = current?.world ? currentWorld?.online ?? false : null;
 
@@ -87,7 +86,7 @@ export default function Home() {
           ANIMA · 在左侧选择或新建一个会话开始；左下角可查看 AWI 仪表盘 / Session Logs。
         </div>
       ) : (
-        <SensingArea streamUrl={streamUrl} worldName={current?.world ?? null} online={worldOnline} />
+        <SensingArea worldUrl={worldUrl} worldName={current?.world ?? null} online={worldOnline} />
       )}
 
       {/* 右栏：聊天面板（v0.5 重构起无对弈面板——下棋=普通对话）；非 session 视图只读(paused)。 */}

@@ -12,10 +12,14 @@ from typing import Any, Protocol, runtime_checkable
 
 @dataclass
 class Observation:
-    """感知双路:图片喂大脑;结构状态作 ground-truth(给将来的高频环节 / 裁判)。"""
+    """感知双路:图片喂大脑;结构状态作 ground-truth(给将来的高频环节 / 裁判)。
 
-    image_png: bytes | None  # 渲染图 / 摄像头帧;某些世界可能没有图 → None
-    state: dict[str, Any]  # 结构化状态,例如 {"pen": [0.5, 0.5]}
+    多相机是一等公民:世界可给多张**命名**图(state.cameras 的名字顺序 = 图片顺序,即对应关系)。
+    `images` 是全集([{name, png}]);`image_png` 保留 = 第一张(主图,单相机世界/老调用方零改动)。"""
+
+    image_png: bytes | None  # 主图(第一路相机);某些世界可能没有图 → None
+    state: dict[str, Any]  # 结构化状态,例如 {"pen": [0.5, 0.5]} / {"cameras": ["oblique","overhead"]}
+    images: list[dict] = field(default_factory=list)   # 全部相机图 [{"name": str, "png": bytes}]
 
 
 @dataclass

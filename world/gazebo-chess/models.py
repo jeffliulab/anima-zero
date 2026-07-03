@@ -167,16 +167,18 @@ def _head_visuals(kind: str, head_r: float, z0: float, collision_total_h: float,
             + sph("ball", head_r * 0.95, z0 + h1 + head_r * 0.6))
 
 
-def camera_sdf(name: str = "overhead_cam") -> tuple[str, tuple[float, float, float], tuple[float, float, float]]:
-    """棋盘相机（v0.5 默认**斜视**、俯视保留可切，见 config.CAM_MODE）。
-    返回 (sdf, spawn xyz, spawn rpy)。相机像素在 CAM_IMAGE_TOPIC 上发布（gz 话题），再用 image_bridge 桥到 ROS。
+def camera_sdf(kind: str = "oblique") -> tuple[str, tuple[float, float, float], tuple[float, float, float]]:
+    """一路棋盘相机（kind = "oblique" 斜视 | "overhead" 正俯视；双相机=两次调用各自 spawn）。
+    返回 (sdf, spawn xyz, spawn rpy)。像素发布在 config.cam_topic(kind)（每路独立 gz 话题），
+    再用 image_bridge 逐路桥到 ROS。
 
     - oblique：从板局部方位角 AZIM（默认 -90°=白方/rank1 一侧）、俯角 ELEV、距离 DIST 看向棋盘中心。
       Gazebo 相机沿 +x 拍：yaw 指向棋盘中心、pitch=俯角。默认机位下图像下缘=rank1、左=a 列，
-      与大脑侧追踪层的方向约定（VISION_OCC_QUARTER_TURNS=0）一致。
+      与从前视觉桥的方向约定一致。
     - overhead：架在棋盘中心正上方 CAM_HEIGHT 处朝下拍（v0.4 原样）。
     """
-    if config.CAM_MODE == "oblique":
+    name = f"{kind}_cam"
+    if kind == "oblique":
         import math
         azim = math.radians(config.CAM_OBL_AZIM_DEG) + config.BOARD_YAW_RAD   # 板局部方位 → world
         elev = math.radians(config.CAM_OBL_ELEV_DEG)
@@ -192,11 +194,11 @@ def camera_sdf(name: str = "overhead_cam") -> tuple[str, tuple[float, float, flo
   <model name="{name}">
     <static>true</static>
     <link name="link">
-      <sensor name="overhead" type="camera">
+      <sensor name="cam" type="camera">
         <always_on>1</always_on>
         <update_rate>{config.CAM_FPS}</update_rate>
         <visualize>false</visualize>
-        <topic>{config.CAM_IMAGE_TOPIC}</topic>
+        <topic>{config.cam_topic(kind)}</topic>
         <camera>
           <horizontal_fov>{config.CAM_FOV_RAD}</horizontal_fov>
           <image><width>{config.CAM_W}</width><height>{config.CAM_H}</height><format>R8G8B8</format></image>

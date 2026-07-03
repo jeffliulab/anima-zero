@@ -128,15 +128,31 @@ class SessionStore:
             s.title = entry["text"][:TITLE_MAX_LEN]
         self.save(s)
 
-    def append_perception(self, sid: str, image_png: bytes | None, state: dict) -> None:
+    def append_perception(self, sid: str, image_png: bytes | None, state: dict,
+                          images: list[dict] | None = None) -> None:
+        """存一次感知。多相机（images=[{name,png}]，>1 张）时全部落盘：主图 image_ref 照旧（第一张，
+        老读取方零改动），其余以 <n>_<相机名>.png 存、refs 记进 images 字段（追加不替换）。"""
         s = self.load(sid)
         ref = None
+        extra: list[dict] = []
         if image_png:
             n = sum(1 for m in s.messages if m.get("role") == "perception")
             with open(os.path.join(self._imgs_dir(sid), f"{n}.png"), "wb") as f:
                 f.write(image_png)
             ref = f"{sid}/imgs/{n}.png"
-        s.messages.append({"role": "perception", "image_ref": ref, "state": state, "ts": _now()})
+            for img in (images or [])[1:]:          # 第 2 张起是多相机的其余各路
+                if not img.get("png"):
+                    continue
+                nm = (img.get("name") or f"cam{len(extra) + 1}").replace("/", "_")
+                fn = f"{n}_{nm}.png"
+                with open(os.path.join(self._imgs_dir(sid), fn), "wb") as f:
+                    f.write(img["png"])
+                extra.append({"name": img.get("name", ""), "ref": f"{sid}/imgs/{fn}"})
+        msg: dict = {"role": "perception", "image_ref": ref, "state": state, "ts": _now()}
+        if extra:
+            first_name = (images[0].get("name", "") if images else "")
+            msg["images"] = [{"name": first_name, "ref": ref}] + extra   # 全集（含主图），名字↔图对应关系
+        s.messages.append(msg)
         self.save(s)
 
     def set_brain(self, sid: str, brain: str) -> None:

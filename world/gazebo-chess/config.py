@@ -68,9 +68,23 @@ RESERVOIR_ORIGIN_X = _f("GZCHESS_RESERVOIR_ORIGIN_X", str(BOARD_ORIGIN_X))    # 
 RESERVOIR_ORIGIN_Y = _f("GZCHESS_RESERVOIR_ORIGIN_Y", "-0.24")               # 放在棋盘另一侧（和弃子区分开）
 
 # ---- 相机 ----
-# v0.5：默认**斜视**（斜着才看得出子型，给 CNN 认；对齐 v0.5 视觉桥）。旧俯视完整保留，
-# GZCHESS_CAM_MODE=overhead 一键切回（T0：加新不丢旧）。
-CAM_MODE = os.getenv("GZCHESS_CAM_MODE", "oblique")          # "oblique"（斜上方）| "overhead"（正俯视）
+# 默认**双相机**（both = 斜视 oblique + 正俯视 overhead 同时开，各自独立话题——
+# 多相机绝不共用话题：共用会让不同机位的帧交替混流，前端/大脑都没法用）。
+# 单相机模式完整保留：GZCHESS_CAM_MODE=oblique / overhead 一键切（T0：加新不丢旧）。
+CAM_MODE = os.getenv("GZCHESS_CAM_MODE", "both")             # "both" | "oblique"（斜上方）| "overhead"（正俯视）
+# 每路相机的 gz 话题 = f"{CAM_TOPIC_BASE}/<相机名>/image"（相机名即模式名；bridge 要逐路桥到 ROS）
+CAM_TOPIC_BASE = os.getenv("GZCHESS_CAM_TOPIC_BASE", "/gazebo_chess")
+
+
+def cam_names() -> list[str]:
+    """本模式下开哪几路相机（名字顺序 = observation 里图片的顺序）。"""
+    return ["oblique", "overhead"] if CAM_MODE == "both" else [CAM_MODE]
+
+
+def cam_topic(name: str) -> str:
+    return f"{CAM_TOPIC_BASE}/{name}/image"
+
+
 # 斜视位姿（板局部系）：从棋盘中心出发，方位角 AZIM（-90°=白方/rank1 一侧）、俯角 ELEV、直线距离 DIST。
 # 默认值的账：俯角 50° 能看出子身高度差；距离 0.85m 时 40cm 棋盘在 720p 竖直视野内整盘可见。
 CAM_OBL_AZIM_DEG = _f("GZCHESS_CAM_OBL_AZIM_DEG", "-90")
@@ -155,6 +169,5 @@ TCP_OFFSET_M = _f("GZCHESS_TCP_OFFSET_M", "0.058")
 GZ_WORLD_NAME = os.getenv("GZCHESS_GZ_WORLD", "episode_world")          # Gazebo 世界名
 ARM_CONTROLLER = os.getenv("GZCHESS_ARM_CONTROLLER", "episode_arm_controller")
 GRIPPER_CONTROLLER = os.getenv("GZCHESS_GRIPPER_CONTROLLER", "gripper_controller")
-CAM_IMAGE_TOPIC = os.getenv("GZCHESS_CAM_IMAGE_TOPIC", "/gazebo_chess/overhead/image")
 # 俯视相机的朝向（rpy 弧度）：默认 pitch=+90° 让相机 +x 轴朝下(-z)拍。图像上下/左右朝向需对着仿真确认。
 CAM_RPY = [float(x) for x in os.getenv("GZCHESS_CAM_RPY", "0,1.5708,0").split(",")]

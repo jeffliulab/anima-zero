@@ -99,8 +99,8 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-// 🌍 世界卡：ANIMA 栖身的现实——动作（会改世界）/ 画面（感知）/ 说明书（世界自述）三区齐全；
-// 调试真值与探活是"仅人看"的旁路，折叠收起、不占正文。
+// 🌍 世界卡：ANIMA 栖身的现实——按 MCP 原语分四区：Tools（动作）/ Resources（感知）/
+// Prompts（说明书）+ Status（场外信息，anima 看不到：/status 真值、/stream、/health，仅人看）。
 function WorldCard({ w }: { w: AwiWorld }) {
   const online = w.online;
   const stateSchema = w.state_schema;
@@ -119,7 +119,7 @@ function WorldCard({ w }: { w: AwiWorld }) {
       <div className="mt-1 text-[11px] text-neutral-500">{w.url}</div>
 
       <div className="mt-3 space-y-3">
-        <Region title="动作" color="#3fb950" sub="ANIMA 可调用的工具（会改世界的过安全闸）">
+        <Region title="Tools" color="#3fb950" sub="ANIMA 可调用的工具（会改世界的过安全闸）">
           {w.tools.map((t) => (
             <CapCard key={t.name} name={t.name} kind={(t as AwiTool).kind} desc={t.description}
               schema={t.parameters} accent="text-green-300" />
@@ -129,7 +129,7 @@ function WorldCard({ w }: { w: AwiWorld }) {
           )}
         </Region>
 
-        <Region title="画面" color="#58a6ff" sub="ANIMA 的感知：一张快照 + 结构 state">
+        <Region title="Resources" color="#58a6ff" sub="ANIMA 的感知：画面快照 + 结构 state">
           {!online ? (
             <div className="text-xs text-neutral-500">(离线，拿不到)</div>
           ) : (
@@ -139,7 +139,7 @@ function WorldCard({ w }: { w: AwiWorld }) {
           )}
         </Region>
 
-        <Region title="说明书" color="#f59e0b" sub="世界写给大脑的自我介绍（大脑读它进系统提示）">
+        <Region title="Prompts" color="#f59e0b" sub="世界的说明书：写给大脑的自我介绍（读进系统提示）">
           {!online ? (
             <div className="text-xs text-neutral-500">(离线，拿不到)</div>
           ) : guidance ? (
@@ -150,23 +150,18 @@ function WorldCard({ w }: { w: AwiWorld }) {
             <div className="text-xs text-neutral-500">(此世界没提供说明书)</div>
           )}
         </Region>
-      </div>
 
-      {/* 仅人看的旁路（不走 MCP）：调试真值折叠收起，不占正文 */}
-      <details className="mt-3 border-t border-neutral-800/70 pt-2">
-        <summary className="cursor-pointer text-[11px] text-neutral-500">
-          🔒 调试真值 /status（人的上帝视角，大脑绝对看不到）· 🎬 视频流 /stream · 🔌 探活 /health
-        </summary>
-        <div className="mt-1.5 space-y-1.5">
+        <Region title="Status" color="#f85149" sub="world 的场外信息，anima 看不到（仅人看，不走 MCP）">
           <div className="text-[12px] text-neutral-400">
-            调试真值（如 FEN/棋子真实位置）：
+            🔒 调试真值（人的上帝视角，如 FEN/棋子真实位置）：
             {hasStatus ? <Json value={w.status} /> : <span className="text-neutral-500"> (这个世界没有 /status)</span>}
           </div>
           <div className="text-[11px] leading-relaxed text-neutral-500">
-            视频流是给人看的连续画面（≠ 大脑的离散快照）；右上角在线点来自探活，每约 {OVERVIEW_POLL_MS / 1000} 秒一次、不计入流量。
+            同属场外：🎬 /stream 视频流（给人看的连续画面，≠ 大脑的离散快照）· 🔌 /health 探活
+            （右上角在线点，每约 {OVERVIEW_POLL_MS / 1000} 秒一次、不计入流量）。
           </div>
-        </div>
-      </details>
+        </Region>
+      </div>
     </div>
   );
 }
@@ -189,7 +184,7 @@ function ServiceCard({ s }: { s: AwiService }) {
         )}
       </div>
       <div className="mt-3">
-        <Region title="工具" color="#34d399" sub="问答拿反馈：给它编码好的问题，它回答案">
+        <Region title="Tools" color="#34d399" sub="问答拿反馈：给它编码好的问题，它回答案">
           {s.tools.map((t) => (
             <CapCard key={t.name} name={t.name} kind={(t as AwiTool).kind} desc={t.description}
               schema={t.parameters} accent="text-emerald-300" />
@@ -257,9 +252,9 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
           <div className="mt-2 space-y-2">
             <p>
               接口走标准 <b className="text-neutral-300">MCP</b>：ANIMA 是发起方（host），每个世界/服务都是一个 MCP server——全程脑发起、server 应答。
-              每个 server 用三样东西自我描述：<b className="text-green-300">工具</b>（<code className="mx-1 rounded bg-neutral-800 px-1">tools/call</code>，动作或问答）、
-              <b className="text-sky-300">画面</b>（<code className="mx-1 rounded bg-neutral-800 px-1">resources/read anima://observation</code>，一张快照 + 结构 state），
-              <b className="text-amber-300">说明书</b>（<code className="mx-1 rounded bg-neutral-800 px-1">prompts/get guidance</code>）。
+              每个 server 用 MCP 三原语自我描述：<b className="text-green-300">Tools</b>（<code className="mx-1 rounded bg-neutral-800 px-1">tools/call</code>，动作或问答）、
+              <b className="text-sky-300">Resources</b>（<code className="mx-1 rounded bg-neutral-800 px-1">resources/read anima://observation</code>，画面快照 + 结构 state），
+              <b className="text-amber-300">Prompts</b>（<code className="mx-1 rounded bg-neutral-800 px-1">prompts/get guidance</code>，说明书）。
               世界三样齐全；服务只有工具（顾问不感知世界）。挂载关系也是世界声明的（<code className="mx-1 rounded bg-neutral-800 px-1">anima://services</code> 资源）。
             </p>
             <p>

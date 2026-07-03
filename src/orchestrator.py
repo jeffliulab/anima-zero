@@ -106,12 +106,16 @@ class Orchestrator:
         tools = world_tools + svc_tools
 
         obs = world.perceive() if world else None
-        image = obs.image_png if obs else None
+        # 多相机：把全套命名图交给 LLM（provider 会给每张标相机名）；单相机/无名图=老形状 bytes，行为不变。
+        image = None
         if obs:
-            self.store.append_perception(session.id, obs.image_png, obs.state)
+            image = obs.images if len(obs.images) > 1 else obs.image_png
+            self.store.append_perception(session.id, obs.image_png, obs.state, images=obs.images)
             img_b64 = base64.b64encode(obs.image_png).decode() if obs.image_png else None
-            state["trace"]["inputs"].append({"image_b64": img_b64, "state": obs.state})
-            emit({"type": "perception", "image_b64": img_b64, "state": obs.state})
+            state["trace"]["inputs"].append({"image_b64": img_b64, "state": obs.state,
+                                             "n_images": len(obs.images)})
+            emit({"type": "perception", "image_b64": img_b64, "state": obs.state,
+                  "n_images": len(obs.images)})
         return {"step": state.get("step", 0) + 1, "tools": tools, "svc_routes": svc_routes,
                 "kinds": {t.name: t.kind for t in tools}, "image": image, "trace": state["trace"]}
 
