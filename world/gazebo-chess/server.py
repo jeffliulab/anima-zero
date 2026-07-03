@@ -45,15 +45,15 @@ GZCHESS_SERVICES = [{"name": "chess-engine",
 mcp_asgi, mcp_lifespan = build_awi_mcp(world, guidance=GAZEBO_GUIDANCE,
                                        services=GZCHESS_SERVICES, server_name="gazebo-chess")
 
-# lifespan：包住 MCP 的 lifespan，进程退出时把本世界 spawn 的相机模型删净——
-# uvicorn 重启/热重载也走这里，防「残留相机抢同一话题 → 画面交替混流」（2026-07-02 实锤根因之一）。
+# lifespan：包住 MCP 的 lifespan，进程退出时**完整关停**世界——删净相机模型（防「残留相机抢同一
+# 话题 → 画面交替混流」，2026-07-02 实锤）+ 停 ROS spin/节点。uvicorn 重启/Ctrl+C 都走这里。
 @contextlib.asynccontextmanager
 async def _lifespan(app):
     async with mcp_lifespan(app):
         try:
             yield
         finally:
-            await asyncio.to_thread(world.cleanup_cameras)
+            await asyncio.to_thread(world.shutdown)
 
 
 app = FastAPI(title="gazebo-chess world", lifespan=_lifespan)

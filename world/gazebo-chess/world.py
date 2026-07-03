@@ -354,6 +354,9 @@ class GazeboChessWorld:
             return {"ok": True, "message": f"已把一枚{color}子摆到 {square}"}
 
     def shutdown(self) -> None:
+        """完整关停（uvicorn lifespan 退出时调）：先删净相机（防残留抢话题），再停 ROS spin/节点。
+        顺序要紧：purge 用 gz CLI 不依赖本进程 ROS，放最前；spin 线程是 daemon、置 False 即自然停。"""
+        self.cleanup_cameras()
         self._spin_alive = False
         try:
             self._executor.shutdown(timeout_sec=1.0)
