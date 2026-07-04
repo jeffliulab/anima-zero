@@ -1,19 +1,12 @@
 """引擎 service 侧测试：FEN 校验的可读报错 + 三个工具的正常路径。
 
-引擎源码在跨仓 3-anima-chess-engine（仓库结构派生路径）；外部环境没有该仓时整文件跳过（不造假）。
+引擎内核已内聚进仓（services/boardgame_engine/chess_engine.py），无跨仓依赖、不再 skip。
 """
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
 import pytest
 
-_ENGINE = Path(__file__).resolve().parents[3] / "3-anima-chess-engine" / "chess" / "engine.py"
-if not (os.getenv("ANIMA_CHESS_ENGINE_PATH") or _ENGINE.exists()):
-    pytest.skip("引擎仓 3-anima-chess-engine 不在（跨仓依赖），跳过引擎 service 测试", allow_module_level=True)
-
-from services import chess_engine_mcp as eng  # noqa: E402  （引擎在模块导入时加载）
+from services.boardgame_engine import app as eng  # 引擎在模块导入时加载
 
 START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 

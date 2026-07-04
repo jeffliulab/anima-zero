@@ -1,54 +1,39 @@
-"""ANIMA 象棋引擎 —— 独立 **MCP service**（棋理顾问）。
+"""ANIMA 棋类引擎 —— 独立 **MCP service**（棋理顾问），多棋种在此分流。
 
 大脑一个 host 同时连 world server（棋盘现实）+ 这个 service（棋理），就是 MCP 的多 server 用法。
-挂载关系由**棋类 world 自己声明**（capabilities 的 anima://services 资源），大脑握手后自动连接——
-本服务与任何 world（sim-chess / gazebo-chess / 未来实机）自由配对，是应用侧的独立模块。
+挂载由 **Host（ANIMA）按 `config.services()` 组装**——server 之间互不相识（标准 MCP 模型）；
+本服务不认识任何 world，可与 sim-chess / gazebo-chess / 未来实机自由配对，跟着大脑跨身体走。
 engine 纯计算、不碰物理、不持有对局（每次给 FEN）。**棋规合法性（legal_moves）也在这层**——绝不放
-world（world 只是棋盘现实）。
+world（world 只是棋盘现实）。它是大脑的高层「想棋」帮手，不是实时控制——真机实时控制永不走 MCP。
 
-- 工具：`best_move(fen)` / `evaluate(fen)` / `legal_moves(fen)`。FEN 由大脑自己看图+读对局历史推出来；
-  FEN 不合法 → 工具报可读错误（大脑据此自我修正后重试），不静默兜底。
+- 工具（当前只接国际象棋）：`best_move(fen)` / `evaluate(fen)` / `legal_moves(fen)`。FEN 由大脑
+  自己看图+读对局历史推出来；FEN 不合法 → 工具报可读错误（大脑据此自我修正后重试），不静默兜底。
+- go_engine / gomoku_engine 已就位、暂不暴露工具（无消费方 + 局面输入格式未定，见 README.md）。
 - 起（在 anima-zero 根，用 anima venv）：
-    ./.venv/bin/uvicorn services.chess_engine_mcp:app --host 127.0.0.1 --port 8108
+    ./.venv/bin/uvicorn services.boardgame_engine.app:app --host 127.0.0.1 --port 8108
 - 可调项走**本服务自带 env**（服务独立进程，不 import 脑 config；默认值在此一处）：
-  `ANIMA_CHESS_ENGINE_PATH`（引擎源码路径，默认从仓库结构派生）、`ANIMA_ENGINE_DEPTH`、`ANIMA_ENGINE_TIME`。
-- 复用同一份引擎（`3-anima-chess-engine/chess/engine.py`）——不改引擎源码，只在外面包。
+  `ANIMA_ENGINE_DEPTH`、`ANIMA_ENGINE_TIME`。
 """
 from __future__ import annotations
 
-import importlib.util
 import os
-from pathlib import Path
 
 import chess
 from mcp.server.fastmcp import FastMCP
+
+from . import chess_engine
+
+# 就位待接的棋种引擎（无消费方，暂不实例化、不暴露工具；接入条件见 README.md）：
+# from . import go_engine
+# from . import gomoku_engine
 
 # 可调项（本服务自带 env，默认集中在此；不 import 脑 config——服务是独立进程/独立模块）
 _ENGINE_DEPTH = int(os.getenv("ANIMA_ENGINE_DEPTH", "3"))
 _ENGINE_TIME = float(os.getenv("ANIMA_ENGINE_TIME", "1.5"))
 
+_ai = chess_engine.AI(depth=_ENGINE_DEPTH, time_limit=_ENGINE_TIME)
 
-def _engine_path() -> str:
-    """引擎源码路径：默认从仓库结构派生（services/ → 仓库根 → 再上两级到项目根，
-    再拼 3-anima-chess-engine/chess/engine.py），env ANIMA_CHESS_ENGINE_PATH 覆盖。"""
-    env = os.getenv("ANIMA_CHESS_ENGINE_PATH")
-    if env:
-        return env
-    root = Path(__file__).resolve().parents[3]
-    return str(root / "3-anima-chess-engine" / "chess" / "engine.py")
-
-
-def _load_engine():
-    spec = importlib.util.spec_from_file_location("anima_chess_engine", _engine_path())
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-_engine = _load_engine()
-_ai = _engine.AI(depth=_ENGINE_DEPTH, time_limit=_ENGINE_TIME)
-
-mcp = FastMCP("anima-chess-engine")
+mcp = FastMCP("anima-boardgame-engine")
 
 
 def _board(fen: str) -> chess.Board:
@@ -75,7 +60,7 @@ def best_move(fen: str) -> str:
 @mcp.tool()
 def evaluate(fen: str) -> int:
     """给一个 FEN，返回静态评估分（厘兵，正 = 轮到方有利）。FEN 不合法会报错并说明原因。"""
-    return int(_engine.evaluate(_board(fen)))
+    return int(chess_engine.evaluate(_board(fen)))
 
 
 @mcp.tool()
