@@ -15,7 +15,6 @@
 """
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
 import threading
@@ -24,6 +23,7 @@ from pathlib import Path
 
 import chess
 
+import chess_bot
 import go
 import gomoku
 import render
@@ -32,25 +32,6 @@ WORLD_VERSION = os.getenv("SIMCHESS_VERSION", "0.4")    # 世界版本(env 可�
 
 SEATS = ("white", "black")
 GAMES = ("chess", "gomoku", "go")
-
-
-# ---- 加载世界自己的内置棋手引擎（跨仓，仅此处碰；与 ANIMA 的引擎相互独立）----
-def _engine_path() -> str:
-    env = os.getenv("SIMCHESS_ENGINE_PATH")
-    if env:
-        return env
-    root = Path(__file__).resolve().parents[4]
-    return str(root / "3-anima-chess-engine" / "chess" / "engine.py")
-
-
-def _load_engine():
-    spec = importlib.util.spec_from_file_location("simchess_engine", _engine_path())
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-_engine_mod = _load_engine()
 
 
 # ---- AWI 工具声明：对大脑只有 move 一个动作 ----
@@ -90,8 +71,9 @@ class SimChessWorld:
         self.bot_side: str | None = bs if bs in SEATS else None
         self.over = False                                # 对局是否已结束（自然终局 or 认输）
         self.result: str = ""                            # "" | "white" | "black" | "draw"
-        self.bot = _engine_mod.AI(depth=int(os.getenv("SIMCHESS_BOT_DEPTH", "3")),
-                                  time_limit=float(os.getenv("SIMCHESS_BOT_TIME", "2.0")))
+        # 世界自带的内置棋手（chess_bot.py 世界专用副本；与 ANIMA 的引擎服务完全无关）
+        self.bot = chess_bot.AI(depth=int(os.getenv("SIMCHESS_BOT_DEPTH", "3")),
+                                time_limit=float(os.getenv("SIMCHESS_BOT_TIME", "2.0")))
         self.last = ""
         self.selected_sq: str | None = None
         self._game_seq = 0                               # 对弈档案的递增编号
