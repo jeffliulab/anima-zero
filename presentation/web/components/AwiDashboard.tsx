@@ -166,7 +166,7 @@ function WorldCard({ w }: { w: AwiWorld }) {
   );
 }
 
-// 🧠 服务卡：ANIMA 请教的顾问（由世界声明挂载）——只渲染它真有的东西：状态、工具、谁声明的。
+// 🧠 服务卡：ANIMA 请教的顾问（由 ANIMA 按 config.services() 挂载）——只渲染它真有的东西：状态、工具。
 // 没有画面、没有说明书就不渲染那两栏（顾问=纯计算，本来就没有）。
 function ServiceCard({ s }: { s: AwiService }) {
   return (
@@ -179,9 +179,7 @@ function ServiceCard({ s }: { s: AwiService }) {
       </div>
       <div className="mt-1 text-[11px] text-neutral-500">
         {s.url}
-        {s.declared_by?.length > 0 && (
-          <span> · 由 {s.declared_by.join("、")} 声明挂载</span>
-        )}
+        <span> · 由 ANIMA 按配置挂载（Host 组装）</span>
       </div>
       <div className="mt-3">
         <Region title="Tools" color="#34d399" sub="问答拿反馈：给它编码好的问题，它回答案">
@@ -255,7 +253,7 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
               每个 server 用 MCP 三原语自我描述：<b className="text-green-300">Tools</b>（<code className="mx-1 rounded bg-neutral-800 px-1">tools/call</code>，动作或问答）、
               <b className="text-sky-300">Resources</b>（<code className="mx-1 rounded bg-neutral-800 px-1">resources/read anima://observation</code>，画面快照 + 结构 state），
               <b className="text-amber-300">Prompts</b>（<code className="mx-1 rounded bg-neutral-800 px-1">prompts/get guidance</code>，说明书）。
-              世界三样齐全；服务只有工具（顾问不感知世界）。挂载关系也是世界声明的（<code className="mx-1 rounded bg-neutral-800 px-1">anima://services</code> 资源）。
+              世界三样齐全；服务只有工具（顾问不感知世界）。连哪些服务由 ANIMA（host）按自己的配置组装（<code className="mx-1 rounded bg-neutral-800 px-1">config.services()</code>）——server 之间互不相识，世界不声明服务。
             </p>
             <p>
               每张世界卡还折叠着几个不走 MCP、仅人看的旁路：/status（调试真值，上帝视角）、/stream（连续视频）、/health（探活，

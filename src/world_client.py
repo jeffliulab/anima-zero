@@ -36,7 +36,6 @@ ONLINE_PROBE_TIMEOUT = config.WORLD_PROBE_TIMEOUT  # 探在线的短超时
 # MCP 契约常量（世界侧适配器 awi_mcp.py 用同样的字符串，两边必须一致）。
 OBSERVATION_URI = "anima://observation"   # 感知资源：读它拿到 state(text) + 画面(image/png blob)
 GUIDANCE_PROMPT = "guidance"              # 说明书提示词名
-SERVICES_URI = "anima://services"         # 挂载服务声明资源：JSON 列表 [{"name","url"}]（没声明的世界没有此资源）
 
 
 class RemoteWorld:  # 实现 World 协议(AWI 客户端)
@@ -71,26 +70,17 @@ class RemoteWorld:  # 实现 World 协议(AWI 客户端)
                                        if getattr(m.content, "text", None))
             except Exception:
                 pass
-            services: list[dict] = []
-            try:
-                rd = await s.read_resource(AnyUrl(SERVICES_URI))
-                for c in rd.contents:
-                    if getattr(c, "text", None):
-                        services = json.loads(c.text) or []
-            except Exception:
-                pass   # 世界没声明挂载服务（没有该资源）→ 空清单
-            return tools, guidance, services
+            return tools, guidance
 
         t0 = time.perf_counter()
-        tools, guidance, services = run_sync(with_session(self.mcp_url, op, self.timeout),
-                                             self.timeout + config.BRIDGE_GRACE_S)
+        tools, guidance = run_sync(with_session(self.mcp_url, op, self.timeout),
+                                   self.timeout + config.BRIDGE_GRACE_S)
         self._caps = Capabilities(name=self.name, version="", tools=tools, state_schema={},
-                                  guidance=guidance, services=services)
+                                  guidance=guidance)
         awi_log.record(self.name, "capabilities", "capabilities() 握手[mcp]",
                        (time.perf_counter() - t0) * 1000,
                        resp={"transport": "mcp", "n_tools": len(tools),
-                             "tools": [t.name for t in tools], "has_guidance": bool(guidance),
-                             "services": [s.get("name", "") for s in services]})
+                             "tools": [t.name for t in tools], "has_guidance": bool(guidance)})
         return self._caps
 
     def refresh(self) -> None:

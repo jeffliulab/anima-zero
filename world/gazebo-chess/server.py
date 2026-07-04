@@ -37,14 +37,9 @@ GAZEBO_GUIDANCE = (
     "一个原语要几十秒（真机械臂在动），失败了看我的报错决定怎么补救。"
 )
 
-# 挂载服务声明：本世界配套的纯计算顾问（象棋引擎）——world+service 一起设计，配对关系属于应用侧，
-# 所以由世界声明（大脑握手读 anima://services 自动连接）；URL 走本世界自带 env。
-GZCHESS_SERVICES = [{"name": "chess-engine",
-                     "url": os.getenv("GZCHESS_ENGINE_URL", "http://localhost:8108")}]
-
 # AWI（脑↔世界）走标准 MCP：世界作 MCP server 挂在 /mcp。
-mcp_asgi, mcp_lifespan = build_awi_mcp(world, guidance=GAZEBO_GUIDANCE,
-                                       services=GZCHESS_SERVICES, server_name="gazebo-chess")
+# 世界不声明任何服务：引擎顾问由大脑（Host）按 config.services() 自行挂载（标准 MCP 组装）。
+mcp_asgi, mcp_lifespan = build_awi_mcp(world, guidance=GAZEBO_GUIDANCE, server_name="gazebo-chess")
 
 # lifespan：包住 MCP 的 lifespan，进程退出时**完整关停**世界——删净相机模型（防「残留相机抢同一
 # 话题 → 画面交替混流」，2026-07-02 实锤）+ 停 ROS spin/节点。uvicorn 重启/Ctrl+C 都走这里。

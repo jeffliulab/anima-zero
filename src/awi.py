@@ -65,10 +65,8 @@ class Capabilities:
     # 对应 MCP 的 Prompt（世界经 prompts/get 提供）；大脑把它拼进系统提示，就"懂"这个陌生世界怎么打交道。
     # 世界没提供 → ""。是让大脑保持纯净通用的关键：世界自我描述，大脑不为某个世界写死逻辑。
     guidance: str = ""
-    # services：世界声明的「挂载服务」清单 [{"name","url"}]——与这个世界配套的纯计算顾问（如象棋引擎）。
-    # 配对关系写在应用侧（world 声明），大脑握手读到就自动连接、把服务工具并进工具单——大脑不认识任何
-    # 具体服务，连几百个也不增加认知负荷。世界没声明 → []。（service 与 world 的界定见 service_client.py。）
-    services: list[dict] = field(default_factory=list)
+    # 注：挂载服务（引擎顾问等）**不在此声明**——服务由大脑（Host）按 config.services() 自行挂载
+    #   （标准 MCP 组装，见 registry.mounted_services / service_client.py），world 与 service 互不相识。
     # 注：「角色/席位」不另设一套声明——世界若有可担任的角色，就在 tools 里声明一个就座类工具
     #   （如 sim-chess 的 take_seat，枚举里列出可选角色），ANIMA 调它来就座；"当前谁坐哪一席" 经 perceive
     #   的 state.controllers 读。（曾经的 Seat/seats/claim 声明已删——和 take_seat 工具重复，没接线、是死的。）

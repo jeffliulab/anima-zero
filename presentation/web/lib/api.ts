@@ -78,19 +78,19 @@ export type AwiWorld = {
   state_schema: Record<string, string>; // 世界【声明】的 perceive.state 契约（键→含义）——面板据此显示，不靠缓存上次 perceive 猜
   guidance: string; // 世界的「说明书」（= MCP prompt）：自我介绍怎么跟它打交道；大脑读它进系统提示，面板第四区显示
 };
-// 挂载服务（顾问，如象棋引擎）：MCP 里和 world 一样都是"一个 server"，只是纯计算 tool server——
-// 只有 tools，无画面(resource)、无说明书(prompt)。挂载关系由世界声明（anima://services 资源）。
+// 挂载服务（顾问，如棋类引擎）：MCP 里和 world 一样都是"一个 server"，只是纯计算 tool server——
+// 只有 tools，无画面(resource)、无说明书(prompt)。由 ANIMA（Host）按 config.services() 挂载
+//（标准 MCP 组装：连哪些 server 是 Host 的活，world 不声明服务、server 之间互不相识）。
 export type AwiService = {
   name: string;
   url: string;
   kind: string;      // "service"
   online: boolean;
   tools: AwiTool[];
-  declared_by: string[]; // 哪些（在线）世界声明了它
 };
 export type AwiOverview = {
   worlds: AwiWorld[];
-  services?: AwiService[]; // 在线世界声明的挂载服务（顾问）
+  services?: AwiService[]; // ANIMA 按配置挂载的服务（顾问）
   brains: Brain[];
   sessions: SessionSummary[];
   stats: { total: number; by_method: Record<string, number>; by_world: Record<string, number> };

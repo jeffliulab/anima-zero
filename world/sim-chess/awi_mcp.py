@@ -41,19 +41,17 @@ from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 NON_MUTATING = {"read", "judge"}          # 非「改世界」的能力
 OBSERVATION_URI = "anima://observation"   # 感知资源 URI（大脑侧 world_client.py 用同一串）
 GUIDANCE_PROMPT = "guidance"              # 说明书提示词名
-SERVICES_URI = "anima://services"         # 挂载服务声明资源 URI（大脑侧 world_client.py 用同一串）
 
 
-def build_awi_mcp(world=None, *, guidance: str = "", services: list | None = None,
+def build_awi_mcp(world=None, *, guidance: str = "",
                   server_name: str = "world", caps_fn=None, observe_fn=None, invoke_fn=None):
     """返回 (asgi_handler, lifespan)：挂到世界 FastAPI 的 /mcp，并用作 app 的 lifespan。
 
     默认从 `world` 取 capabilities()/observe()/invoke()；若世界的动作方法名不同（如 sim-desk 是 step），
     传 `invoke_fn=world.step` 覆盖即可（observe_fn/caps_fn 同理）。
 
-    `services`：本世界声明的「挂载服务」清单 [{"name","url"}]——与这个世界配套的纯计算顾问
-    （如象棋世界配象棋引擎）。配对关系属于应用侧（world+service 一起设计），所以由世界声明、
-    大脑握手时读 `anima://services` 自动连接；不声明（None/[]）则不暴露该资源。
+    世界只暴露自己的 tools / observation / guidance——**不声明任何服务**：挂载服务（引擎顾问等）
+    由大脑（Host）按自己的 config.services() 组装，server 之间互不相识（标准 MCP 模型）。
     """
     _caps = caps_fn or world.capabilities        # () -> {"tools":[...], ...}
     _observe = observe_fn or world.observe        # () -> (state, image_png|None)
@@ -113,25 +111,14 @@ def build_awi_mcp(world=None, *, guidance: str = "", services: list | None = Non
 
     @srv.list_resources()
     async def _list_resources():
-        out = [t.Resource(
+        return [t.Resource(
             uri=OBSERVATION_URI, name="observation",
             description="当前画面 + 结构 state（大脑感知；绝不含世界真值）",
             mimeType="application/json",
         )]
-        if services:
-            out.append(t.Resource(
-                uri=SERVICES_URI, name="services",
-                description="本世界声明的挂载服务清单 [{name,url}]（配套的纯计算顾问，如引擎）",
-                mimeType="application/json",
-            ))
-        return out
 
     @srv.read_resource()
     async def _read_resource(uri):
-        if str(uri) == SERVICES_URI:
-            if not services:
-                raise ValueError(f"unknown resource: {uri}")   # 没声明就没有此资源（大脑侧按“无声明”处理）
-            return [ReadResourceContents(content=json.dumps(services), mime_type="application/json")]
         # 感知同样下工作线程（gazebo 的 observe 要拿世界锁 + spin ROS，不许堵循环）。
         state, image = await anyio.to_thread.run_sync(_observe)
         out = [ReadResourceContents(content=json.dumps(state or {}), mime_type="application/json")]
