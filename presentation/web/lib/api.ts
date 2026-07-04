@@ -78,9 +78,9 @@ export type AwiWorld = {
   state_schema: Record<string, string>; // 世界【声明】的 perceive.state 契约（键→含义）——面板据此显示，不靠缓存上次 perceive 猜
   guidance: string; // 世界的「说明书」（= MCP prompt）：自我介绍怎么跟它打交道；大脑读它进系统提示，面板第四区显示
 };
-// 挂载服务（顾问，如棋类引擎）：MCP 里和 world 一样都是"一个 server"，只是纯计算 tool server——
+// Engine Server（引擎顾问，如棋类引擎）：和 World Server 一样都是标准 MCP server，只是纯计算——
 // 只有 tools，无画面(resource)、无说明书(prompt)。由 ANIMA（Host）按 config.services() 挂载
-//（标准 MCP 组装：连哪些 server 是 Host 的活，world 不声明服务、server 之间互不相识）。
+//（标准 MCP 组装：连哪些 server 是 Host 的活，World Server 不声明它、server 之间互不相识）。
 export type AwiService = {
   name: string;
   url: string;

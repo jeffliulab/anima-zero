@@ -99,7 +99,7 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-// 🌍 世界卡：ANIMA 栖身的现实——按 MCP 原语分四区：Tools（动作）/ Resources（感知）/
+// 🌍 World Server 卡：ANIMA 栖身的现实——按 MCP 原语分四区：Tools（动作）/ Resources（感知）/
 // Prompts（说明书）+ Status（场外信息，anima 看不到：/status 真值、/stream、/health，仅人看）。
 function WorldCard({ w }: { w: AwiWorld }) {
   const online = w.online;
@@ -112,7 +112,7 @@ function WorldCard({ w }: { w: AwiWorld }) {
       <div className="flex items-center justify-between">
         <span className="font-medium">
           🌍 {w.name}{" "}
-          <span className="text-xs text-neutral-500">世界 · ANIMA 栖身的现实{w.version ? ` v${w.version}` : ""}</span>
+          <span className="text-xs text-neutral-500">World Server · ANIMA 栖身的现实{w.version ? ` v${w.version}` : ""}</span>
         </span>
         <span className={`text-xs ${online ? "text-green-400" : "text-red-400"}`}>● {online ? "在线" : "离线"}</span>
       </div>
@@ -166,14 +166,14 @@ function WorldCard({ w }: { w: AwiWorld }) {
   );
 }
 
-// 🧠 服务卡：ANIMA 请教的顾问（由 ANIMA 按 config.services() 挂载）——只渲染它真有的东西：状态、工具。
+// 🧠 Engine Server 卡：ANIMA 请教的引擎顾问（由 ANIMA 按 config.services() 挂载）——只渲染它真有的东西：状态、工具。
 // 没有画面、没有说明书就不渲染那两栏（顾问=纯计算，本来就没有）。
 function ServiceCard({ s }: { s: AwiService }) {
   return (
     <div className="rounded-xl border border-emerald-900/60 bg-neutral-900 p-4">
       <div className="flex items-center justify-between">
         <span className="font-medium">
-          🧠 {s.name} <span className="text-xs text-neutral-500">服务 · ANIMA 请教的顾问（纯计算）</span>
+          🧠 {s.name} <span className="text-xs text-neutral-500">Engine Server · ANIMA 请教的引擎顾问（纯计算）</span>
         </span>
         <span className={`text-xs ${s.online ? "text-green-400" : "text-red-400"}`}>● {s.online ? "在线" : "离线"}</span>
       </div>
@@ -235,8 +235,8 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
 
         {/* 一句人话说明 + 细节全部折叠（想深究再点开） */}
         <p className="text-sm leading-relaxed text-neutral-400">
-          ANIMA 连接两类东西：<b className="text-neutral-200">🌍 世界</b>——它栖身的现实（有画面，动作会改变现实）；
-          <b className="text-neutral-200">🧠 服务</b>——它请教的顾问（纯计算，问答拿反馈，由世界声明挂载）。
+          ANIMA（Host）连接两类 MCP server：<b className="text-neutral-200">🌍 World Server</b>——它栖身的现实（有画面，动作会改变现实）；
+          <b className="text-neutral-200">🧠 Engine Server</b>——它请教的引擎顾问（纯计算，问答拿反馈，由 ANIMA 按配置挂载）。
           这页展示这些连接的契约与实时流量；要看「ANIMA 看到什么→想了什么→调了什么」的完整链，去{" "}
           {embedded && onOpenLogs ? (
             <button onClick={onOpenLogs} className="text-blue-400 hover:underline">Session Logs</button>
@@ -249,14 +249,15 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
           <summary className="cursor-pointer text-neutral-400">这页怎么读（MCP 细节，点开看）</summary>
           <div className="mt-2 space-y-2">
             <p>
-              接口走标准 <b className="text-neutral-300">MCP</b>：ANIMA 是发起方（host），每个世界/服务都是一个 MCP server——全程脑发起、server 应答。
+              接口走标准 <b className="text-neutral-300">MCP</b>：ANIMA 是发起方（Host），server 统一两类——World Server 与 Engine Server，全程脑发起、server 应答
+              （Host 给每个 server 各开一条专线，即代码里的 RemoteWorld / RemoteService，MCP 的 Client 层）。
               每个 server 用 MCP 三原语自我描述：<b className="text-green-300">Tools</b>（<code className="mx-1 rounded bg-neutral-800 px-1">tools/call</code>，动作或问答）、
               <b className="text-sky-300">Resources</b>（<code className="mx-1 rounded bg-neutral-800 px-1">resources/read anima://observation</code>，画面快照 + 结构 state），
               <b className="text-amber-300">Prompts</b>（<code className="mx-1 rounded bg-neutral-800 px-1">prompts/get guidance</code>，说明书）。
-              世界三样齐全；服务只有工具（顾问不感知世界）。连哪些服务由 ANIMA（host）按自己的配置组装（<code className="mx-1 rounded bg-neutral-800 px-1">config.services()</code>）——server 之间互不相识，世界不声明服务。
+              World Server 三样齐全；Engine Server 只有工具（顾问不感知世界）。连哪些 server 由 ANIMA（Host）按自己的配置组装（<code className="mx-1 rounded bg-neutral-800 px-1">config.worlds() / config.services()</code>）——server 之间互不相识，World Server 不声明 Engine Server。
             </p>
             <p>
-              每张世界卡还折叠着几个不走 MCP、仅人看的旁路：/status（调试真值，上帝视角）、/stream（连续视频）、/health（探活，
+              每张 World Server 卡还折叠着几个不走 MCP、仅人看的旁路：/status（调试真值，上帝视角）、/stream（连续视频）、/health（探活，
               每约 {OVERVIEW_POLL_MS / 1000} 秒一次；不计入下面的实时流量，免得刷屏——流量里只有真正的脑↔server 调用）。
             </p>
           </div>
@@ -264,34 +265,34 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
 
         {data && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat label="世界" value={data.worlds.length} />
-            <Stat label="服务" value={services.length} />
+            <Stat label="World Server" value={data.worlds.length} />
+            <Stat label="Engine Server" value={services.length} />
             <Stat label="在线" value={data.worlds.filter((w) => w.online).length + services.filter((s) => s.online).length} />
             <Stat label="调用总数" value={data.stats.total} />
           </div>
         )}
 
         <section>
-          <h2 className="mb-2 text-sm font-medium text-neutral-400">🌍 世界 <span className="text-xs font-normal text-neutral-600">· ANIMA 栖身的现实，每个会话连一个</span></h2>
+          <h2 className="mb-2 text-sm font-medium text-neutral-400">🌍 World Server <span className="text-xs font-normal text-neutral-600">· ANIMA 栖身的现实，每个会话连一个</span></h2>
           <div className="space-y-3">
             {data?.worlds.map((w) => <WorldCard key={`w:${w.name}`} w={w} />)}
           </div>
         </section>
 
         <section>
-          <h2 className="mb-2 text-sm font-medium text-neutral-400">🧠 服务 <span className="text-xs font-normal text-neutral-600">· ANIMA 请教的顾问，由世界声明挂载</span></h2>
+          <h2 className="mb-2 text-sm font-medium text-neutral-400">🧠 Engine Server <span className="text-xs font-normal text-neutral-600">· ANIMA 请教的引擎顾问，由 ANIMA 按配置挂载（Host 组装）</span></h2>
           <div className="space-y-3">
             {services.map((s) => <ServiceCard key={`s:${s.url}`} s={s} />)}
             {services.length === 0 && (
               <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 text-xs text-neutral-500">
-                (暂无——在线世界都没有声明挂载服务，或声明的服务还没被握手到)
+                (暂无——ANIMA 的服务清单 config.services() 为空)
               </div>
             )}
           </div>
         </section>
 
         <section>
-          <h2 className="mb-2 text-sm font-medium text-neutral-400">实时流量 <span className="text-xs font-normal text-neutral-600">· ANIMA ↔ 世界/服务 的每次调用（走 MCP）</span></h2>
+          <h2 className="mb-2 text-sm font-medium text-neutral-400">实时流量 <span className="text-xs font-normal text-neutral-600">· ANIMA ↔ World/Engine Server 的每次调用（走 MCP）</span></h2>
           <p className="mb-2 text-xs leading-relaxed text-neutral-500">
             每条两半：<span className="text-neutral-300">→ 发出</span>（命令+参数）、<span className="text-neutral-300">← 返回</span>（图片字节数、成败、回程 state、答案）。
             审计点：<code className="rounded bg-neutral-800 px-1">perceive</code> 的回程 state <b>绝不许夹带棋盘真值</b>（FEN/局面/着法）——疑似含真值会标 <span className="text-amber-400">⚠</span>。
