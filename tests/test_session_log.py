@@ -118,11 +118,11 @@ def test_awi_record_forwards_with_session_and_kind(tmp_path, monkeypatch):
     monkeypatch.setattr(awi_log, "_LOG_DIR", str(tmp_path / "awi"))
     with session_log.session_scope("sess-W"):
         awi_log.record("sim-chess", "invoke", "move({'from':'e7','to':'e5'})", 95.2, {"ok": True})
-        awi_log.record("chess-engine", "best_move", "best_move → e7e5", 340.0, {"uci": "e7e5"},
+        awi_log.record("boardgame-engine", "best_move", "best_move → e7e5", 340.0, {"uci": "e7e5"},
                        kind="service_call")
     entries = session_log.recent(10, session="sess-W")
     assert [e["kind"] for e in entries] == ["world_call", "service_call"], "awi 流量应转发进统一日志"
     assert entries[0]["world"] == "sim-chess"
-    assert entries[1]["server"] == "chess-engine", "service_call 用 server 键"
+    assert entries[1]["server"] == "boardgame-engine", "service_call 用 server 键"
     # awi 自己的内存条目也带上了 session（/awi 终端可显示归属）
     assert awi_log.recent(0)[-1]["session"] == "sess-W"

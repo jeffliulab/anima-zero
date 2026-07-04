@@ -68,6 +68,19 @@ MODEL_GPT = _s("ANIMA_OPENAI_GPT_MODEL", "gpt-5.5")
 MODEL_GPT_NANO = _s("ANIMA_OPENAI_NANO_MODEL", "gpt-4.1-nano")
 MODEL_QWEN = _s("ANIMA_QWEN3VL_MODEL", "qwen3-vl:8b")
 
+def _pairs(raw: str) -> list[tuple[str, str]]:
+    """解析 "name=url,name2=url2" 清单（worlds/services 共用）。"""
+    pairs: list[tuple[str, str]] = []
+    for item in raw.split(","):
+        item = item.strip()
+        if "=" not in item:
+            continue
+        name, url = (s.strip() for s in item.split("=", 1))
+        if name and url:
+            pairs.append((name, url))
+    return pairs
+
+
 # ---- 世界清单（单一来源：后端 server 与 dev_turn CLI 都从这里读）----
 # ⛔ T0：默认清单必须含所有已知世界——加世界=往这份默认里【追加】,绝不替换
 #    (2026-06-28 教训：加 sim-chess 时只写了它,把 sim-desk 挤没了)。
@@ -83,15 +96,21 @@ def worlds() -> list[tuple[str, str]]:
             ("camera", _s("CAMERA_URL", "http://localhost:8104")),
             ("gazebo-chess", _s("GAZEBO_CHESS_URL", "http://localhost:8106")),
         ]
-    pairs: list[tuple[str, str]] = []
-    for item in raw.split(","):
-        item = item.strip()
-        if "=" not in item:
-            continue
-        name, url = (s.strip() for s in item.split("=", 1))
-        if name and url:
-            pairs.append((name, url))
-    return pairs
+    return _pairs(raw)
+
+
+# ---- 挂载服务清单（与 worlds() 完全对称；Host 组装 = 标准 MCP：连哪些 server 由大脑自己决定）----
+# service=顾问（纯计算、无画面、无副作用），是大脑的能力、不属于任何世界——world 不声明服务。
+# ⛔ T0：加服务=往这份默认里【追加】,绝不替换。
+def services() -> list[tuple[str, str]]:
+    """挂载服务清单 [(name, url)]。env ANIMA_SERVICES="name=url,..." 覆盖；没设=全部已知服务。
+    在【调用时】读 env（同 worlds()）。"""
+    raw = os.getenv("ANIMA_SERVICES", "").strip()
+    if not raw:
+        return [
+            ("boardgame-engine", _s("ANIMA_BOARDGAME_ENGINE_URL", "http://localhost:8108")),
+        ]
+    return _pairs(raw)
 
 # （v0.5 重构起：对弈行为树 / 视觉 / 脑侧引擎的全部配置已随 game mode 删除——
-#   引擎可调项住引擎 service 自带 env（services/chess_engine_mcp.py），世界可调项住各世界自带 env。）
+#   引擎可调项住引擎 service 自带 env（services/boardgame_engine/app.py），世界可调项住各世界自带 env。）

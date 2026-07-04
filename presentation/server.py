@@ -240,31 +240,24 @@ def status() -> dict:
 
 
 # ---- AWI 仪表盘(/awi 页面用)----
-# ---- 挂载服务（顾问）卡片：读各在线世界声明的 services，经 registry 建/复用客户端 ----
+# ---- 挂载服务（顾问）卡片：Host 组装——由 ANIMA 按 config.services() 挂载（经 registry 建/复用客户端）----
 # service 和 world 在 MCP 里都是"一个 server"，只是 service 是纯计算 tool server：只有 tools，
 # 无感知(resource)、无说明书(prompt)。能力清单由 RemoteService 缓存（握手一次）。
 def _service_servers() -> list[dict]:
-    by_url: dict[str, dict] = {}
-    for wname in registry.list_worlds():
-        w = registry.get(wname)
-        if not (hasattr(w, "online") and w.online()):
-            continue
-        for svc in registry.services_for(w):
-            info = by_url.get(svc.base)
-            if info is None:
-                info = {"name": svc.name, "url": svc.base, "kind": "service",
-                        "online": svc.online(), "tools": [], "declared_by": []}
-                if info["online"]:
-                    try:
-                        info["tools"] = [
-                            {"name": t.name, "description": t.description, "kind": t.kind,
-                             "parameters": t.parameters}
-                            for t in svc.capabilities().tools]
-                    except Exception:
-                        info["online"] = False
-                by_url[svc.base] = info
-            info["declared_by"].append(wname)
-    return list(by_url.values())
+    out: list[dict] = []
+    for svc in registry.mounted_services():
+        info = {"name": svc.name, "url": svc.base, "kind": "service",
+                "online": svc.online(), "tools": []}
+        if info["online"]:
+            try:
+                info["tools"] = [
+                    {"name": t.name, "description": t.description, "kind": t.kind,
+                     "parameters": t.parameters}
+                    for t in svc.capabilities().tools]
+            except Exception:
+                info["online"] = False
+        out.append(info)
+    return out
 
 
 @app.get("/api/awi")  # 世界 + 引擎 server(含能力清单 + 实时 state)+ 大脑 + 会话 + 统计

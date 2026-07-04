@@ -13,7 +13,7 @@ class WorldRegistry:
     def __init__(self) -> None:
         self._worlds: dict[str, World] = {}
         self._bound: str | None = None
-        self._services: dict[str, object] = {}   # url -> RemoteService（多个 world 声明同一服务时共用客户端）
+        self._services: dict[str, object] = {}   # url -> RemoteService（同一 URL 共用一个客户端）
 
     def register_world(self, name: str, url: str) -> None:
         """注册一个远程世界(按给定名字;不在此握手)。"""
@@ -41,30 +41,28 @@ class WorldRegistry:
     def list_worlds(self) -> list[str]:
         return list(self._worlds)
 
-    # ---------- 挂载服务（world 声明，脑侧惰性连接）----------
-    def services_for(self, world) -> list:
-        """按该 world 能力自述里的 services 声明，返回（并缓存）service 客户端列表。
+    # ---------- 挂载服务（Host 组装：大脑按 config.services() 自行挂载；world 不声明服务）----------
+    def mounted_services(self) -> list:
+        """按 config.services() 返回（并缓存）service 客户端列表。
 
-        惰性：world 离线 / 没声明 → []。配对关系写在应用侧（world 声明 name+url），大脑不认识
-        任何具体服务——连上哪个 world 就挂它声明的清单。同一 URL 的服务只建一个客户端（共用缓存）。"""
+        标准 MCP 的「Host 组装」：连哪些 server 是大脑（Host）自己的配置决定，server 之间互不相识。
+        惰性：建客户端不握手（同 register_world，能力在运行时才真正去问）；同一 URL 只建一个客户端。
+        「棋世界要用引擎」这类配对不靠结构绑定——服务工具并进工具单后，模型看画面自选（不相关就不调）。"""
+        from . import config
         from .service_client import RemoteService
 
-        try:
-            decls = world.capabilities().services if world is not None else []
-        except Exception:
-            return []
         out = []
-        for d in decls or []:
-            url = (d.get("url") or "").strip()
+        for name, url in config.services():
+            url = (url or "").strip()
             if not url:
                 continue
             svc = self._services.get(url)
             if svc is None:
-                svc = RemoteService((d.get("name") or url).strip(), url)
+                svc = RemoteService((name or url).strip(), url)
                 self._services[url] = svc
             out.append(svc)
         return out
 
     def list_services(self) -> list:
-        """已知的全部 service 客户端（/awi 仪表盘用；只含被某个 world 声明过、被问过的）。"""
+        """已知的全部 service 客户端（/awi 仪表盘用；含全部被 mounted_services 建过的）。"""
         return list(self._services.values())

@@ -218,6 +218,8 @@ class Orchestrator:
     def _service_toolbox(self, world, world_tool_names: set[str]) -> tuple[list[ToolSpec], dict]:
         """挂载服务的工具单与路由表：tools 并进大脑工具单；routes(name→service) 供分发按来源路由。
 
+        挂载来源 = config.services()（Host 组装，world 不声明服务）；顾问随世界会话出场
+        （纯聊天不上服务工具单）——这是 Host 的组装策略，不是 world↔service 的结构绑定。
         - 服务离线/握手失败 → 它的工具这一轮不上单（等它起来即恢复；诚实呈现，不兜底）。
         - 同名冲突 **world 优先**（约定：service 工具名不得与常见世界动作重名），冲突的服务工具
           不上单并记警告——绝不让一个名字有两个去向。"""
@@ -225,7 +227,7 @@ class Orchestrator:
         routes: dict = {}
         if world is None:
             return tools, routes
-        for svc in self.registry.services_for(world):
+        for svc in self.registry.mounted_services():
             try:
                 caps = svc.capabilities()
             except Exception:

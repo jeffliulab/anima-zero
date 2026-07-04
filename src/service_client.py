@@ -1,4 +1,4 @@
-"""RemoteService：把一个「挂载服务」（world 声明的纯计算顾问，如象棋引擎）接成大脑可调的工具端点。
+"""RemoteService：把一个「挂载服务」（大脑自己按配置挂的纯计算顾问，如棋类引擎）接成大脑可调的工具端点。
 
 【service 与 world 的界定（勿混，这是设计约定）】
 - **world = ANIMA 栖身的现实**：有画面（perceive）、动作有副作用（过安全闸）、慢动作走
@@ -10,9 +10,9 @@
 没有 perceive；工具 kind 一律记 "read"（顾问=只读，不过安全闸）。
 每次调用记账 kind="service_call"（awi_log 转发进 session_log，Session Logs 里全链可见）。
 
-挂载来源：world 能力自述里的 services 声明（见 awi.Capabilities.services / registry.services_for）。
-信任模型：大脑按 world 声明的 URL 连接 service——本项目全部本机自有进程，接受该信任；
-将来接第三方 world 前需加白名单（登记在案的"先别做"）。
+挂载来源：大脑（Host）自己的配置 config.services()（见 registry.mounted_services）——标准 MCP 的
+「Host 组装」：连哪些 server 由大脑决定，server 之间互不相识、world 不声明服务。
+信任模型：URL 出自大脑自己的配置（部署者写的），不再来自任何 world 的声明。
 """
 from __future__ import annotations
 

@@ -84,7 +84,7 @@ def test_llm_plays_one_turn_via_engine_then_move(tmp_path, monkeypatch):
     world, engine = _ChessWorld(), _Engine()
     reg = WorldRegistry()
     reg._worlds[world.name] = world
-    reg.services_for = lambda w: [engine]
+    reg.mounted_services = lambda: [engine]
     orch = Orchestrator(reg, SessionStore(root=str(tmp_path / "mem")))
     sess, _ = orch.store.new(world.name, "fake-brain")
 
@@ -119,7 +119,7 @@ def test_stream_variant_same_chain(tmp_path, monkeypatch):
     world, engine = _ChessWorld(), _Engine()
     reg = WorldRegistry()
     reg._worlds[world.name] = world
-    reg.services_for = lambda w: [engine]
+    reg.mounted_services = lambda: [engine]
     orch = Orchestrator(reg, SessionStore(root=str(tmp_path / "mem")))
     sess, _ = orch.store.new(world.name, "fake-brain")
 

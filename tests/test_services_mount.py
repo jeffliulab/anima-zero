@@ -1,6 +1,7 @@
-"""service 挂载制测试：world 声明 → registry 惰性连接/缓存 → orchestrator 合并/路由。
+"""service 挂载制测试：Host 组装（config.services()）→ registry 建/缓存客户端 → orchestrator 合并/路由。
 
 界定回顾（见 service_client.py）：world=现实（发命令、过安全闸）；service=顾问（问答、只读、不过闸）。
+挂载来源=大脑自己的配置（标准 MCP：连哪些 server 是 Host 的活，server 之间互不相识、world 不声明服务）。
 """
 from __future__ import annotations
 
@@ -14,20 +15,19 @@ from anima.session import SessionStore
 
 
 class _World:
-    """假世界：可配工具与 services 声明。"""
+    """假世界：可配工具。"""
     name = "w"
     base = "fake://w"
 
-    def __init__(self, tools=None, services=None, boom=False):
+    def __init__(self, tools=None, boom=False):
         self._tools = tools if tools is not None else [ToolSpec("move", "动一下", {}, "tool")]
-        self._services = services or []
         self._boom = boom
         self.invoked: list[tuple[str, dict]] = []
 
     def capabilities(self):
         if self._boom:
             raise RuntimeError("offline")
-        return Capabilities(self.name, "t", self._tools, services=self._services)
+        return Capabilities(self.name, "t", self._tools)
 
     def perceive(self):
         return Observation(image_png=None, state={})
@@ -77,28 +77,36 @@ def _orch(tmp_path, world, services):
     reg = WorldRegistry()
     reg._worlds[world.name] = world
     orch = Orchestrator(reg, SessionStore(root=str(tmp_path)))
-    # 挂载来源在 registry.services_for（读 world 声明建真客户端）；orchestrator 层测试用假服务替掉它
-    reg.services_for = lambda w: list(services)
+    # 挂载来源在 registry.mounted_services（读 config.services() 建真客户端）；orchestrator 层测试用假服务替掉它
+    reg.mounted_services = lambda: list(services)
     sess, _ = orch.store.new(world.name, "fake")
     return orch, sess
 
 
-# ---------------- registry 层：world 声明 → 客户端惰性连接/缓存 ----------------
+# ---------------- registry 层：config.services()（Host 组装）→ 客户端惰性建/缓存 ----------------
 
-def test_registry_builds_service_clients_from_world_declaration():
+def test_registry_builds_service_clients_from_host_config(monkeypatch):
+    monkeypatch.setenv("ANIMA_SERVICES", "boardgame-engine=http://localhost:8108")
     reg = WorldRegistry()
-    w = _World(services=[{"name": "chess-engine", "url": "http://localhost:8108"}])
-    out = reg.services_for(w)
+    out = reg.mounted_services()
     assert len(out) == 1 and isinstance(out[0], RemoteService)
-    assert out[0].name == "chess-engine" and out[0].mcp_url == "http://localhost:8108/mcp"
-    assert reg.services_for(w)[0] is out[0], "同一 URL 复用同一客户端（缓存）"
+    assert out[0].name == "boardgame-engine" and out[0].mcp_url == "http://localhost:8108/mcp"
+    assert reg.mounted_services()[0] is out[0], "同一 URL 复用同一客户端（缓存）"
 
 
-def test_registry_services_empty_when_world_offline_or_undeclared():
-    reg = WorldRegistry()
-    assert reg.services_for(_World(services=[])) == []
-    assert reg.services_for(_World(boom=True)) == [], "world 离线 → 空清单（惰性，不抛）"
-    assert reg.services_for(None) == []
+def test_registry_default_mounts_boardgame_engine(monkeypatch):
+    """没设 ANIMA_SERVICES → 默认清单必含 boardgame-engine（T0：加服务=追加，绝不替换默认）。"""
+    monkeypatch.delenv("ANIMA_SERVICES", raising=False)
+    monkeypatch.delenv("ANIMA_BOARDGAME_ENGINE_URL", raising=False)
+    out = WorldRegistry().mounted_services()
+    assert [s.name for s in out] == ["boardgame-engine"]
+    assert out[0].mcp_url == "http://localhost:8108/mcp"
+
+
+def test_registry_services_empty_when_config_empty(monkeypatch):
+    """显式配空（如部署时不带任何顾问）→ 空清单，不抛。"""
+    monkeypatch.setenv("ANIMA_SERVICES", "none")   # 只有非法项 → 解析结果为空
+    assert WorldRegistry().mounted_services() == []
 
 
 # ---------------- orchestrator 层：合并 / 路由 / 冲突 ----------------
