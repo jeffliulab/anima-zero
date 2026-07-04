@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/FastAPI-backend-009688?logo=fastapi&logoColor=white" alt="FastAPI">
   <img src="https://img.shields.io/badge/Next.js-15-black?logo=nextdotjs" alt="Next.js">
   <img src="https://img.shields.io/badge/Status-Pre--alpha-orange" alt="Status">
-  <img src="https://img.shields.io/badge/License-Apache_2.0-green" alt="License">
+  <img src="https://img.shields.io/badge/License-AGPL--3.0-blue" alt="License">
 </p>
 
 <p>
@@ -327,9 +327,17 @@ v0.2 长出对弈技能与行为树;v0.3 接入真实摄像头世界 camera;v0.4
 Engine Server(顾问)** 两类;主循环迁 **LangGraph** 骨架;三套日志统一成按会话的
 **Session Logs**;**v0.6 引擎内聚 + 服务挂载回归标准 MCP「Host 组装」**(见 §十三)。
 真机安全硬检查、持续响应模式按依赖顺序后做。
-`anima-zero` 是完全开源的 Zero 线展示版。
+`anima-zero` 是开源(AGPL-3.0)的 Zero 线展示版;不愿受 AGPL 开源义务约束的商业集成可另购商业授权(见 License)。
 
 ## License
 
-[Apache License 2.0](LICENSE) — Copyright 2026 Jeff Liu Lab
+[GNU AGPL-3.0](LICENSE)(v3 或任何后续版本)— **双授权(dual licensing)**:
+
+- **AGPL-3.0**:自由使用、修改、分发;若你把本软件(含修改版)分发出去、装进产品、或作为网络服务
+  提供给他人使用,须按 AGPL 向你的用户开放对应源码。与依赖 GPL-3 的 python-chess 天然兼容。
+- **商业授权**:不愿承担上述开源义务的商业集成(闭源产品、闭源 SaaS 等),
+  可另行取得商业许可 — 联系 jeff.pang.liu@gmail.com。
+- 本次协议变更之前发布的历史版本(≤ v0.6.0)仍按其原 Apache License 2.0 条款可用。
+
+Copyright 2026 Jeff Liu
 ([jeffliulab.com](https://jeffliulab.com),GitHub [@jeffliulab](https://github.com/jeffliulab))。
