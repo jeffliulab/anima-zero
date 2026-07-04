@@ -2,6 +2,12 @@
 
 ANIMA Zero 版本记录。**版本记录要点：保持简洁，每版只说重点，比如具体改了什么。**（格式参考 [Keep a Changelog](https://keepachangelog.com)）
 
+## [0.7.0] — 开发中
+
+Features:
+
+1. 协议变更：全仓由 Apache-2.0 改为 **AGPL-3.0 + 商业双授权**。AGPL-3.0 要求：把本软件（含修改版）分发出去、装进产品、或**通过网络提供服务**给他人使用时，必须向这些用户按 AGPL 开放对应源码（网络服务条款是它与普通 GPL 的关键区别）；不愿承担此开源义务的闭源商业集成，可联系维护者（jeff.pang.liu@gmail.com）另购商业许可。与依赖 GPL-3 的 python-chess 兼容；≤v0.6.0 的历史版本仍按原 Apache-2.0 可用。
+
 ## [0.6.0] — 2026-07-03
 
 Main: 引擎内聚 + world/service 彻底解耦，服务挂载回归标准 MCP「Host 组装」——面向真机前先把边界理干净。简单来说，Host, Service相互之间都变得独立，Engine Server和Anima Host交流，World Server和Anima Host交流，World Server和Engine Server不再交流。
@@ -12,7 +18,6 @@ Features:
 2. 大脑的引擎顾问与 sim-chess 世界的内置电脑对手拆成两份有意独立的副本（chess_engine.py / chess_bot.py，零共享代码、禁去重合并）：关掉引擎服务世界电脑照走，顾问跟着大脑跨身体走。
 3. 废除 v0.5 的「world 声明服务（anima://services）」机制，改为大脑按 config.services() 自行挂载（与 worlds() 对称）——对齐 MCP 规范「连哪些 server 是 Host 的职责、server 之间互不相识」；配对靠模型看画面自选工具，不靠结构绑定。
 4. 统一 MCP 三层称呼与「专线」模型：server 只有两类——World Server（现实，三原语齐全）和 Engine Server（引擎顾问，只有 Tools）；Host（ANIMA 大脑）给每个 server 各开一条专线即 Client 层（代码里的 RemoteWorld / RemoteService，一条专线只连一个 server），专线负责记地址、握手缓存能力、翻译协议、按角色管超时（world 走生命迹象监督、engine 走短超时问答）并记账，专线之间互不相通=server 隔离的落实。README §四与 /awi 页已按此更新。
-5. 协议变更：全仓 Apache-2.0 → AGPL-3.0 + 商业双授权（自由使用修改分发，闭源商业集成需另购商业许可，联系维护者；与 GPL-3 的 python-chess 兼容）；此前发布的历史版本仍按原 Apache-2.0 可用。
 
 ## [0.5.0] — 2026-07-03
 
