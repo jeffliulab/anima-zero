@@ -2,6 +2,16 @@
 
 ANIMA Zero 版本记录。**版本记录要点：保持简洁，每版只说重点，比如具体改了什么。**（格式参考 [Keep a Changelog](https://keepachangelog.com)）
 
+## [0.6.0] — 2026-07-03
+
+Main: 引擎内聚 + world/service 彻底解耦，服务挂载回归标准 MCP「Host 组装」——面向真机前先把边界理干净。
+
+Features:
+
+1. 三个棋类引擎内核（chess/gomoku/go）搬进 services/boardgame_engine/（原跨仓 importlib 读外部文件，clone 下来起不了）；服务更名 boardgame-engine，chess 三工具就活，go/gomoku 就位待接；外部 3-anima-chess-engine 文件夹删除，仓库自足。
+2. 大脑的引擎顾问与 sim-chess 世界的内置电脑对手拆成两份有意独立的副本（chess_engine.py / chess_bot.py，零共享代码、禁去重合并）：关掉引擎服务世界电脑照走，顾问跟着大脑跨身体走。
+3. 废除 v0.5 的「world 声明服务（anima://services）」机制，改为大脑按 config.services() 自行挂载（与 worlds() 对称）——对齐 MCP 规范「连哪些 server 是 Host 的职责、server 之间互不相识」；配对靠模型看画面自选工具，不靠结构绑定。
+
 ## [0.5.0] — 2026-07-03
 
 Main: 大重构——删除 game mode 等人为编排，最小化框架来考察智能：LLM 亲自看画面、亲自决定每一步、亲自调用工具。

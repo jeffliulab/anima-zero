@@ -71,7 +71,7 @@ ANIMA 不认识任何具体世界,只认一套 **AWI** 加几个外围件:
 | **会话**(`src/session.py`) | 一次任务一个会话,**按世界单活 + 冻结**(同一个世界同时只允许一个活跃会话,安全);记忆存本地 |
 | **上下文**(`src/context.py`) | 发给大脑的历史 = 滑动窗口 + 只发最新一张图(老图只存不发,防上下文腐烂) |
 | **安全闸**(`src/safety.py`) | 动作下发前一道**不经过 LLM 的确定性检查**;只拦「会改世界」的动作(仿真默认放行,上真机把 `default_allow` 显式关掉、再填硬检查) |
-| **挂载服务**(`src/service_client.py`) | **world 之外的第二类端点:顾问**——纯计算、无画面、无副作用(如象棋引擎),问答拿反馈;由 world 自己声明(`anima://services`),脑握手后自动连接、工具并进同一张工具单 |
+| **挂载服务**(`src/service_client.py`) | **world 之外的第二类端点:顾问**——纯计算、无画面、无副作用(如棋类引擎),问答拿反馈;由**大脑(Host)按 `config.services()` 自行挂载**(标准 MCP 的 Host 组装,world 不声明服务),工具并进同一张工具单 |
 | **统一日志**(`src/session_log.py`) | **Session Logs**:每会话一条流水(`logs/sessions/<sid>.jsonl`),LLM 调用/世界往返/服务调用按时间合并——「看到什么→想了什么→调了什么」一条链可查、可一键复制 |
 | **裁判** | 是世界提供的一个**确定性工具**,LLM 学会去调它确认成没成——不靠 LLM 自己看图说「做好了」 |
 | **编排器**(`src/orchestrator.py`) | 把上面这些串成一个简单的主循环 |
@@ -126,9 +126,11 @@ Prompt   (prompts/get "guidance")      ->  世界的「说明书」:自我介绍
 ```
 
 **挂载服务(顾问)也是同一种 MCP server**,只是纯计算——只填 Tools,没有 Resource / Prompt。
-例:象棋引擎 service(`services/chess_engine_mcp.py`,`best_move`/`evaluate`/`legal_moves`)。
-**配对关系写在应用侧**:world 在能力自述里声明配套服务(资源 `anima://services`,如 sim-chess 声明
-chess-engine),大脑握手读到就自动连接——大脑不认识任何具体服务,连几百个也不增加认知负荷。
+例:棋类引擎 service(`services/boardgame_engine/`,`best_move`/`evaluate`/`legal_moves`)。
+**组装是 Host 的活(标准 MCP)**:连哪些服务由大脑按 `config.services()` 自己决定(与 `worlds()`
+完全对称),server 之间互不相识、world 不声明服务;「棋世界要用引擎」这类配对不靠结构绑定——
+服务工具并进工具单后,模型看画面自选(面前是棋盘才调 `best_move`,别的世界里不相关就不调)。
+另一条边界:引擎是大脑的高层「想棋」顾问,**真机实时控制永不走 MCP**(那条留在身体内部)。
 
 **视频流永远带外**:世界另推一条 `GET /stream`(MJPEG)给网页看——MCP 只跑 JSON-RPC 文本、传不了视频,所以
 它和 `GET /health`(探活)、`GET /status`(上帝视角真值,绝不进感知)一样走普通 HTTP,不进 MCP(红线)。
@@ -230,11 +232,12 @@ cd presentation/web && npm install && npm run dev      # 默认 :3000
 回你一句话。没有循环、没有技能、没有视觉模块兜底——**读错棋盘就读错,这本身就是对模型能力的测量**
 (8B 级小模型基本认不对整盘;演示请用 GPT-5.5 / Claude 这类强脑)。
 
-- **world `sim-chess`**(`world/sim-chess/`):独立棋具——握唯一真值、判合法、渲染棋盘、内置电脑棋手。
-  对大脑只暴露一个动作 `move`,perceive 只给画面、state 空 `{}`,绝不给局面/FEN/轮次/胜负。
-  它同时**声明配套的 chess-engine 服务**(挂载关系属于应用侧)。
-- **service `chess-engine`**(`services/chess_engine_mcp.py`,`:8108`,下棋必起):纯计算顾问,给 FEN
-  回最佳着法/评估/合法着;FEN 不合法会报可读错误,让大脑自我修正后重试。
+- **world `sim-chess`**(`world/sim-chess/`):独立棋具——握唯一真值、判合法、渲染棋盘、内置电脑棋手
+  (自带 `chess_bot.py`,与引擎服务零共享代码)。对大脑只暴露一个动作 `move`,perceive 只给画面、
+  state 空 `{}`,绝不给局面/FEN/轮次/胜负。
+- **service `boardgame-engine`**(`services/boardgame_engine/`,`:8108`,下棋必起):纯计算顾问,给 FEN
+  回最佳着法/评估/合法着;FEN 不合法会报可读错误,让大脑自我修正后重试。由大脑按 `config.services()`
+  挂载(world 不声明服务)。
 - 一回合的真实链路:看图 → `best_move(fen=自己推的)` → 重新看图 → `move(from,to)` → 出文字。
   全过程在 **Session Logs** 里一条链可查(llm_call → service_call → world_call)。
 
@@ -242,8 +245,8 @@ cd presentation/web && npm install && npm run dev      # 默认 :3000
 ```bash
 # 终端1:棋具世界(独立进程)
 cd world/sim-chess && pip install -e . && uvicorn server:app --port 8102
-# 终端2:象棋引擎服务(下棋必起;sim-chess 声明了它,大脑会自动连接)
-./.venv/bin/uvicorn services.chess_engine_mcp:app --port 8108     # 在 anima-zero 根
+# 终端2:棋类引擎服务(下棋必起;大脑按 config.services() 默认挂载它)
+./.venv/bin/uvicorn services.boardgame_engine.app:app --port 8108     # 在 anima-zero 根
 # 终端3:后端(默认清单已含全部世界)
 uvicorn presentation.server:app --port 8000
 # 网页新建会话(世界选 sim-chess)→ 在 sim-chess 网页(:8102)人执白走一步 → 聊天说"该你了,你执黑"
@@ -289,14 +292,29 @@ cd world/camera && pip install -e . && uvicorn server:app --port 8104
 
 ---
 
+## 十三、引擎内聚 + 回归标准 MCP「Host 组装」(v0.6)
+
+这一版不长新能力,把边界理干净——面向真机前必须先理清的一步:
+
+- **引擎内聚,仓库自足**:三个棋类引擎内核(chess/gomoku/go)搬进 `services/boardgame_engine/`
+  (此前跨仓 importlib 读外部文件,clone 下来起不了)。chess 三工具就活;go/gomoku 就位待接
+  (无消费方,不造死工具——原因登记在该包 README)。
+- **顾问与对手彻底分开**:大脑的引擎顾问(`boardgame_engine/chess_engine.py`)和 sim-chess 世界的
+  内置电脑(`world/sim-chess/chess_bot.py`)是**两份有意独立的副本、零共享代码**(禁去重合并)——
+  关掉引擎服务,世界的电脑照走;顾问跟着大脑跨身体走,不属于任何一个世界。
+- **服务挂载回归标准 MCP 的「Host 组装」**:废除 v0.5 的「world 声明服务(`anima://services`)」,
+  改为大脑按 `config.services()` 自行挂载(与 `worlds()` 对称)。MCP 规范把「连哪些 server」划给
+  Host、server 之间互不相识——配对靠模型看画面自选工具,不靠结构绑定。
+
 ## 状态
 
-**v0.5(Pre-alpha),持续迭代中。** v0.1 封版了顶层架构(世界独立 + 会话 + 主循环 + 外围 hook + 原生 tool-calling);
+**v0.6(Pre-alpha),持续迭代中。** v0.1 封版了顶层架构(世界独立 + 会话 + 主循环 + 外围 hook + 原生 tool-calling);
 v0.2 长出对弈技能与行为树;v0.3 接入真实摄像头世界 camera;v0.4 接口**采标 MCP** + 物理世界 gazebo-chess;
 **v0.5 先修长动作通信语义(MCP progress + 生命迹象等待),随后反向大简化**:删掉整个 game mode
 (行为树/技能/视觉栈),下棋回归普通对话、**每一步由 LLM 亲自决定**;端点分成 **world(现实)+
-service(顾问,world 声明挂载)** 两类;主循环迁 **LangGraph** 骨架;三套日志统一成按会话的
-**Session Logs**。真机安全硬检查、持续响应模式按依赖顺序后做。
+service(顾问)** 两类;主循环迁 **LangGraph** 骨架;三套日志统一成按会话的
+**Session Logs**;**v0.6 引擎内聚 + 服务挂载回归标准 MCP「Host 组装」**(见 §十三)。
+真机安全硬检查、持续响应模式按依赖顺序后做。
 `anima-zero` 是完全开源的 Zero 线展示版。
 
 ## License
