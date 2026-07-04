@@ -4,7 +4,7 @@ ANIMA Zero 版本记录。**版本记录要点：保持简洁，每版只说重�
 
 ## [0.6.0] — 2026-07-03
 
-Main: 引擎内聚 + world/service 彻底解耦，服务挂载回归标准 MCP「Host 组装」——面向真机前先把边界理干净。
+Main: 引擎内聚 + world/service 彻底解耦，服务挂载回归标准 MCP「Host 组装」——面向真机前先把边界理干净。简单来说，Host, Service相互之间都变得独立，Engine Server和Anima Host交流，World Server和Anima Host交流，World Server和Engine Server不再交流。
 
 Features:
 
