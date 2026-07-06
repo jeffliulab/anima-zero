@@ -151,10 +151,21 @@ def referee_enabled() -> bool:
 
 
 # 内置电脑对手走哪方（white/black/off）。裁判落档的 white/black 标签也据此定（非 bot 侧 = anima）。
+# 对手走子=瞬移（直接改模型位姿，不用机械臂）；引擎是 gz_bot.py（第三份独立副本，禁与另两份合并）。
 BOT_SIDE = os.getenv("GZCHESS_BOT_SIDE", "black")
+BOT_DEPTH = _i("GZCHESS_BOT_DEPTH", "3")                       # 对手搜索深度（对齐 SIMCHESS 默认）
+BOT_TIME = _f("GZCHESS_BOT_TIME", "2.0")                       # 对手单步思考秒数上限
 # 对局棋谱落档目录（对齐 sim-chess：默认仓根 logs/，eval 记分台从这里读）。
 GAMES_LOG_DIR = os.getenv("GZCHESS_GAMES_LOG_DIR") or str(
     Path(__file__).resolve().parents[2] / "logs")
+# 弃子处理：bin（默认，v0.7）= 真夹真搬到固定「弃子袋」点，放稳后模型销毁（袋子吞掉——
+# 一盘最多 30 次吃子，槽位摆开第 2 排起就超臂展、还会互相碰撞）；slots = v0.5 槽位摆开行为原样（T0）。
+DISCARD_MODE = os.getenv("GZCHESS_DISCARD_MODE", "bin")
+DISCARD_BIN_XY = tuple(float(v) for v in os.getenv(
+    "GZCHESS_DISCARD_BIN_XY", f"{DISCARD_ORIGIN_X},{DISCARD_ORIGIN_Y}").split(","))
+# 终局后自动复位（默认 off：让人看完终局盘面自己在网页按「开新局」；on 则终局几秒后自动重摆）。
+AUTO_RESET = os.getenv("GZCHESS_AUTO_RESET", "off") == "on"
+AUTO_RESET_DELAY_S = _f("GZCHESS_AUTO_RESET_DELAY_S", "5.0")
 
 # ---- 失败注入（v0.5：测大脑补救链路用；默认全关，绝不影响正常运行）----
 # 语义：off=关 / once=注入一次后自动归 off / always=每次都注入。

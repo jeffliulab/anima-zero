@@ -44,6 +44,7 @@ class ArmController(Node):
         self._ik = self.create_client(GetPositionIK, "/compute_ik")
         self._fk = self.create_client(GetPositionFK, "/compute_fk")
         self._js: JointState | None = None
+        self.ik_no_reply = 0        # IK 服务「超时无应答」累计（≠ 无解；见 compute_ik）
         self.create_subscription(JointState, "/joint_states", self._on_js, 10)
 
     # ---------- 基础 ----------
@@ -75,7 +76,9 @@ class ArmController(Node):
 
     # ---------- IK ----------
     def compute_ik(self, pose: grasp_pose.Pose, timeout_s: float = config.IK_TIMEOUT_S) -> list[float] | None:
-        """把 link6 的目标位姿（world 帧）解成 6 个臂关节角；解不出返回 None。"""
+        """把 link6 的目标位姿（world 帧）解成 6 个臂关节角；解不出返回 None。
+        无解 vs 服务无应答是两种失败：后者记在 self.ik_no_reply 计数上（调用方据此把
+        「基础设施没应答」和「运动学不可达」报成不同的错——混为一谈会把补救方向带偏）。"""
         (px, py, pz), (qx, qy, qz, qw) = pose
         req = GetPositionIK.Request()
         r = req.ik_request
@@ -94,7 +97,10 @@ class ArmController(Node):
         ps.pose.orientation.x, ps.pose.orientation.y, ps.pose.orientation.z, ps.pose.orientation.w = qx, qy, qz, qw
         r.pose_stamped = ps
         res = self._wait_future(self._ik.call_async(req), timeout_s + config.IK_WAIT_EXTRA_S)
-        if res is None or res.error_code.val != 1:   # 1 = SUCCESS
+        if res is None:                              # 服务超时没应答（≠ 无解）：单独计数
+            self.ik_no_reply += 1
+            return None
+        if res.error_code.val != 1:                  # 1 = SUCCESS；其余 = 真·无解/求解失败
             return None
         sol = {n: p for n, p in zip(res.solution.joint_state.name, res.solution.joint_state.position)}
         if not all(j in sol for j in ARM_JOINTS):
@@ -170,6 +176,7 @@ class ArmController(Node):
         inject_miss: 失败注入（测补救链路）：动作全走、但**不闭爪**——物理后果=夹空，子留在原地。
         """
         note = progress or (lambda m: None)
+        no_reply0 = self.ik_no_reply
         for label, approach, grasp in grasp_pose.candidates_for_point(px, py, pz, avoid_xy=avoid_xy):
             note(f"IK 求解抓取姿态（候选 {label}）")
             sol = self._solve_candidate(approach, grasp)
@@ -192,12 +199,23 @@ class ArmController(Node):
             if not self.goto_arm(ja, config.MOVE_TIME_SHORT_S):
                 return False, f"抬起失败({label})"
             return True, f"抓取动作完成({label})"
-        return False, "所有候选姿态都 IK 不可达"
+        return False, self._all_ik_failed_msg(no_reply0)
+
+    def _all_ik_failed_msg(self, no_reply_before: int) -> str:
+        """全候选失败时定性：全是「服务超时无应答」= 基础设施问题（MoveIt/DDS），
+        不是「够不着」——两种失败混为一谈会把补救方向带偏（实锤：进程快速重启后 DDS 应答丢失，
+        30 个候选全超时，被误报成不可达）。"""
+        n = self.ik_no_reply - no_reply_before
+        if n > 0:
+            return (f"IK 服务无应答（{n} 次请求超时）——这是 MoveIt/通信问题，不是够不着；"
+                    f"查 move_group 是否活着、或重启世界服务再试")
+        return "所有候选姿态都 IK 不可达"
 
     def place_at(self, px: float, py: float, pz: float, progress=None,
                  avoid_xy=None) -> tuple[bool, str]:
         """在世界点放下：到接近点→下到放置点→开爪→抬回接近点。progress/avoid_xy 语义同 pick_at。"""
         note = progress or (lambda m: None)
+        no_reply0 = self.ik_no_reply
         for label, approach, grasp in grasp_pose.candidates_for_point(px, py, pz, avoid_xy=avoid_xy):
             note(f"IK 求解放置姿态（候选 {label}）")
             sol = self._solve_candidate(approach, grasp)
@@ -216,4 +234,4 @@ class ArmController(Node):
             if not self.goto_arm(ja, config.MOVE_TIME_SHORT_S):
                 return False, f"放后抬起失败({label})"
             return True, f"放置动作完成({label})"
-        return False, "放置点所有候选姿态都 IK 不可达"
+        return False, "放置点" + self._all_ik_failed_msg(no_reply0)

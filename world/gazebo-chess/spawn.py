@@ -124,6 +124,13 @@ def spawn_piece_at(xyz: tuple[float, float, float], color: str = "white",
     return False, out
 
 
+def note_square(name: str, square: str | None) -> None:
+    """teleport（set_model_pose）后同步登记表的所在格——登记表保持诚实。
+    （_piece_at 按实时位姿找子、不依赖登记表，这里只是别让台账烂掉。）"""
+    if name in _REGISTRY:
+        _REGISTRY[name]["square"] = square
+
+
 def registry() -> dict[str, dict]:
     return dict(_REGISTRY)
 

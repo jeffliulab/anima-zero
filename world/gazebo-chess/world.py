@@ -35,8 +35,11 @@ import time
 
 import rclpy
 
+import chess
+
 import config
 import geometry
+import gz_bot
 import referee as referee_mod
 import render
 import spawn
@@ -90,11 +93,13 @@ class GazeboChessWorld:
         self._discard_n = 0                 # 已用掉几个弃子槽（remove 递增）
         # 裁判（v0.7）：对局模式（摆 FEN）才建；标签=非 bot 侧是 anima（bot 关掉时对面标 opponent）。
         self.referee = None
+        self._bot = None
         if config.referee_enabled():
             labels = {"white": "anima", "black": "opponent"}
             if config.BOT_SIDE in ("white", "black"):
                 labels = ({"white": "bot", "black": "anima"} if config.BOT_SIDE == "white"
                           else {"white": "anima", "black": "bot"})
+                self._bot = gz_bot.AI(depth=config.BOT_DEPTH, time_limit=config.BOT_TIME)
             self.referee = referee_mod.Referee(config.SETUP_FEN, games_dir=config.GAMES_LOG_DIR,
                                                **labels)
         # 失败注入状态（once 模式注入一次即耗尽；见 config.FAIL_*）
@@ -113,7 +118,8 @@ class GazeboChessWorld:
         threading.Thread(target=self._spin_forever, name="gzchess-ros-spin", daemon=True).start()
         self.ready = self.arm.wait_ready(config.READY_TIMEOUT_S)
         # 布场景：棋盘 + 相机 +（演示子）；停臂驻位
-        self._setup(demo_piece_square or os.getenv("GZCHESS_DEMO_PIECE", "e2"))
+        self._demo_square = demo_piece_square or os.getenv("GZCHESS_DEMO_PIECE", "e2")
+        self._setup(self._demo_square)
 
     def _spin_forever(self) -> None:
         while self._spin_alive and rclpy.ok():
@@ -140,6 +146,10 @@ class GazeboChessWorld:
                 if n_pub != 1:   # 发布者数自检：>1 = 残留相机/孤儿 gz 进程在抢话题（画面会交替混流）
                     print(f"[gazebo-chess] ⚠️ 话题 {config.cam_topic(kind)} 有 {n_pub} 个发布者"
                           f"（应为 1）——查残留相机模型或孤儿 gz sim 进程（pgrep -af 'gz sim'）")
+            # 先清掉上一次会话/脚本残留的棋子模型（和相机清扫同理：gz 世界是长活的，不清=污染摆盘）
+            for nm in list(spawn.all_model_poses()):
+                if nm.startswith("piece_"):
+                    spawn.purge_model(nm)
             fen = config.SETUP_FEN.strip()
             if fen:                                     # v0.5 多子：按 FEN 摆放字段摆盘
                 self._spawn_fen(fen)
@@ -149,6 +159,11 @@ class GazeboChessWorld:
                 self.arm.goto_arm(PARK, config.MOVE_TIME_APPROACH_S)
             time.sleep(config.SETTLE_S)
             self._spin(20)
+            # 开局就轮到对手（bot 执白）→ 它先瞬移走一手
+            if self.referee is not None and self._bot is not None and not self.referee.over:
+                bot_color = chess.WHITE if config.BOT_SIDE == "white" else chess.BLACK
+                if self.referee.board.turn == bot_color:
+                    print("[gazebo-chess] 对手执白先行：", self._bot_reply())
 
     @staticmethod
     def _spawn_fen(fen: str) -> None:
@@ -257,6 +272,85 @@ class GazeboChessWorld:
             return True
         return mode == "always"
 
+    # ---------- 裁判记账 + 内置对手应手（持锁内调用）----------
+    def _after_commit(self, prim: tuple, note) -> str:
+        """原语物理核实成功后的收尾：裁判记账；凑完一手且轮到对手 → 对手瞬移应一手。
+        返回要追加进 ok 消息的播报（前带 ｜）。"""
+        info = self.referee.commit(prim)
+        msg = "｜" + info["message"]
+        if info["advanced"] and not info["over"] and self._bot is not None:
+            bot_color = chess.WHITE if config.BOT_SIDE == "white" else chess.BLACK
+            if self.referee.board.turn == bot_color:
+                note(_P_VERIFY, "对手思考中…")
+                msg += "｜" + self._bot_reply()
+        if self.referee.over and config.AUTO_RESET:
+            threading.Timer(config.AUTO_RESET_DELAY_S, self.reset_board).start()
+            msg += f"｜{config.AUTO_RESET_DELAY_S:.0f} 秒后自动开新局"
+        return msg
+
+    def _bot_reply(self) -> str:
+        """内置电脑对手应一手：算棋（gz_bot 副本）→ 物理瞬移（set_pose/purge/spawn，不用机械臂）
+        → 真值推进（push_direct）。**物理应用全部成功才推进真值**——半路失败就如实报、真值不动，
+        人可按「开新局」收拾。返回播报（按设计不说走了哪步——你下次看画面自己认）。"""
+        m = self._bot.best_move(self.referee.board.copy())
+        if m is None:                      # 未终局却无棋可走不该发生（终局在 commit 已判）
+            return "对手没有可走的棋（异常，请查 /status）"
+        ok, why = self._apply_bot_move(m)
+        if not ok:
+            return f"对手应手失败：{why}（真值未推进——物理和棋规记录可能已不一致，建议开新局）"
+        info = self.referee.push_direct(m)
+        time.sleep(config.SPAWN_SETTLE_S)  # 瞬移后给物理/画面一个稳定节拍再返回
+        tail = f"，{info['message']}" if info["message"] else ""
+        return f"对手已应一手（看画面认它走了哪步）{tail}"
+
+    def _apply_bot_move(self, m: "chess.Move") -> tuple[bool, str]:
+        """把对手的一手棋物理落到 Gazebo（瞬移）。board 仍是走这手之前的局面。"""
+        board = self.referee.board
+        frm, to = chess.square_name(m.from_square), chess.square_name(m.to_square)
+        name, _ = self._piece_at(frm)
+        if name is None:
+            return False, f"{frm} 上找不到对手的子（物理与棋规记录分叉）"
+        # 1) 吃子：先把被吃的子从世界删掉（对手侧不走弃子区，直接消失——它不是机械臂）
+        cap_sq = None
+        if board.is_en_passant(m):
+            cap_sq = chess.square_name(chess.square(chess.square_file(m.to_square),
+                                                    chess.square_rank(m.from_square)))
+        elif board.is_capture(m):
+            cap_sq = to
+        if cap_sq:
+            victim, _ = self._piece_at(cap_sq)
+            if victim is None:
+                return False, f"被吃格 {cap_sq} 上找不到子（物理与棋规记录分叉）"
+            spawn.purge_model(victim)
+        # 2) 升变：兵模型换成升变子；否则瞬移本体
+        if m.promotion:
+            color = "white" if board.turn == chess.WHITE else "black"
+            spawn.purge_model(name)
+            ok, out = spawn.spawn_piece(to, color, kind=chess.piece_symbol(m.promotion))
+            if not ok:
+                return False, f"升变子 spawn 失败：{out}"
+        else:
+            tx, ty, tz = geometry.square_surface_xyz(to)
+            ok, out = spawn.set_model_pose(name, (tx, ty, tz))
+            if not ok:
+                return False, f"瞬移失败：{out}"
+            spawn.note_square(name, to)
+        # 3) 易位：车也跟着瞬移
+        if board.is_castling(m):
+            kingside = chess.square_file(m.to_square) == 6
+            rank = chess.square_rank(m.from_square)
+            rf = chess.square_name(chess.square(7 if kingside else 0, rank))
+            rt = chess.square_name(chess.square(5 if kingside else 3, rank))
+            rook, _ = self._piece_at(rf)
+            if rook is None:
+                return False, f"易位的车不在 {rf}（物理与棋规记录分叉）"
+            rx, ry, rz = geometry.square_surface_xyz(rt)
+            ok, out = spawn.set_model_pose(rook, (rx, ry, rz))
+            if not ok:
+                return False, f"车瞬移失败：{out}"
+            spawn.note_square(rook, rt)
+        return True, ""
+
     # ---------- move = 裸搬（真夹真放，不判棋规）----------
     def _move(self, args: dict, note=lambda p, m="": None) -> dict:
         frm = (args.get("from", "") or "").strip().lower()
@@ -306,8 +400,8 @@ class GazeboChessWorld:
             if err <= config.PLACE_TOLERANCE_M:
                 self.last = f"move {frm}->{to}"
                 suffix = ""
-                if self.referee:   # 物理核实成功 → 裁判记账（可能凑完一手 → 真值前进 + 对局播报）
-                    suffix = "｜" + self.referee.commit(("move", frm, to))["message"]
+                if self.referee:   # 物理核实成功 → 裁判记账（凑完一手 → 真值前进 + 可能触发对手应手）
+                    suffix = self._after_commit(("move", frm, to), note)
                 return {"ok": True,
                         "message": f"已把子从 {frm} 搬到 {to}（落点误差 {err * 100:.1f}cm）{suffix}"}
             res = self._classify_move_failure(name, frm, to, p2, err)
@@ -359,19 +453,27 @@ class GazeboChessWorld:
                     self.referee.note_failure(("remove", square), "pick_fail", square)
                 self._park(); return {"ok": False, "message": f"抓 {square} 的子失败：{msg}"}
             note(_P_CARRY, "已夹取，正在移向弃子区")
-            dx, dy, dz = geometry.discard_grasp_xyz(self._discard_n)
+            # bin 模式（v0.7 默认）：固定「弃子袋」一个点，放稳后模型销毁（袋子吞掉）——
+            # 一盘最多 30 次吃子，槽位摆开第 2 排就超臂展；slots 模式=旧行为原样保留（T0）。
+            if config.DISCARD_MODE == "bin":
+                bx, by = config.DISCARD_BIN_XY
+                dx, dy, dz = bx, by, config.OFFBOARD_SURFACE_Z + config.PIECE_GRASP_WAIST_M
+            else:
+                dx, dy, dz = geometry.discard_grasp_xyz(self._discard_n)
             ok, msg = self.arm.place_at(dx, dy, dz, progress=lambda m: note(_P_PLACE, m), avoid_xy=avoid)
             self._park()
             if not ok:
                 if self.referee:   # 半路失败：子在哪世界说不准（可能还夹着/掉在路上），修复放开格名
                     self.referee.note_failure(("remove", square), "discard_fail", None)
                 return {"ok": False, "message": f"丢到弃子区失败：{msg}"}
+            if config.DISCARD_MODE == "bin":
+                spawn.purge_model(name)     # 放稳后销毁=袋子吞掉；搬运的真实代价已如实花掉
             self._discard_n += 1
             self.last = f"remove {square}"
             suffix = ""
             if self.referee:
-                suffix = "｜" + self.referee.commit(("remove", square))["message"]
-            return {"ok": True, "message": f"已把 {square} 的子移到弃子区（第 {self._discard_n} 个）{suffix}"}
+                suffix = self._after_commit(("remove", square), note)
+            return {"ok": True, "message": f"已把 {square} 的子移出棋盘（第 {self._discard_n} 个）{suffix}"}
 
     # ---------- place = 从备用子区取子摆上盘 ----------
     def _place(self, square: str, piece: str, note=lambda p, m="": None) -> dict:
@@ -414,8 +516,35 @@ class GazeboChessWorld:
             self.last = f"place {letter}@{square}"
             suffix = ""
             if self.referee:
-                suffix = "｜" + self.referee.commit(("place", square, letter))["message"]
+                suffix = self._after_commit(("place", square, letter), note)
             return {"ok": True, "message": f"已把一枚{color}子摆到 {square}{suffix}"}
+
+    def reset_board(self) -> dict:
+        """开新局（人类侧：POST /reset / 网页「开新局」按钮；**不进 MCP**——大脑不许重置现实，
+        与 sim-chess「复位是网页的事」同构）。残局先如实落档（result=""）→ 清盘 → 按 FEN 重摆 →
+        裁判复位 → 弃子计数清零 → 停臂驻位；bot 执白则它先走。"""
+        with self.lock:
+            if self.referee is not None:
+                self.referee.reset(config.SETUP_FEN)
+            for nm in list(spawn.all_model_poses()):
+                if nm.startswith("piece_"):
+                    spawn.purge_model(nm)
+            self._discard_n = 0
+            fen = config.SETUP_FEN.strip()
+            if fen:
+                self._spawn_fen(fen)
+            elif self._demo_square:
+                spawn.spawn_piece(self._demo_square, "white")
+            self._park()
+            time.sleep(config.SETTLE_S)
+            self._spin(10)
+            first = ""
+            if self.referee is not None and self._bot is not None and not self.referee.over:
+                bot_color = chess.WHITE if config.BOT_SIDE == "white" else chess.BLACK
+                if self.referee.board.turn == bot_color:
+                    first = self._bot_reply()
+            self.last = "reset"
+            return {"ok": True, "message": "已开新局" + (f"｜{first}" if first else "")}
 
     def shutdown(self) -> None:
         """完整关停（uvicorn lifespan 退出时调）：先删净相机（防残留抢话题），再停 ROS spin/节点。
