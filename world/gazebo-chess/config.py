@@ -32,21 +32,43 @@ STREAM_FPS = _i("GZCHESS_STREAM_FPS", "15")          # 人类页实时视频帧�
 # ---- 棋盘几何（米；坐标系 = MoveIt 规划帧 `world` = Gazebo 世界帧）----
 # 重要：episode 孪生给 base_link 上面焊了个 `world` 链接，MoveIt 规划帧因此是 `world`，
 # 和 Gazebo 世界帧、spawn/读位姿同一个系。所以这里所有坐标都按 `world` 帧给（不是 base_link）。
-# 机械臂 base 大约在 world 原点正上方一点（底板 z≈0.02），可达性从 base 算。
-# 棋盘 40cm 见方、8×8；格名 a-h(列) / 1-8(行) 是域常量。
-BOARD_SIZE_M = _f("GZCHESS_BOARD_SIZE_M", "0.40")
+# 机械臂 base 在 world 原点（底座落在安装底板顶 z=0.02），可达性从 base 算。
 BOARD_FILES = 8                                       # 域常量：列 a-h
 BOARD_RANKS = 8                                       # 域常量：行 1-8
-CELL_M = BOARD_SIZE_M / BOARD_FILES                   # 派生：每格边长（默认 0.05）
-BOARD_THICKNESS_M = _f("GZCHESS_BOARD_THICKNESS_M", "0.008")  # 棋盘底板厚度（坐在桌面 z=0 上）
+# 格宽 / 板宽（v0.7 起格宽是主项 = Jeff 实测真棋盘 4.5cm；板宽默认派生 = 格宽×8）。
+# 兼容旧用法（T0）：只设 GZCHESS_BOARD_SIZE_M 时行为与 v0.4-0.6 完全一致（格宽 = 板宽/8）；
+# 两者都显式设置时各用各的（格区仍居中，边框相应变宽/变窄）。
+_cell_env = os.getenv("GZCHESS_CELL_M")
+_size_env = os.getenv("GZCHESS_BOARD_SIZE_M")
+if _cell_env is not None:
+    CELL_M = float(_cell_env)
+    BOARD_SIZE_M = float(_size_env) if _size_env is not None else CELL_M * BOARD_FILES
+elif _size_env is not None:
+    BOARD_SIZE_M = float(_size_env)
+    CELL_M = BOARD_SIZE_M / BOARD_FILES
+else:
+    CELL_M = 0.045                                    # Jeff 实测：真实棋盘格宽 4.5cm（2026-07-06）
+    BOARD_SIZE_M = CELL_M * BOARD_FILES               # 派生：格区 0.36
+BOARD_THICKNESS_M = _f("GZCHESS_BOARD_THICKNESS_M", "0.008")  # 棋盘底板厚度（坐在底板顶上）
 # 印坐标的边框宽度：板总尺寸 = 格区(BOARD_SIZE_M) + 2×边框。格中心坐标不受边框影响（格区始终居中）。
 BOARD_MARGIN_M = _f("GZCHESS_BOARD_MARGIN_M", "0.03")
 # 贴图最终整体旋转（90° 一档，0-3）：补偿 gz box 顶面 UV 的取向差——金标准（/status 真值 ↔ 印刷坐标）
 # 实测定档；换 gz 版本若 UV 约定变了改这一个数即可。
 BOARD_TEX_QUARTER_TURNS = _i("GZCHESS_BOARD_TEX_QUARTER_TURNS", "1")
-# 棋盘中心在 world 里的位姿（默认摆臂正前方、桌面上）。可达性按格自检，远格够不着就把这个挪近。
-# 背景：episode 桌面碰撞体中心 x≈0.35、臂展≈0.43；默认放近一点，保证演示格轻松够得着。
-BOARD_ORIGIN_X = _f("GZCHESS_BOARD_ORIGIN_X", "0.28")
+# 臂底座前缘在 world 的 x（米）。量法：episode1_urdf_1113/meshes/collision/base_link.STL 的包围盒
+# x∈[-0.076,+0.076]（离线解析，2026-07-06），base_link 焊在 world 原点正上方 → 前缘 x=+0.076。
+# 不参与派生，仅作自检/展示（底座外缘到板边的实际净空 = GAP − 此值）。
+ARM_BASE_FRONT_X_M = _f("GZCHESS_ARM_BASE_FRONT_X_M", "0.076")
+# 臂基座轴心在 world 的 xy（径向倾斜抓取的方位角原点；episode 孪生 base_link 就在原点）。
+ARM_BASE_XY = tuple(float(v) for v in os.getenv("GZCHESS_ARM_BASE_XY", "0,0").split(","))
+# 底座**轴心** → 棋盘物理近边（含印刷边框）的距离。口径 = Jeff 2026-07-06 拍板的方案 A：
+# 10cm 从轴心量起（底座外缘到板边实际 ≈2.4cm）。曾试过「前缘量 10cm」——h 列离轴心 0.544-0.566m，
+# 超出孪生臂全姿态抓取半径上限 0.53m（0-90° 径向倾斜逐档实测），64 格闸门不过，方案见 v0.7 开发日志。
+ARM_BOARD_GAP_M = _f("GZCHESS_ARM_BOARD_GAP_M", "0.10")
+# 棋盘中心在 world 里的位姿。默认按真实摆位派生：轴心 + 间距 + 边框 + 半幅格区（默认 0.31）；
+# 直接设 GZCHESS_BOARD_ORIGIN_X 可整体覆盖（旧用法保留，T0）。
+BOARD_ORIGIN_X = _f("GZCHESS_BOARD_ORIGIN_X",
+                    str(ARM_BASE_XY[0] + ARM_BOARD_GAP_M + BOARD_MARGIN_M + BOARD_SIZE_M / 2))
 BOARD_ORIGIN_Y = _f("GZCHESS_BOARD_ORIGIN_Y", "0.0")
 # 棋盘上表面 z（= 棋子底面所在高度）。
 # ⚠️ 实测：episode 的 40×80 安装底板(mount_plate)顶在 z=0.02，比薄棋盘高，会把平铺在 z=0.008 的棋盘**挡住**、
@@ -145,9 +167,11 @@ GRIP_CLOSE_M = _f("GZCHESS_GRIP_CLOSE_M", "0.003")
 GRIP_OPEN_M = _f("GZCHESS_GRIP_OPEN_M", "0.012")          # 张开放子/接近时的手指位置
 PLACE_TOLERANCE_M = _f("GZCHESS_PLACE_TOLERANCE_M", "0.015")  # 落子到位容差 1.5cm
 
-# ---- 找抓取姿态的备用自由度（够不着/会撞时逐档试；0.4 主要用竖直 0°）----
-# 接近方向从竖直往外偏的档（度）；末端 joint6 手腕自转的档（度）。
-APPROACH_TILT_DEG = _deg_list("GZCHESS_APPROACH_TILT_DEG", "0,15,30,45")
+# ---- 找抓取姿态的备用自由度（够不着/会撞时逐档试）----
+# 接近方向从竖直往外偏的档（度，v0.7 起为**径向**倾斜：朝远离基座方向倒）；末端 joint6 手腕自转的档（度）。
+# 60/75 两档是 v0.7 新增：4.5cm 格 + 10cm 间隔后最远角格离基座 ≈0.57m，竖直取半径（≈0.44m）够不到，
+# 大倾角（接近水平）才有解——对应真臂「伸直去取」的姿态。旧档全保留（T0）。
+APPROACH_TILT_DEG = _deg_list("GZCHESS_APPROACH_TILT_DEG", "0,15,30,45,60,75")
 WRIST_ROLL_DEG = _deg_list("GZCHESS_WRIST_ROLL_DEG", "0,45,90,-45,-90")
 
 # ---- 动作阶段预算 / 节奏（秒）——每个环节的等待上限，超了就如实报失败，绝不无限挂 ----
