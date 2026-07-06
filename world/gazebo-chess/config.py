@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 
 def _f(name: str, default: str) -> float:
@@ -131,8 +132,29 @@ CAM_H = _i("GZCHESS_CAM_H", "720")
 CAM_FPS = _i("GZCHESS_CAM_FPS", "15")
 
 # ---- 摆盘（v0.5 多子）----
-# 非空 → 启动按 FEN（只用摆放字段）摆多子；空 → 只摆一枚演示子（GZCHESS_DEMO_PIECE，v0.4 路径保留）。
+# 非空 → 启动按 FEN 摆多子（摆放字段；v0.7 起也接受完整 FEN，轮次/易位权给裁判用）；
+# 空 → 只摆一枚演示子（GZCHESS_DEMO_PIECE，v0.4 路径保留）。
 SETUP_FEN = os.getenv("GZCHESS_SETUP_FEN", "")
+
+# ---- 裁判 / 对局（v0.7）----
+# 裁判 = 世界内部的棋规真值（referee.py）：原语动臂之前过合法闸、物理核实后才推进真值、终局落档。
+# auto（默认）= 摆了 FEN 才开；单演示子模式自动关，v0.4-0.6 的「裸物理原语」行为原样保留（T0）。
+REFEREE_MODE = os.getenv("GZCHESS_REFEREE", "auto")            # auto / on / off
+
+
+def referee_enabled() -> bool:
+    if REFEREE_MODE == "on":
+        return True
+    if REFEREE_MODE == "off":
+        return False
+    return bool(SETUP_FEN.strip())
+
+
+# 内置电脑对手走哪方（white/black/off）。裁判落档的 white/black 标签也据此定（非 bot 侧 = anima）。
+BOT_SIDE = os.getenv("GZCHESS_BOT_SIDE", "black")
+# 对局棋谱落档目录（对齐 sim-chess：默认仓根 logs/，eval 记分台从这里读）。
+GAMES_LOG_DIR = os.getenv("GZCHESS_GAMES_LOG_DIR") or str(
+    Path(__file__).resolve().parents[2] / "logs")
 
 # ---- 失败注入（v0.5：测大脑补救链路用；默认全关，绝不影响正常运行）----
 # 语义：off=关 / once=注入一次后自动归 off / always=每次都注入。

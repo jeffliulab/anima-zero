@@ -21,4 +21,4 @@ dependencies = [
 ]
 
 [tool.setuptools]
-py-modules = ["server", "world", "arm_controller", "grasp_pose", "vision", "geometry", "spawn", "render", "config", "awi_mcp"]
+py-modules = ["server", "world", "arm_controller", "grasp_pose", "vision", "geometry", "spawn", "render", "config", "awi_mcp", "referee", "models", "board_texture"]

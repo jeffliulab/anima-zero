@@ -5,11 +5,16 @@
 - `remove(square)`：把 square 格的子夹起来、放到棋盘一侧的**弃子区**（吃子/清子）。
 - `place(square,piece)`：从**备用子区**取一枚该色的新子、摆到 square（摆盘/升变）。
 
-大脑靠 adapter.expand_move 把一手逻辑棋拆成这几个原语的序列（吃子=remove+move、升变=move+remove+place…）。
-世界只负责把每个原语真做出来 + 回成败，绝不碰"轮到谁/是否终局/合法性"（那些在大脑）。
+大脑自己把一手逻辑棋拆成这几个原语的序列（吃子=remove+move、升变=move+remove+place、易位=王先车后两次 move）。
+
+裁判（v0.7，referee.py）：摆了 FEN 的对局模式下，世界内部持一份棋规真值（对齐 sim-chess
+「世界=现实、可以懂棋规」的先例）——每个原语**动臂之前**先过合法闸（非法直接拒绝，臂不动），
+物理核实成功后才推进真值，终局判定 + 棋谱落档都在世界内。无 FEN 的单演示子模式裁判自动关，
+v0.4-0.6 的「裸物理原语」行为原样保留（T0）。
 
 state（perceive 随画面给大脑的结构化部分）= **空 `{}`**：这个世界没有该给大脑的结构化真值，棋盘全靠画面看。
-棋盘真值（每子在哪格）只走人类调试台 /status（debug_state），绝不给 ANIMA。
+棋盘真值（每子在哪格 + 裁判的局面记录）只走人类调试台 /status（debug_state），绝不给 ANIMA；
+大脑能听到的只有原语的 ok/fail 消息（拒绝原因/对局播报——那是「现实的反馈」，不是真值通道）。
 
 线程（v0.5 wave 0）：ROS 的 spin 收敛到**唯一一个专职线程**（SingleThreadedExecutor，init 时启动）——
 相机帧、/joint_states、service/action 回包全由它持续送达；请求工作线程对 ROS future 只「挂事件+带超时等」
@@ -32,6 +37,7 @@ import rclpy
 
 import config
 import geometry
+import referee as referee_mod
 import render
 import spawn
 from arm_controller import ArmController
@@ -82,6 +88,15 @@ class GazeboChessWorld:
         self.lock = threading.RLock()
         self.last = ""
         self._discard_n = 0                 # 已用掉几个弃子槽（remove 递增）
+        # 裁判（v0.7）：对局模式（摆 FEN）才建；标签=非 bot 侧是 anima（bot 关掉时对面标 opponent）。
+        self.referee = None
+        if config.referee_enabled():
+            labels = {"white": "anima", "black": "opponent"}
+            if config.BOT_SIDE in ("white", "black"):
+                labels = ({"white": "bot", "black": "anima"} if config.BOT_SIDE == "white"
+                          else {"white": "anima", "black": "bot"})
+            self.referee = referee_mod.Referee(config.SETUP_FEN, games_dir=config.GAMES_LOG_DIR,
+                                               **labels)
         # 失败注入状态（once 模式注入一次即耗尽；见 config.FAIL_*）
         self._fail_grip = config.FAIL_GRIP_MISS
         self._fail_place = config.FAIL_PLACE_MODE
@@ -168,7 +183,10 @@ class GazeboChessWorld:
                     continue
                 pieces[nm] = {"square": geometry.base_xy_to_square(pp[0], pp[1]),
                               "xyz": [round(v, 4) for v in pp]}
-            return {"pieces": pieces, "discard_used": self._discard_n}
+            out = {"pieces": pieces, "discard_used": self._discard_n}
+            if self.referee:   # 裁判真值（fen/轮次/终局/进行中序列/物理失败计数）——上帝视角，允许
+                out["referee"] = self.referee.status()
+            return out
 
     def observe(self) -> tuple[dict, list[tuple[str, bytes]]]:
         """给画面 + 极简 state。多相机：每路一张命名图，state.cameras 按序列名字（这就是图↔相机的
@@ -257,12 +275,18 @@ class GazeboChessWorld:
             if occ is not None and occ != name:
                 return {"ok": False,
                         "message": f"{to} 格上已经有子——想换掉它就先 remove({to}) 再 move；想放旁边就换个空格。"}
+            if self.referee:                       # 前置合法闸：非法零物理动作（一次臂动 26 秒，别浪费）
+                legal, why = self.referee.check(("move", frm, to))
+                if not legal:
+                    return {"ok": False, "message": f"裁判拒绝：{why}", "data": {"refused": "referee"}}
             note(_P_LOCATE, f"已定位 {frm} 上的棋子，正在规划抓取")
             gx, gy, gz = p[0], p[1], p[2] + config.PIECE_GRASP_WAIST_M
             avoid = self._others_xy(name)
             ok, msg = self.arm.pick_at(gx, gy, gz, progress=lambda m: note(_P_PICK, m),
                                        inject_miss=self._consume_inject("_fail_grip"), avoid_xy=avoid)
             if not ok:
+                if self.referee:
+                    self.referee.note_failure(("move", frm, to), "pick_fail", frm)  # 子没动，还在 frm
                 self._park(); return {"ok": False, "message": f"抓取失败：{msg}"}
             note(_P_CARRY, f"已夹取，正在移向 {to}")
             dx, dy, dz = geometry.grasp_xyz(to)
@@ -270,6 +294,8 @@ class GazeboChessWorld:
                 dx += config.FAIL_PLACE_OFFSET_M
             ok, msg = self.arm.place_at(dx, dy, dz, progress=lambda m: note(_P_PLACE, m), avoid_xy=avoid)
             if not ok:
+                if self.referee:   # 放置中途失败：子可能还夹着/掉在路上，实际位置世界也说不准 → 不报格
+                    self.referee.note_failure(("move", frm, to), "place_fail", None)
                 self._park(); return {"ok": False, "message": f"放置失败：{msg}"}
             note(_P_VERIFY, "已放下，正在核对落点")
             time.sleep(config.SETTLE_S); self._spin(10)
@@ -279,8 +305,16 @@ class GazeboChessWorld:
             self._park()
             if err <= config.PLACE_TOLERANCE_M:
                 self.last = f"move {frm}->{to}"
-                return {"ok": True, "message": f"已把子从 {frm} 搬到 {to}（落点误差 {err * 100:.1f}cm）"}
-            return self._classify_move_failure(name, frm, to, p2, err)
+                suffix = ""
+                if self.referee:   # 物理核实成功 → 裁判记账（可能凑完一手 → 真值前进 + 对局播报）
+                    suffix = "｜" + self.referee.commit(("move", frm, to))["message"]
+                return {"ok": True,
+                        "message": f"已把子从 {frm} 搬到 {to}（落点误差 {err * 100:.1f}cm）{suffix}"}
+            res = self._classify_move_failure(name, frm, to, p2, err)
+            if self.referee:       # 失败自检结果同步给裁判：登记修复上下文（序列指针不动）
+                self.referee.note_failure(("move", frm, to), res["data"]["fail"],
+                                          res["data"]["piece_square"])
+            return res
 
     def _classify_move_failure(self, name: str, frm: str, to: str, p2, err: float) -> dict:
         """执行自检分类（v1.1：自检是早停提示，最终判据仍是大脑的视觉裁判）。
@@ -312,21 +346,32 @@ class GazeboChessWorld:
             name, p = self._piece_at(square)
             if name is None:
                 return {"ok": False, "message": f"{square} 格上没有子"}
+            if self.referee:                       # 前置合法闸：remove 只用于合法吃子的第一步
+                legal, why = self.referee.check(("remove", square))
+                if not legal:
+                    return {"ok": False, "message": f"裁判拒绝：{why}", "data": {"refused": "referee"}}
             note(_P_LOCATE, f"已定位 {square} 上的棋子，准备夹去弃子区")
             gx, gy, gz = p[0], p[1], p[2] + config.PIECE_GRASP_WAIST_M
             avoid = self._others_xy(name)
             ok, msg = self.arm.pick_at(gx, gy, gz, progress=lambda m: note(_P_PICK, m), avoid_xy=avoid)
             if not ok:
+                if self.referee:
+                    self.referee.note_failure(("remove", square), "pick_fail", square)
                 self._park(); return {"ok": False, "message": f"抓 {square} 的子失败：{msg}"}
             note(_P_CARRY, "已夹取，正在移向弃子区")
             dx, dy, dz = geometry.discard_grasp_xyz(self._discard_n)
             ok, msg = self.arm.place_at(dx, dy, dz, progress=lambda m: note(_P_PLACE, m), avoid_xy=avoid)
             self._park()
             if not ok:
+                if self.referee:   # 半路失败：子在哪世界说不准（可能还夹着/掉在路上），修复放开格名
+                    self.referee.note_failure(("remove", square), "discard_fail", None)
                 return {"ok": False, "message": f"丢到弃子区失败：{msg}"}
             self._discard_n += 1
             self.last = f"remove {square}"
-            return {"ok": True, "message": f"已把 {square} 的子移到弃子区（第 {self._discard_n} 个）"}
+            suffix = ""
+            if self.referee:
+                suffix = "｜" + self.referee.commit(("remove", square))["message"]
+            return {"ok": True, "message": f"已把 {square} 的子移到弃子区（第 {self._discard_n} 个）{suffix}"}
 
     # ---------- place = 从备用子区取子摆上盘 ----------
     def _place(self, square: str, piece: str, note=lambda p, m="": None) -> dict:
@@ -340,6 +385,10 @@ class GazeboChessWorld:
             letter = (piece or "").strip()
             if not letter or letter.lower() not in "pnbrqk":
                 return {"ok": False, "message": f"piece 非法：{piece!r}（应为棋子字母 P/N/B/R/Q/K，大写白小写黑）"}
+            if self.referee:                       # 前置合法闸：place 只在升变最后一步合法
+                legal, why = self.referee.check(("place", square, letter))
+                if not legal:
+                    return {"ok": False, "message": f"裁判拒绝：{why}", "data": {"refused": "referee"}}
             color = "white" if letter.isupper() else "black"
             note(_P_LOCATE, f"在备用子区备一枚{color}子")
             rx, ry, rz = geometry.reservoir_spawn_xyz()
@@ -351,15 +400,22 @@ class GazeboChessWorld:
             avoid = self._others_xy(nm)
             ok, msg = self.arm.pick_at(grx, gry, grz, progress=lambda m: note(_P_PICK, m), avoid_xy=avoid)
             if not ok:
+                if self.referee:
+                    self.referee.note_failure(("place", square, letter), "pick_fail", None)
                 self._park(); return {"ok": False, "message": f"从备用区抓子失败：{msg}"}
             note(_P_CARRY, f"已从备用区夹取，正在移向 {square}")
             dx, dy, dz = geometry.grasp_xyz(square)
             ok, msg = self.arm.place_at(dx, dy, dz, progress=lambda m: note(_P_PLACE, m), avoid_xy=avoid)
             self._park()
             if not ok:
+                if self.referee:
+                    self.referee.note_failure(("place", square, letter), "place_fail", None)
                 return {"ok": False, "message": f"摆到 {square} 失败：{msg}"}
             self.last = f"place {letter}@{square}"
-            return {"ok": True, "message": f"已把一枚{color}子摆到 {square}"}
+            suffix = ""
+            if self.referee:
+                suffix = "｜" + self.referee.commit(("place", square, letter))["message"]
+            return {"ok": True, "message": f"已把一枚{color}子摆到 {square}{suffix}"}
 
     def shutdown(self) -> None:
         """完整关停（uvicorn lifespan 退出时调）：先删净相机（防残留抢话题），再停 ROS spin/节点。
