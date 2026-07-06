@@ -52,6 +52,7 @@ GZCHESS_SETUP_FEN="4k3/8/8/8/8/8/4P3/4K3" uvicorn server:app --port 8106 --reloa
 - [x] `arm_controller.py`（MoveIt `/compute_ik` + FK 复核 + `FollowJointTrajectory`）、`grasp_pose.py`
 - [x] `server.py` / `world.py` 接 MCP（`awi_mcp.py`，接口和 sim-chess 同款）
 - [x] **teleop 手动遥控（`:8110`）**：人可顺畅点动这条臂，物理底座已验通（见 `episode-ros-ws` 的 `episode_teleop` + 项目 `运行命令.md`「三 · teleop」）
+  （📌 2026-07-06 目录迁移 note：episode-ros-ws 已迁至项目根 `episode-robot-dev-framework/` 下，命令以更新后的 `运行命令.md` 为准；原因见项目根《episode目录迁移公告-NOTE.md》。）
 - [x] **ANIMA 自主走子（大脑发 `move` → 世界内部真跑一趟夹取搬运）——v0.5 wave 0 已修通**。
       v0.4 的 `TimeoutError` 根因是框架级的：世界把几十秒的夹取同步跑在事件循环上（move 期间整个
       服务器冻结、进度发不出去），大脑又用固定死线盲等。修法＝采标 MCP progress：世界把活儿放到
