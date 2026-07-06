@@ -100,26 +100,40 @@ def load_games_from_pgn(pgn_path: str) -> list[dict]:
     return games
 
 
+# 统计哪些下棋世界的 AWI 流量（v0.7：gazebo-chess 加入；EVAL_CHESS_WORLDS 可覆盖清单）。
+EVAL_WORLDS = [w.strip() for w in
+               os.getenv("EVAL_CHESS_WORLDS", "sim-chess,gazebo-chess").split(",") if w.strip()]
+_PRIM_PREFIXES = ("move(", "remove(", "place(")   # 下棋物理原语（sim-chess 只有 move）
+
+
 def awi_move_stats() -> dict:
-    """从 AWI 日志取 sim-chess 的 move invoke：合法/失败率 + 决策延迟。与棋谱互补（这边有每步耗时）。"""
-    oks, lat = [], []
+    """从 AWI 日志取各下棋世界的原语 invoke：成功率 + 决策延迟。**分世界出指标、绝不合并**：
+    sim-chess 是软件世界，失败≈非法走子（成功率=合法率）；gazebo-chess 是物理世界，
+    失败还包含夹空/放偏/掉子等物理失败——两种率语义不同，混在一起会误导。
+    返回 {世界名: {invokes, ok_rate, latency_ms_mean, latency_ms_p95, latency_samples}}。"""
+    per = {w: {"oks": [], "lat": []} for w in EVAL_WORLDS}
     for p in sorted(glob.glob(os.path.join(LOGS_DIR, "awi-*.jsonl"))):
         for e in _read_jsonl(p):
-            if e.get("world") == "sim-chess" and e.get("method") == "invoke" \
-                    and str(e.get("summary", "")).startswith("move("):
+            w = e.get("world")
+            if w in per and e.get("method") == "invoke" \
+                    and str(e.get("summary", "")).startswith(_PRIM_PREFIXES):
                 resp = e.get("resp") or {}
                 if "ok" in resp:
-                    oks.append(1 if resp["ok"] else 0)
+                    per[w]["oks"].append(1 if resp["ok"] else 0)
                 if isinstance(e.get("ms"), (int, float)):
-                    lat.append(float(e["ms"]))
-    n = len(oks)
-    return {
-        "move_invokes": n,
-        "legal_rate": (sum(oks) / n) if n else None,
-        "latency_ms_mean": (statistics.mean(lat) if lat else None),
-        "latency_ms_p95": (sorted(lat)[int(0.95 * (len(lat) - 1))] if lat else None),
-        "latency_samples": len(lat),
-    }
+                    per[w]["lat"].append(float(e["ms"]))
+    out = {}
+    for w, d in per.items():
+        oks, lat = d["oks"], d["lat"]
+        n = len(oks)
+        out[w] = {
+            "invokes": n,
+            "ok_rate": (sum(oks) / n) if n else None,
+            "latency_ms_mean": (statistics.mean(lat) if lat else None),
+            "latency_ms_p95": (sorted(lat)[int(0.95 * (len(lat) - 1))] if lat else None),
+            "latency_samples": len(lat),
+        }
+    return out
 
 
 # ---------------- 棋力评分（需 UCI 引擎） ----------------
@@ -216,9 +230,17 @@ def render_html(report: dict) -> str:
 
     row("对局数 (games)", s["games"])
     row("ANIMA 走子数 (scored moves)", s["scored_moves"])
-    row("合法率 legal-rate", f'{a["legal_rate"]*100:.1f}%' if a["legal_rate"] is not None else "—")
-    row("决策延迟 mean / p95 (ms)",
-        f'{a["latency_ms_mean"]:.0f} / {a["latency_ms_p95"]:.0f}' if a["latency_ms_mean"] is not None else "—")
+    for w, aw in a.items():   # 分世界：sim-chess 成功率=合法率；gazebo 成功率还含物理失败，语义不同不合并
+        if not aw["invokes"]:
+            continue
+        rate_label = "合法率" if w == "sim-chess" else "原语成功率（失败含物理失败）"
+        row(f"[{w}] 原语调用数", aw["invokes"])
+        row(f"[{w}] {rate_label}", f'{aw["ok_rate"]*100:.1f}%' if aw["ok_rate"] is not None else "—")
+        row(f"[{w}] 决策延迟 mean / p95 (ms)",
+            f'{aw["latency_ms_mean"]:.0f} / {aw["latency_ms_p95"]:.0f}' if aw["latency_ms_mean"] is not None else "—")
+    if s.get("physical_fails"):
+        row("物理失败合计（gazebo 落档 physical_fails）",
+            " · ".join(f"{k}:{v}" for k, v in sorted(s["physical_fails"].items())))
     if sc:
         row("ACPL（平均每步丢厘兵·越低越强）", sc["acpl"])
         row("accuracy %（lichess 公式）", sc["accuracy_pct"])
@@ -249,7 +271,18 @@ def main() -> None:
     games = load_games_from_pgn(args.pgn) if args.pgn else load_games_from_logs()
     awi = awi_move_stats()
 
-    report = {"engine": "(none)", "summary": {"games": len(games), "scored_moves": 0}, "awi": awi, "strength": None}
+    # 各世界对局数 + gazebo 落档里的物理失败合计（无 world 字段的旧记录都是 sim-chess 的）
+    games_by_world: dict[str, int] = {}
+    phys: dict[str, int] = {}
+    for g in games:
+        w = g.get("world") or ("pgn" if g.get("source") == "pgn" else "sim-chess")
+        games_by_world[w] = games_by_world.get(w, 0) + 1
+        for k, v in (g.get("physical_fails") or {}).items():
+            phys[k] = phys.get(k, 0) + v
+    report = {"engine": "(none)",
+              "summary": {"games": len(games), "games_by_world": games_by_world,
+                          "physical_fails": phys, "scored_moves": 0},
+              "awi": awi, "strength": None}
 
     if not games:
         print(f"没找到对局记录（{LOGS_DIR}/games-*.jsonl 为空）。先下几盘棋让世界落档，或用 --pgn 指定棋谱。")
@@ -276,9 +309,15 @@ def main() -> None:
     # 终端摘要
     s, a, sc = report["summary"], report["awi"], report["strength"]
     print(f"\n=== ANIMA 下棋记分卡 ===")
-    print(f"对局 {s['games']} · ANIMA 走子 {s['scored_moves']} · 引擎 {report['engine']}")
-    if a["legal_rate"] is not None:
-        print(f"合法率 {a['legal_rate']*100:.1f}% · 延迟均值 {a['latency_ms_mean']:.0f}ms（{a['latency_samples']} 步）")
+    by_w = " ".join(f"{w}:{n}" for w, n in sorted(s.get("games_by_world", {}).items()))
+    print(f"对局 {s['games']}（{by_w}） · ANIMA 走子 {s['scored_moves']} · 引擎 {report['engine']}")
+    for w, aw in a.items():
+        if aw["ok_rate"] is not None:
+            lbl = "合法率" if w == "sim-chess" else "原语成功率(含物理失败)"
+            print(f"[{w}] {lbl} {aw['ok_rate']*100:.1f}% · 延迟均值 {aw['latency_ms_mean']:.0f}ms"
+                  f"（{aw['latency_samples']} 次原语）")
+    if s.get("physical_fails"):
+        print("物理失败合计：" + " ".join(f"{k}:{v}" for k, v in sorted(s["physical_fails"].items())))
     if sc:
         print(f"ACPL {sc['acpl']} · accuracy {sc['accuracy_pct']}% · 命中最佳着 {sc['best_move_match_pct']}% "
               f"· 漏/错/小 {sc['blunders']}/{sc['mistakes']}/{sc['inaccuracies']} · ≈Elo {sc['est_elo']}")
