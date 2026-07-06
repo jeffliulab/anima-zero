@@ -153,20 +153,31 @@ class Referee:
         return prim in self._next_prims()
 
     def _repair_match(self, prim: Prim) -> bool:
-        """物理失败后的修复放宽：move 只要目标格与期待一致（源格自由——子被放偏到哪，就从哪修）；
-        remove 若世界报了子的实际位置则须对上，没报（掉哪不知道）就放开格名；place 只许原样重试。"""
+        """物理失败后的修复放宽：目标格必须与期待一致；**源格必须是世界报的子实际所在格**
+        （夹空=还在原格、放偏=报了实际落格），只有世界也不知道子在哪（drop 未定位）才放开源格。
+        教训（2026-07-06 对局 2 实锤）：最初「move 源格全自由」被大脑钻了空子——f1 车连夹 8 次
+        失败后它把 g1 的**王**搬去目标格，裁判照单全收记成 Rxf2，真值与物理大面积分叉。
+        修复的本意是「同一颗子从它实际的位置挪到本来要去的地方」，源格校验就是「同一颗子」的代理。"""
         exp: Prim = self._attempt["prim"]
         if prim[0] != exp[0]:
             return False
+        known = self._attempt.get("square")
         if prim[0] == "move":
-            return prim[2] == exp[2]
+            if prim[2] != exp[2]:
+                return False
+            return known is None or prim[1] == known
         if prim[0] == "remove":
-            known = self._attempt.get("square")
             return known is None or prim[1] == known
         return prim == exp
 
     def _refusal(self, prim: Prim) -> str:
         """拒绝原因，说人话（帮大脑自我纠偏——它只能靠这句话理解哪里不对）。"""
+        if self._attempt is not None:
+            exp: Prim = self._attempt["prim"]
+            known = self._attempt.get("square")
+            if prim[0] == exp[0] == "move" and prim[2] == exp[2] and known and prim[1] != known:
+                return (f"修复要用**同一颗子**：上次失败后那颗子在 {known}，"
+                        f"请 move({known},{exp[2]})——不能拿别的子（{prim[1]} 上的）顶替。")
         if self._pending is not None:
             nxt = "、".join(self._prim_desc(p) for p in self._next_prims())
             return (f"上一手（{self._pending_desc()}）还没做完——期待下一步：{nxt}。"

@@ -172,9 +172,23 @@ def test_place_offset_repair_target_must_match():
     assert ok
     ok, _ = ref.check(("move", "d4", "d5"))            # 目标不一致 → 拒
     assert not ok
+    ok, why = ref.check(("move", "g1", "e4"))          # 目标一致但**不是那颗子** → 拒并指路
+    assert not ok and "同一颗子" in why and "d4" in why
     info = ref.commit(("move", "d4", "e4"))            # 修复成功按原手记账
     assert info["advanced"] and info["move"] == "e2e4"
     assert ref.status()["physical_fails"] == {"place_offset": 1}
+
+
+def test_repair_cannot_substitute_another_piece():
+    """反面教材回归（2026-07-06 对局 2 实锤）：车夹不起来后大脑拿王顶替去目标格，
+    旧规则（move 源格全自由）照单全收 → 真值/物理大面积分叉。收紧后必须拒。"""
+    ref = _ref("r4rk1/ppp2ppp/8/8/8/8/PP3PPP/R4RK1 w - - 0 18")
+    assert ref.check(("move", "f1", "e1"))[0]
+    ref.note_failure(("move", "f1", "e1"), "grip_miss", "f1")      # 车还在 f1
+    ok, why = ref.check(("move", "g1", "e1"))          # 拿王顶替 → 拒（王 g1→e1 本身也非法）
+    assert not ok
+    ok, _ = ref.check(("move", "f1", "e1"))            # 同一颗子原样重试 → 放行
+    assert ok
 
 
 def test_grip_miss_exact_retry():

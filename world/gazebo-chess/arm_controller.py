@@ -44,7 +44,12 @@ class ArmController(Node):
         super().__init__(f"gazebo_chess_arm_{os.getpid()}")
         self.set_parameters([rclpy.parameter.Parameter("use_sim_time", value=True)])
         self._arm = ActionClient(self, FollowJointTrajectory, f"/{config.ARM_CONTROLLER}/follow_joint_trajectory")
-        self._grip = ActionClient(self, FollowJointTrajectory, f"/{config.GRIPPER_CONTROLLER}/follow_joint_trajectory")
+        # 夹爪走 **topic 发布**（JointTrajectoryController 原生订阅 ~/joint_trajectory），不用 action：
+        # 2026-07-06 整盘耐力跑实锤——长命进程跑到 ~30 手后，夹爪 action 客户端单独瘫痪
+        # （goal 应答不再送达；同节点的臂 action 客户端还活着、CLI 也正常），闭爪静默失效被误判成
+        # 连环「夹空」。pub/sub 没有 service 应答链路可瘫；到没到位改由 /joint_states 实测核实。
+        self._grip_pub = self.create_publisher(JointTrajectory,
+                                               f"/{config.GRIPPER_CONTROLLER}/joint_trajectory", 10)
         self._ik = self.create_client(GetPositionIK, "/compute_ik")
         self._fk = self.create_client(GetPositionFK, "/compute_fk")
         self._js: JointState | None = None
@@ -65,7 +70,6 @@ class ArmController(Node):
 
     def wait_ready(self, timeout: float = 15.0) -> bool:
         ok = (self._arm.wait_for_server(timeout_sec=timeout)
-              and self._grip.wait_for_server(timeout_sec=timeout)
               and self._ik.wait_for_service(timeout_sec=timeout))
         self._fk.wait_for_service(timeout_sec=timeout)   # FK 用于复核 IK 解，不强制（缺了退化为信任 IK）
         t0 = time.time()
@@ -111,11 +115,13 @@ class ArmController(Node):
             return None
         joints = [sol[j] for j in ARM_JOINTS]
         # ⚠️ 实测：这台臂的 IKFast 插件会对**够不着的位姿也返回 error_code=SUCCESS + 一个不匹配的解**。
-        # 所以必须用 FK 复核：解出来的关节 FK 回 link6，和请求位姿差太多就判不可达（别让上层拿假解去执行）。
+        # 所以必须用 FK 复核：解出来的关节 FK 回 link6，和请求位姿差超容差就判不可达。
+        # 容差见 config.IK_FK_TOL_M（原写死 0.02 导致个别位姿带 1-2cm 偏差的解通过、该格每抓必空）。
         fk = self._fk_link6(joints)
         if fk is None:
             return joints   # FK 服务不可用时退化为信任 IK（至少别更糟）
-        if (abs(fk[0] - px) > 0.02 or abs(fk[1] - py) > 0.02 or abs(fk[2] - pz) > 0.02):
+        tol = config.IK_FK_TOL_M
+        if (abs(fk[0] - px) > tol or abs(fk[1] - py) > tol or abs(fk[2] - pz) > tol):
             return None
         return joints
 
@@ -152,14 +158,38 @@ class ArmController(Node):
     def goto_arm(self, positions: list[float], duration_s: float = config.MOVE_TIME_APPROACH_S) -> bool:
         return self._send_traj(self._arm, ARM_JOINTS, positions, duration_s)
 
-    def set_gripper(self, finger_pos: float, duration_s: float = config.GRIP_TIME_S) -> bool:
-        return self._send_traj(self._grip, GRIPPER_JOINTS, [finger_pos, finger_pos], duration_s)
+    def gripper_positions(self) -> list[float]:
+        """两指当前位置（/joint_states 实测；没数据返回空表）。"""
+        pos = self.current_arm_positions()
+        return [pos[j] for j in GRIPPER_JOINTS if j in pos]
+
+    def set_gripper(self, finger_pos: float, duration_s: float = config.GRIP_TIME_S,
+                    verify_reach: bool = True) -> bool:
+        """夹爪到指定指位：topic 发布轨迹（见 __init__ 注释——不用 action），完成判定走
+        /joint_states 实测。verify_reach=True（张开用）：等两指真到位，超时如实报 False；
+        =False（闭合夹子用）：手指会被棋子挡停、到不了目标位是**预期**，只等轨迹时间走完，
+        夹没夹住交给下游的位移核实判断（最终判据是物理状态，不是指令 ack）。"""
+        jt = JointTrajectory(joint_names=list(GRIPPER_JOINTS))
+        pt = JointTrajectoryPoint(positions=[float(finger_pos)] * 2)
+        pt.time_from_start = Duration(sec=int(duration_s), nanosec=int((duration_s % 1) * 1e9))
+        jt.points = [pt]
+        self._grip_pub.publish(jt)
+        if not verify_reach:
+            time.sleep(duration_s + config.GRIP_SETTLE_S)
+            return True
+        deadline = time.time() + duration_s + config.TRAJ_EXTRA_S
+        while time.time() < deadline:
+            got = self.gripper_positions()
+            if len(got) == 2 and all(abs(p - finger_pos) <= config.GRIP_POS_TOL_M for p in got):
+                return True
+            time.sleep(config.SPIN_STEP_S)
+        return False
 
     def open_gripper(self) -> bool:
-        return self.set_gripper(config.GRIP_OPEN_M)
+        return self.set_gripper(config.GRIP_OPEN_M, verify_reach=True)
 
     def close_gripper(self) -> bool:
-        return self.set_gripper(config.GRIP_CLOSE_M)
+        return self.set_gripper(config.GRIP_CLOSE_M, verify_reach=False)
 
     # ---------- 抓 / 放 ----------
     def _solve_candidate(self, approach: grasp_pose.Pose, grasp: grasp_pose.Pose):
@@ -188,7 +218,8 @@ class ArmController(Node):
                 continue
             ja, jg = sol
             note(f"抓取姿态可达（{label}），移向接近点")
-            self.open_gripper()
+            if not self.open_gripper():   # 状态核实没到位=控制器/通信问题，如实定性（≠抓取失败）
+                return False, "夹爪没张开（张开指令未生效——控制器/通信问题，不是够不着）"
             if not self.goto_arm(ja, config.MOVE_TIME_APPROACH_S):
                 return False, f"到接近点失败({label})"
             note("下探到抓取点")
@@ -233,7 +264,8 @@ class ArmController(Node):
             if not self.goto_arm(jg, config.MOVE_TIME_SHORT_S):
                 return False, f"下到放置点失败({label})"
             note("张开夹爪放子")
-            self.open_gripper()
+            if not self.open_gripper():   # 张不开=子可能还夹在手里，如实定性为基础设施问题
+                return False, "放置时夹爪没张开（指令未生效——控制器/通信问题；子可能还夹着）"
             time.sleep(config.GRIP_SETTLE_S)
             if not self.goto_arm(ja, config.MOVE_TIME_SHORT_S):
                 return False, f"放后抬起失败({label})"

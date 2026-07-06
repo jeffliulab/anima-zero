@@ -1,4 +1,4 @@
-"""gazebo-chess 世界的可调项集中地（v0.4）。
+"""gazebo-chess 世界的可调项集中地。
 
 约定（对齐 anima-zero 各世界做法 + 开发指南「禁止硬编码」）：
 - 所有可调值都在这里，用 GZCHESS_* 环境变量给默认值；别的模块从这里取，不要在代码里 inline 魔法数字。
@@ -26,7 +26,7 @@ def _deg_list(name: str, default: str) -> list[float]:
 
 
 # ---- 世界标识 / 服务 ----
-WORLD_VERSION = os.getenv("GZCHESS_VERSION", "0.4")
+WORLD_VERSION = os.getenv("GZCHESS_VERSION", "0.7")
 PORT = _i("GZCHESS_PORT", "8106")
 STREAM_FPS = _i("GZCHESS_STREAM_FPS", "15")          # 人类页实时视频帧率
 
@@ -204,6 +204,8 @@ GRIP_CLOSE_M = _f("GZCHESS_GRIP_CLOSE_M", "0.003")
 # 0.020 全开→±3.3cm，邻格子身表面只有 5-1.75=3.25cm 远→下探蹭到邻子（e2 旁的 e1 王被扫飞）。
 # 0.012 →±2.5cm：不出本格（半格 2.5cm），而开口 5.0cm 仍远大于腰宽 3.5cm。
 GRIP_OPEN_M = _f("GZCHESS_GRIP_OPEN_M", "0.012")          # 张开放子/接近时的手指位置
+# 夹爪「到位」判定容差（米，对 /joint_states 实测指位；v0.7 夹爪改 topic+状态核实后使用）
+GRIP_POS_TOL_M = _f("GZCHESS_GRIP_POS_TOL_M", "0.002")
 PLACE_TOLERANCE_M = _f("GZCHESS_PLACE_TOLERANCE_M", "0.015")  # 落子到位容差 1.5cm
 
 # ---- 找抓取姿态的备用自由度（够不着/会撞时逐档试）----
@@ -217,6 +219,11 @@ WRIST_ROLL_DEG = _deg_list("GZCHESS_WRIST_ROLL_DEG", "0,45,90,-45,-90")
 # 背景（v0.5 wave 0）：一次 move 是长动作（几十秒），大脑靠 MCP progress「生命迹象」判活；
 # 世界侧的责任是每个阶段自己有预算、卡死快败，liveness 只是最后防线，不是常规失败路径。
 IK_TIMEOUT_S = _f("GZCHESS_IK_TIMEOUT_S", "1.0")            # MoveIt /compute_ik 的求解预算
+# IKFast 假解防线的 FK 复核容差（米）。原来写死 0.02——太松：指全开跨度 5cm、棋子腰宽 3.5cm，
+# 抓取点横向偏差 >(5-3.5)/2=0.75cm 指尖就会闭空；个别位姿的 IKFast 解带着 1-2cm 系统性偏差
+# 通过复核，同一位姿每次选同一解 → 该格「每抓必空」（2026-07-06 两盘耐力跑在 a2/f1 复现实锤）。
+# 收紧到 0.005：超差的解按不可达处理，候选自然落到下一档（如径向倾斜），那些档的解是准的。
+IK_FK_TOL_M = _f("GZCHESS_IK_FK_TOL_M", "0.005")
 IK_WAIT_EXTRA_S = _f("GZCHESS_IK_WAIT_EXTRA_S", "2.0")      # 等 IK 服务应答的额外余量（网络/调度）
 FK_WAIT_S = _f("GZCHESS_FK_WAIT_S", "3.0")                  # FK 复核（IKFast 假解防线）的等待上限
 TRAJ_ACCEPT_S = _f("GZCHESS_TRAJ_ACCEPT_S", "10.0")         # 轨迹 goal 被控制器接受的等待上限

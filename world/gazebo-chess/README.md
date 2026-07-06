@@ -1,28 +1,45 @@
-# gazebo-chess 世界（ANIMA Zero v0.5）
+# gazebo-chess 世界（ANIMA Zero v0.7）
 
 sim-chess 那张棋桌的 **Gazebo 3D 物理版**：真实建模的 episode 六轴机械臂，用**真实夹爪**把棋子从一格夹起、挪到另一格。对大脑（ANIMA）只露标准 MCP 接口（和 sim-chess 同款），世界内部把 ROS2 + MoveIt + Gazebo 这一摊全包起来。
 
-> v0.4 跑通最小 infra（单子 + 手动遥控）；**v0.5 长成完整形态**：斜视相机（看得出子型）、
-> `GZCHESS_SETUP_FEN` 多子摆盘（棋子分六型剪影，碰撞体不变）、长动作 MCP progress（move 期间
-> 服务器不冻结、进度实时可见）、失败注入/执行自检/补救。大脑侧的双层视觉桥见脑仓 `src/tools/boardgame/`。
+> v0.4 跑通最小 infra（单子 + 手动遥控）；v0.5 长成完整形态（斜视相机、多子摆盘、长动作
+> MCP progress、失败注入/自检/补救）；**v0.7 能下完整盘棋**：几何对齐真实摆位（4.5cm 格、
+> 底座轴心到板边 10cm）、径向倾斜抓取 64 格全可达、世界内置裁判 + 瞬移电脑对手、吃子落袋、
+> 终局落档给 eval 评分、网页「开新局」、真实斯汤顿棋子外观（CC-BY 4.0 网格，碰撞体不变）。
 
 ## 它和大脑怎么对话（标准 MCP，挂在 `/mcp`）
 
-- `tools/list` + `tools/call` —— 三个物理原语：`move`(裸搬)/`remove`(夹去弃子区)/`place`(备用区取子摆盘)；
+- `tools/list` + `tools/call` —— 三个物理原语：`move`(裸搬)/`remove`(夹走拿出棋盘)/`place`(备用区取子摆盘)；
   长动作边执行边发 `notifications/progress`（人话阶段：定位→抓→搬→放→核对）。
+- **裁判（v0.7，`referee.py`，对局模式=摆了 FEN 才开）**：三原语动臂之前先过前置合法闸——非法直接
+  拒绝并给人话原因（臂不动，省 26s/次）；一手棋按标准拆解表（吃子=remove→move、过路兵=remove(被吃
+  兵格)→move、易位=王先车后两次 move、升变=move→remove→place）逐原语核对，**全部物理核实后真值
+  才推进**；物理失败只登记修复上下文（move 目标格一致即接受修复）。终局判定 + 棋谱落档
+  （`logs/games-*.jsonl`，含 `world/white/black/physical_fails` 字段）都在世界内。
+- **内置电脑对手（`gz_bot.py`，第三份独立引擎副本，禁与顾问/sim-chess 副本合并）**：大脑每凑完
+  一手，对手立刻「瞬移」应手（set_pose/purge/spawn，不用机械臂）——**不播报走了哪步**，大脑下次
+  感知看画面自己认（`GZCHESS_BOT_SIDE=white/black/off`）。
 - `resources/read anima://observation` —— 给画面（相机帧）+ 空 state，**绝不给棋盘真值**。
-- `prompts/get "guidance"` —— 世界说明书（注入大脑系统提示）。
-- 带外普通 HTTP：`/health`（探活）/ `/status`（人类调试台真值，不给大脑）/ `/stream`（人看的视频）/ `/`（人类页）。
+- `prompts/get "guidance"` —— 世界说明书（注入大脑系统提示；含拆解规则与失败补救指引）。
+- 带外普通 HTTP：`/health`（探活）/ `/status`（人类调试台真值+裁判局面，不给大脑）/
+  `POST /reset`（人类侧开新局；**不进 MCP**——大脑不许重置现实）/ `/stream`（人看的视频）/ `/`（人类页，双相机+开新局按钮）。
 
 ## 它内部怎么跟仿真说话（ROS2 + MoveIt）
 
 - 机械臂运动：MoveIt `/compute_ik`（+ FK 复核防 IKFast 假解）→ `FollowJointTrajectory` 执行；
   抓取候选按「指尖离邻子净空」排序（多子防撞）。
+- **径向倾斜抓取（v0.7，`grasp_pose.py`）**：远格竖直够不着时，工具朝「远离基座」的方向倒
+  15°–75°（方位角 = 基座→目标；link6 = 抓取点 − TCP_OFFSET·工具轴，接近/退出都沿工具轴）——
+  臂的抓取半径从 0.44m（纯竖直）扩到 ≈0.53m，h 列因此可达。`scripts/reach_map.py` 一条命令
+  出 64 格可达性地图（IK+FK 复核、不动臂；`--execute` 抽查真抓）。
 - 夹爪：`gripper_controller`（真实闭合夹住子；张开度收窄到指尖不出本格）。
 - ROS spin 收敛到**唯一专职线程**（请求线程只对 future 挂事件等待，绝不自己 spin——从请求线程
   spin 会和 DDS 撞线程卡死，v0.5 实测教训）。
 - 往 Gazebo 塞棋盘/棋子/相机：`ros_gz_sim create`；读真值：pose 话题（只用于 /status 与执行自检）。
-- 相机：Gazebo 相机（默认斜视，`GZCHESS_CAM_MODE=overhead` 切回俯视）→ `ros_gz_image image_bridge` → 订阅 → /perceive + /stream。
+- 相机：Gazebo 相机（默认双路 oblique+overhead）→ `ros_gz_image image_bridge` → 订阅 → /perceive + /stream。
+- 棋子外观：`models/meshes/` 六子真实斯汤顿网格（CC-BY 4.0，来源/许可/实测尺寸见
+  `models/meshes/SOURCE.md`），运行时按 config 身高梯度派生缩放；**碰撞体仍是三段圆柱**
+  （v0.4 验证的抓取物理零重调）；`GZCHESS_PIECE_MESH_DIR=""` 回退几何剪影。
 - 离线工具：`scripts/gen_dataset.py`（合成训练数据，世界真值自动打标签）+ `scripts/train_cnn.py`
   （离线 torch 训练导出 ONNX，不进任何运行时）。
 
@@ -32,44 +49,51 @@ sim-chess 那张棋桌的 **Gazebo 3D 物理版**：真实建模的 episode 六�
 # 终端1（用户亲手起 ROS 仿真栈）
 ros2 launch episode1_gz_sim sim.launch.py headless:=true rviz:=false
 # 终端1b（相机图桥，见项目 运行命令.md 二·4）
-ros2 run ros_gz_image image_bridge /gazebo_chess/overhead/image
-# 终端2（gazebo-chess 世界服务，:8106；可选 GZCHESS_SETUP_FEN 摆多子）
+ros2 run ros_gz_image image_bridge /gazebo_chess/oblique/image /gazebo_chess/overhead/image
+# 终端2（gazebo-chess 世界服务，:8106；下整盘棋摆标准开局，裁判+对手自动开）
 cd .../anima-zero/world/gazebo-chess && source .venv/bin/activate && \
-GZCHESS_SETUP_FEN="4k3/8/8/8/8/8/4P3/4K3" uvicorn server:app --port 8106 --reload
+GZCHESS_SETUP_FEN="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" uvicorn server:app --port 8106
 ```
 
 > venv 用 `python3 -m venv --system-site-packages .venv` 建，好 import 系统 ROS2。
+> `GZCHESS_SETUP_FEN` 接受完整 FEN 或仅摆放字段；不摆 FEN = 单演示子模式（裁判/对手自动关，
+> v0.4-0.6 裸物理行为原样保留）。
 
 ## 全部可调项
 
-见 `config.py`（`GZCHESS_*` 环境变量，默认值集中在那里，禁硬编码）。
+见 `config.py`（`GZCHESS_*` 环境变量，默认值集中在那里，禁硬编码）。v0.7 新增主要项：
+`GZCHESS_CELL_M`（格宽，默认 0.045=Jeff 实测）、`GZCHESS_ARM_BOARD_GAP_M`（底座轴心→板边，默认
+0.10）、`GZCHESS_REFEREE`（auto/on/off）、`GZCHESS_BOT_SIDE/DEPTH/TIME`、`GZCHESS_DISCARD_MODE`
+（bin 弃子袋/slots 旧槽位）、`GZCHESS_PIECE_MESH_DIR`、`GZCHESS_AUTO_RESET`。
 
-## 当前进度（v0.5）
+## 当前进度（v0.7）
 
 - [x] `config.py`、`geometry.py`（坐标换算，已离线自测通过）
 - [x] 棋子/棋盘/相机模型 + 往 Gazebo spawn（`spawn.py` / `models.py`）
-- [x] 俯视相机出图（Gazebo 相机 → `ros_gz_image image_bridge` → `vision.py` → JPEG）
+- [x] 俯视相机出图（Gazebo 相机 → `ros_gz_image image_bridge` → JPEG）
 - [x] `arm_controller.py`（MoveIt `/compute_ik` + FK 复核 + `FollowJointTrajectory`）、`grasp_pose.py`
 - [x] `server.py` / `world.py` 接 MCP（`awi_mcp.py`，接口和 sim-chess 同款）
-- [x] **teleop 手动遥控（`:8110`）**：人可顺畅点动这条臂，物理底座已验通（见 `episode-ros-ws` 的 `episode_teleop` + 项目 `运行命令.md`「三 · teleop」）
-  （📌 2026-07-06 目录迁移 note：episode-ros-ws 已迁至项目根 `episode-robot-dev-framework/` 下，命令以更新后的 `运行命令.md` 为准；原因见项目根《episode目录迁移公告-NOTE.md》。）
-- [x] **ANIMA 自主走子（大脑发 `move` → 世界内部真跑一趟夹取搬运）——v0.5 wave 0 已修通**。
-      v0.4 的 `TimeoutError` 根因是框架级的：世界把几十秒的夹取同步跑在事件循环上（move 期间整个
-      服务器冻结、进度发不出去），大脑又用固定死线盲等。修法＝采标 MCP progress：世界把活儿放到
-      工作线程、分阶段报人话进度（「已夹取，正在移向 e4」），大脑「有进度就续命、失联才判死」。
-      实测：move ~26s 完成，期间 `/health` 全程 <2ms 响应，进度实时上 AWI 仪表盘与对弈面板。
-- [x] **多子摆盘**（`GZCHESS_SETUP_FEN`）+ 棋子六型剪影（视觉分型，碰撞体全型一致=抓取物理不变）
-- [x] **斜视相机**（默认；俯视保留可切）+ 合成数据管线（`scripts/gen_dataset.py` / `train_cnn.py`）
-- [x] **失败注入 + 执行自检分类 + 大脑补救**（夹空原样重试 / 放偏从实际落格夹回）——活体验收通过
-- [x] **活体对弈验收**：王兵残局 4 个半回合——大脑经斜视相机读盘、纯视觉认出对手挪子、真夹真放，
-      信念盘与世界真值一致
-- [ ] 吃子/升变/易位的视觉识别、扶正倒子、弃子区实测校准、真机（C920 域适配）——后续版本
+- [x] **teleop 手动遥控（`:8110`）**：人可顺畅点动这条臂，物理底座已验通（见 `episode-robot-dev-framework/episode-ros-ws` 的 `episode_teleop` + 项目 `运行命令.md`「三 · teleop」）
+- [x] **ANIMA 自主走子**（大脑发 `move` → 世界真跑一趟夹取搬运）——v0.5 修通（MCP progress，~26s/原语）
+- [x] **多子摆盘**（`GZCHESS_SETUP_FEN`）+ 失败注入/执行自检分类/大脑补救——v0.5 活体验收通过
+- [x] **几何对齐真实摆位 + 径向倾斜抓取 + 64 格全可达**（v0.7 wave0：reach_map 64/64 硬闸 +
+      a1/h1/h8/e4 实抓 PASS，误差 0.1–0.2cm；h 列用 15–30° 倾斜真抓）
+- [x] **裁判 + 真值推进 + 落档**（v0.7 wave1：离线 18 测试全绿）
+- [x] **内置对手瞬移应手 + 弃子袋 + 复位**（v0.7 wave2：开局/吃子(过路兵)/易位/升变四场景活体全过）
+- [x] **真实斯汤顿棋子外观**（v0.7 wave3：CC-BY 4.0 网格，仅视觉；满盘双相机截图人工核可辨六型）
+- [x] **eval 记分**（v0.7 wave4：gazebo 对局进记分卡，分世界指标）
+- [ ] 扶正倒子、真机（C920 域适配）、VLA 策略换芯——后续版本
 
-## 已知限制（v0.5 实测数据，如实记录）
+## 已知限制（实测数据，如实记录）
 
-- **h 列整列 IK 不可达**：臂展实测上限 ≈0.44m，h 列格心在 x≈0.455m——完整对局需要 h 列。
-  修法（缩板 `GZCHESS_BOARD_SIZE_M` 或挪板 `GZCHESS_BOARD_ORIGIN_X`）都是配置项，但牵动贴图几何
-  与可达性/精度全量复测，留待下版连同机械臂位置、抓取方式一起调整。a–g 列 + 四角实测全可达，
-  搬运落点误差 0.1–0.8cm。
-- **角上夹取偶发掉子**（~1/4 概率）：物理仿真的真实抖动；世界会如实报错（「子掉到棋盘外了」），
-  大脑可按报错补救，不隐瞒、不兜底。
+- **倾斜抓取的可靠性随倾角下降**：h 列/远角要 15–30° 径向倾斜，单次实抓验证通过（误差 0.1cm），
+  但长程对局里大倾角抓取的掉子率待整盘数据积累；掉子/放偏世界会如实报错并给自检分类，大脑按提示补救。
+- **角上夹取偶发掉子**（v0.5 实测 ~1/4 概率）：物理仿真的真实抖动；世界如实报错，不隐瞒、不兜底。
+- **网格与碰撞体的视觉空隙**：夹取瞬间指尖与棋子表面有几毫米可见空隙（碰撞腰 35mm > 网格腰
+  18–24mm，物理接触发生在不可见碰撞体上）——0.85m 相机距离不可辨，明细见 `models/meshes/SOURCE.md`。
+- **DDS 长会话腐化（运维教训，2026-07-06 实锤）**：仿真栈被大量短命客户端进程 + 强杀反复折腾后，
+  会出现「IK 服务全超时」或「臂轨迹 goal 石沉大海但 CLI 正常」——这是 DDS 图腐化不是代码问题，
+  **重启仿真栈即愈**。世界侧已做两层防护：ArmController 节点名带 PID（防同名幽灵）、
+  IK「服务无应答」与「运动学无解」分开报错（别把基础设施问题误读成够不着）。
+- ~~h 列整列 IK 不可达~~（v0.5 遗留）——**v0.7 已修**：径向倾斜 + 方案 A 几何（轴心量 10cm），
+  reach_map 实测 64/64 可达（h 列 15°、四角 30°）。
