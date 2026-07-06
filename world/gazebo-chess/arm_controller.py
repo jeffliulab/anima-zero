@@ -14,6 +14,7 @@ take_message 里 100 秒不返回），spin 必须收敛到唯一一个专职线
 """
 from __future__ import annotations
 
+import os
 import threading
 import time
 
@@ -37,7 +38,10 @@ GRIPPER_JOINTS = ["left_finger_joint", "right_finger_joint"]
 
 class ArmController(Node):
     def __init__(self) -> None:
-        super().__init__("gazebo_chess_arm")
+        # 节点名带 PID：世界服务、reach_map、各探针都会各自实例化本节点——短命进程复用同一个
+        # 节点名会留下 DDS「幽灵」，新进程的 service/action 应答被路由给死节点（实锤两次：
+        # IK 全超时被误判不可达 / 臂轨迹 goal 石沉大海而 CLI 正常）。ROS2 要求图内节点名唯一。
+        super().__init__(f"gazebo_chess_arm_{os.getpid()}")
         self.set_parameters([rclpy.parameter.Parameter("use_sim_time", value=True)])
         self._arm = ActionClient(self, FollowJointTrajectory, f"/{config.ARM_CONTROLLER}/follow_joint_trajectory")
         self._grip = ActionClient(self, FollowJointTrajectory, f"/{config.GRIPPER_CONTROLLER}/follow_joint_trajectory")

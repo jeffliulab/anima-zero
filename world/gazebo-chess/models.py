@@ -7,7 +7,14 @@ spawn 时再塞进 Gazebo。生成的是单个 <model> 片段（含 <sdf> 包裹
 """
 from __future__ import annotations
 
+import json
+import os
+
 import config
+
+# 网格 manifest 缓存与「缺文件只警告一次」登记（见 _mesh_visual）
+_MESH_MANIFEST: dict | None = None
+_MESH_WARNED: set[str] = set()
 
 
 def _inertia_box(m: float, x: float, y: float, z: float) -> str:
@@ -73,6 +80,36 @@ def board_sdf(name: str = "chessboard") -> tuple[str, tuple[float, float, float]
 _KIND_HEIGHT_FACTOR = {"p": 1.0, "r": 1.1, "n": 1.15, "b": 1.25, "q": 1.4, "k": 1.5}
 
 
+def _mesh_visual(kind: str, mat: str) -> str | None:
+    """某子型的真实网格 visual（v0.7）。config.PIECE_MESH_DIR 为空 / manifest 缺 / 文件缺 → None
+    （调用方回退几何剪影，缺哪型只回退哪型）。缩放 = 身高梯度目标高 / 网格原始高——
+    与剪影同一把「身高尺」，头部保持在手腕以下（王 6.75cm < 抓取时 link6 底 ~7.8cm）。"""
+    global _MESH_MANIFEST
+    d = config.PIECE_MESH_DIR
+    if not d:
+        return None
+    if _MESH_MANIFEST is None:
+        try:
+            with open(os.path.join(d, "manifest.json"), encoding="utf-8") as f:
+                _MESH_MANIFEST = json.load(f)
+        except Exception as e:  # noqa: BLE001
+            _MESH_MANIFEST = {}
+            print(f"[gazebo-chess] ⚠️ 棋子网格 manifest 读不到（{e}）——全部回退几何剪影")
+    info = (_MESH_MANIFEST.get("pieces") or {}).get(kind)
+    path = os.path.join(d, info["file"]) if info else ""
+    if not info or not os.path.isfile(path):
+        if kind not in _MESH_WARNED:
+            _MESH_WARNED.add(kind)
+            print(f"[gazebo-chess] ⚠️ 子型 {kind} 无网格（{path or 'manifest 未登记'}）——该型回退几何剪影")
+        return None
+    scale = config.PIECE_HEIGHT_M * _KIND_HEIGHT_FACTOR[kind] / float(info["natural_height_m"])
+    return (f"""      <visual name="mesh"><pose>0 0 0 0 0 0</pose>
+        <geometry><mesh><uri>file://{os.path.abspath(path)}</uri>"""
+            f"""<scale>{scale:.5f} {scale:.5f} {scale:.5f}</scale></mesh></geometry>
+        <material>{mat}</material></visual>
+""")
+
+
 def piece_sdf(name: str, color: str = "white", kind: str = "p") -> tuple[str, tuple[float, float, float]]:
     """一枚棋子：底座(宽)+ 抓取腰(GRASP_WIDTH 宽，高摩擦，给夹爪夹)+ 分型的头。
     返回 (sdf, spawn 世界 xyz=模型原点)。模型原点在棋子底面中心，spawn z = 棋盘上表面。
@@ -103,6 +140,16 @@ def piece_sdf(name: str, color: str = "white", kind: str = "p") -> tuple[str, tu
     head_cz = base_h + waist_h + head_h / 2.0
     # 高摩擦让夹爪靠接触摩擦夹得住（腰段尤其重要）。
     fric = "<surface><friction><ode><mu>1.2</mu><mu2>1.2</mu2></ode></friction></surface>"
+    # 视觉：优先真实网格（v0.7，只换外观）；无网格 → v0.5 几何剪影（该型单独回退，T0）。
+    visuals = _mesh_visual(kind, mat)
+    if visuals is None:
+        visuals = (f"""      <visual name="base"><pose>0 0 {base_cz:.4f} 0 0 0</pose>
+        <geometry><cylinder><radius>{base_r:.4f}</radius><length>{base_h}</length></cylinder></geometry>
+        <material>{mat}</material></visual>
+      <visual name="waist"><pose>0 0 {waist_cz:.4f} 0 0 0</pose>
+        <geometry><cylinder><radius>{waist_r:.4f}</radius><length>{waist_h}</length></cylinder></geometry>
+        <material>{mat}</material></visual>
+""" + _head_visuals(kind, head_r, base_h + waist_h, total_h, mat))
     sdf = f"""<sdf version="1.10">
   <model name="{name}">
     <link name="link">
@@ -117,13 +164,7 @@ def piece_sdf(name: str, color: str = "white", kind: str = "p") -> tuple[str, tu
       <collision name="head"><pose>0 0 {head_cz:.4f} 0 0 0</pose>
         <geometry><cylinder><radius>{head_r:.4f}</radius><length>{head_h:.4f}</length></cylinder></geometry>
         {fric}</collision>
-      <visual name="base"><pose>0 0 {base_cz:.4f} 0 0 0</pose>
-        <geometry><cylinder><radius>{base_r:.4f}</radius><length>{base_h}</length></cylinder></geometry>
-        <material>{mat}</material></visual>
-      <visual name="waist"><pose>0 0 {waist_cz:.4f} 0 0 0</pose>
-        <geometry><cylinder><radius>{waist_r:.4f}</radius><length>{waist_h}</length></cylinder></geometry>
-        <material>{mat}</material></visual>
-{_head_visuals(kind, head_r, base_h + waist_h, total_h, mat)}    </link>
+{visuals}    </link>
   </model>
 </sdf>"""
     return sdf, spawn_xyz

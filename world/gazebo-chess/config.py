@@ -77,6 +77,12 @@ BOARD_ORIGIN_Y = _f("GZCHESS_BOARD_ORIGIN_Y", "0.0")
 BOARD_ORIGIN_Z = _f("GZCHESS_BOARD_ORIGIN_Z", "0.028")
 BOARD_YAW_RAD = _f("GZCHESS_BOARD_YAW_RAD", "0.0")    # 棋盘绕 z 转角：a→h 方向相对 world +x 的夹角
 
+# ---- 棋子外观网格（v0.7：真实斯汤顿造型，仅视觉；碰撞体仍是三段圆柱，物理零重调）----
+# 目录里要有 manifest.json + 六个 STL（来源/许可见 models/meshes/SOURCE.md）。
+# 设为空串 "" → 完整回退 v0.5 的几何剪影（T0）；单个子型文件缺失也只该型回退。
+PIECE_MESH_DIR = os.getenv("GZCHESS_PIECE_MESH_DIR",
+                           str(Path(__file__).resolve().parent / "models" / "meshes"))
+
 # ---- 棋子尺寸（米）----
 # 注意夹爪可夹宽度区间见下（GRIP_*）：抓取点宽度必须落在该区间内，太细夹不住、太粗夹不下。
 PIECE_BASE_DIAM_M = _f("GZCHESS_PIECE_BASE_DIAM_M", "0.030")     # 底座直径 ~3cm
