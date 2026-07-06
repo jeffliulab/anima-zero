@@ -58,6 +58,7 @@ class LoopState(TypedDict, total=False):
     svc_routes: dict         # 工具名 → service 客户端（本轮）
     kinds: dict              # 工具名 → kind（本轮）
     tools: list              # 本轮工具单
+    meta_names: set          # 本轮内建元工具名（核心任务两件；分发时优先拦截）
     image: Any               # 本轮画面（bytes | None）
     reply: Any               # 本轮 LLMReply
     trace: dict              # handle() 返回的调试轨迹（inputs/thinking/reply）
@@ -97,13 +98,14 @@ class Orchestrator:
     #   服务工具按来源路由(只读不过闸)、handle 与 handle_stream 共用同一张图(行为天然一致)。
 
     def _node_perceive(self, state: LoopState) -> dict:
-        """看：拿本轮工具单（世界+服务）与画面；画面落会话历史并发 perception 事件。"""
+        """看：拿本轮工具单（世界+服务+内建元工具）与画面；画面落会话历史并发 perception 事件。"""
         emit = get_stream_writer()
         session, world = state["session"], state["world"]
         caps = world.capabilities() if world else None      # 握手:首轮拿能力并缓存
         world_tools = list(caps.tools) if caps else []
         svc_tools, svc_routes = self._service_toolbox(world, {t.name for t in world_tools})
-        tools = world_tools + svc_tools
+        meta_tools = self._meta_toolbox({t.name for t in world_tools} | set(svc_routes))
+        tools = world_tools + svc_tools + meta_tools
 
         obs = world.perceive() if world else None
         # 多相机：把全套命名图交给 LLM（provider 会给每张标相机名）；单相机/无名图=老形状 bytes，行为不变。
@@ -117,15 +119,18 @@ class Orchestrator:
             emit({"type": "perception", "image_b64": img_b64, "state": obs.state,
                   "n_images": len(obs.images)})
         return {"step": state.get("step", 0) + 1, "tools": tools, "svc_routes": svc_routes,
-                "kinds": {t.name: t.kind for t in tools}, "image": image, "trace": state["trace"]}
+                "kinds": {t.name: t.kind for t in tools}, "image": image, "trace": state["trace"],
+                "meta_names": {t.name for t in meta_tools}}
 
     def _node_agent(self, state: LoopState) -> dict:
         """想：拼系统提示+历史+工具单 → 自有 LLM 层 chat()（LoggingLLM 记账不动）。"""
         emit = get_stream_writer()
         session, llm, world = state["session"], state["llm"], state["world"]
         svc_tools_present = bool(state["svc_routes"])
-        history = context.build(self.store.get(session.id).messages)
-        reply: LLMReply = llm.chat(self._system(world, has_services=svc_tools_present),
+        stored = self.store.get(session.id)      # 每步现读：历史 + 核心任务寄存器（本轮内改写立即生效）
+        history = context.build(stored.messages)
+        reply: LLMReply = llm.chat(self._system(world, has_services=svc_tools_present,
+                                                core_task=stored.core_task),
                                    history, state["tools"], state["image"])
 
         if not reply.tool_calls:    # 出文字 → 最终回复,收尾
@@ -150,7 +155,8 @@ class Orchestrator:
         step_trace = state["trace"]["thinking"][-1]
         for tc in state["reply"].tool_calls:
             emit({"type": "tool_call", "name": tc.name, "args": tc.arguments})
-            result = self._run_tool(session, world, state["svc_routes"], state["kinds"], tc, emit)
+            result = self._run_tool(session, world, state["svc_routes"], state["kinds"], tc, emit,
+                                    meta_names=state.get("meta_names") or set())
             step_trace["tool_results"].append({"name": tc.name, "ok": result.ok, "message": result.message})
         return {"trace": state["trace"]}
 
@@ -163,11 +169,14 @@ class Orchestrator:
 
     # ==================== 工具执行 ====================
     def _run_tool(self, session: Session, world, svc_routes: dict, kinds: dict,
-                  tc: ToolCall, emit) -> ActionResult:
-        """执行一个工具调用：服务工具（顾问=只读）路由给服务、不过安全闸；世界动作先过闸再发。
+                  tc: ToolCall, emit, meta_names: set | None = None) -> ActionResult:
+        """执行一个工具调用：内建元工具（操作大脑自己的会话状态）直接处理；服务工具（顾问=只读）
+        路由给服务、不过安全闸；世界动作先过闸再发。
         世界动作可能几十秒：放后台线程跑（contextvars 复制保 session 标签），MCP progress 经
         队列转成 "progress" 事件实时发出（用户看到"已夹取，正在移向 e4"，不黑等）。
         结果统一落会话历史（role=tool）+ 发 tool_result 事件。"""
+        if meta_names and tc.name in meta_names:   # 元工具不碰世界：不过安全闸、不进路由
+            return self._run_meta_tool(session, tc, emit)
         svc = svc_routes.get(tc.name)
         changes_world = svc is None and world is not None and kinds.get(tc.name, "tool") not in NON_MUTATING_KINDS
         if changes_world:
@@ -208,6 +217,38 @@ class Orchestrator:
         emit({"type": "tool_result", "name": tc.name, "ok": result.ok, "message": result.message})
         return result
 
+    def _run_meta_tool(self, session: Session, tc: ToolCall, emit) -> ActionResult:
+        """内建元工具：操作大脑自己的会话状态（核心任务寄存器）。通用机制——「当前在执行什么任务」
+        是状态不是聊天记录，由 LLM 亲自登记/改写/清除，常驻注入系统提示（见 _system）。"""
+        if tc.name == messages.CORE_TASK_SET_TOOL["name"]:
+            task = str(tc.arguments.get("task", "")).strip()
+            if not task:
+                result = ActionResult(False, messages.CORE_TASK_EMPTY_REPLY)
+            else:
+                self.store.set_core_task(session.id, task)
+                session.core_task = task
+                result = ActionResult(True, messages.CORE_TASK_SET_REPLY.format(task=task))
+        else:                                        # clear_core_task
+            self.store.set_core_task(session.id, "")
+            session.core_task = ""
+            result = ActionResult(True, messages.CORE_TASK_CLEAR_REPLY)
+        self.store.append(session.id, {"role": "tool", "id": tc.id, "name": tc.name,
+                                       "content": result.message})
+        emit({"type": "tool_result", "name": tc.name, "ok": result.ok, "message": result.message})
+        return result
+
+    def _meta_toolbox(self, taken_names: set[str]) -> list[ToolSpec]:
+        """内建元工具单（当前只有核心任务两件）。与世界/服务同名冲突时**元工具让位**并记警告
+        （对外保持「world 赢」的一致惯例；正常情况下不会撞名）。kind=read：不改世界。"""
+        out: list[ToolSpec] = []
+        for spec in (messages.CORE_TASK_SET_TOOL, messages.CORE_TASK_CLEAR_TOOL):
+            if spec["name"] in taken_names:
+                _log.warning("内建元工具与世界/服务工具同名，元工具让位：%s", spec["name"])
+                continue
+            out.append(ToolSpec(name=spec["name"], description=spec["description"],
+                                parameters=spec["parameters"], kind="read"))
+        return out
+
     def _dispatch(self, world, name: str, args: dict, _on_progress=None) -> ActionResult:
         if world is None:
             return ActionResult(False, "没连接世界,无法操作。")
@@ -241,10 +282,13 @@ class Orchestrator:
         return tools, routes
 
     # ==================== 系统提示 ====================
-    def _system(self, world, has_services: bool = False) -> str:
+    def _system(self, world, has_services: bool = False, core_task: str = "") -> str:
         base = messages.system_prompt()
         if world is None:
-            return base + "\n\n当前:未连接任何世界(纯聊天)。"
+            s = base + "\n\n当前:未连接任何世界(纯聊天)。"
+            if core_task:
+                s += messages.CORE_TASK_BLOCK.format(task=core_task)
+            return s
         # 这个世界能不能操作,由它的【能力声明】决定(通用,不针对具体世界):
         #   有工具 → 可在需要时调用;空工具(如 camera 摄像头世界)→ 只能看 + 聊,无任何动作可调。
         # capabilities() 在 RemoteWorld 侧已缓存,这里再读一次不发 HTTP。
@@ -264,6 +308,8 @@ class Orchestrator:
             s += f"\n\n【这个世界的说明书（它自己写的，教你怎么跟它打交道）】\n{guidance}"
         if has_services:
             s += messages.SERVICES_HINT
+        if core_task:   # 核心任务寄存器：状态通道常驻注入，不占历史窗口、无「滑出」概念
+            s += messages.CORE_TASK_BLOCK.format(task=core_task)
         return s
 
     # ==================== 公共接口（签名与 v0.5 一致）====================

@@ -37,12 +37,17 @@ class Session:
     status: str  # "active" | "frozen"
     created_at: str
     title: str
+    # 核心任务寄存器（v0.7）：LLM 经内建元工具 set_core_task/clear_core_task **自己**登记/改写/清除，
+    # 每轮常驻注入系统提示——「当前在执行什么任务」是状态不是聊天记录，不该随滑动窗口被遗忘。
+    # 必须带默认值：load() 用 Session(**data) 构造，旧会话 JSON 没有这个键。
+    core_task: str = ""
     messages: list = field(default_factory=list)
 
     def summary(self) -> dict:
         return {
             "id": self.id, "world": self.world, "brain": self.brain,
             "status": self.status, "created_at": self.created_at, "title": self.title,
+            "core_task": self.core_task,
         }
 
 
@@ -158,6 +163,12 @@ class SessionStore:
     def set_brain(self, sid: str, brain: str) -> None:
         s = self.load(sid)
         s.brain = brain
+        self.save(s)
+
+    def set_core_task(self, sid: str, task: str) -> None:
+        """写核心任务寄存器（空串=清除）。调用方=编排器的内建元工具，别处不该写它。"""
+        s = self.load(sid)
+        s.core_task = task
         self.save(s)
 
     def is_active(self, sid: str) -> bool:
