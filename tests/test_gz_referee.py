@@ -254,3 +254,17 @@ def test_push_direct_for_bot():
     assert info["advanced"] and ref.status()["turn"] == "white"
     with pytest.raises(AssertionError):
         _do(ref, ("remove", "d5"))                             # 没这种吃法，check 先拒
+
+
+def test_restoration_ok_matches_truth_only():
+    """备用子恢复判定：真值该格正是这枚子才放行（物理是否为空由世界核实，不在裁判职责内）。"""
+    ref = _ref()
+    assert ref.restoration_ok("a2", "P")           # 真值 a2=白兵
+    assert not ref.restoration_ok("a2", "p")       # 颜色不对
+    assert not ref.restoration_ok("a3", "P")       # 空格
+    assert not ref.restoration_ok("e8", "K")       # e8 是黑王不是白王
+    assert not ref.restoration_ok("zz", "P")       # 非法格名不炸
+    # 恢复不影响进行中的修复上下文/序列（纯查询）
+    ref.note_failure(("move", "a2", "a4"), "drop", None)
+    assert ref.restoration_ok("a2", "P")
+    assert ref.check(("move", "a2", "a4"))[0], "恢复后原来那手棋照旧可走"

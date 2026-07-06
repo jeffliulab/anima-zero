@@ -91,6 +91,10 @@ class GazeboChessWorld:
         self.lock = threading.RLock()
         self.last = ""
         self._discard_n = 0                 # 已用掉几个弃子槽（remove 递增）
+        # 重试多样性（v0.7）：同一动作目标连续物理失败的计数——传给 pick_at/place_at 轮换候选起点
+        # （确定性失手的解，重试一万次也一样；换姿态才是独立重试）。成功或换目标即清零。
+        self._retry_n = 0
+        self._retry_key = ""
         # 裁判（v0.7）：对局模式（摆 FEN）才建；标签=非 bot 侧是 anima（bot 关掉时对面标 opponent）。
         self.referee = None
         self._bot = None
@@ -272,6 +276,20 @@ class GazeboChessWorld:
             return True
         return mode == "always"
 
+    # ---------- 重试多样性（v0.7）----------
+    def _retry_rotation(self, key: str) -> int:
+        """本次动作的候选轮换位数：同一目标（key=动作+格）连上次失败相同 → 用当前计数；换目标 → 清零。"""
+        if key != self._retry_key:
+            self._retry_key, self._retry_n = key, 0
+        return self._retry_n
+
+    def _retry_note(self, key: str, ok: bool) -> None:
+        """动作收尾登记：成功清零；失败且同目标 → 计数 +1（下次轮换到新首选）。"""
+        if ok or key != self._retry_key:
+            self._retry_key, self._retry_n = ("", 0) if ok else (key, 1)
+        else:
+            self._retry_n += 1
+
     # ---------- 裁判记账 + 内置对手应手（持锁内调用）----------
     def _after_commit(self, prim: tuple, note) -> str:
         """原语物理核实成功后的收尾：裁判记账；凑完一手且轮到对手 → 对手瞬移应一手。
@@ -374,11 +392,15 @@ class GazeboChessWorld:
                 if not legal:
                     return {"ok": False, "message": f"裁判拒绝：{why}", "data": {"refused": "referee"}}
             note(_P_LOCATE, f"已定位 {frm} 上的棋子，正在规划抓取")
+            rkey = f"move:{frm}->{to}"
+            rot = self._retry_rotation(rkey)     # 重试多样性：同目标连续失败 → 换候选姿态起点
             gx, gy, gz = p[0], p[1], p[2] + config.PIECE_GRASP_WAIST_M
             avoid = self._others_xy(name)
             ok, msg = self.arm.pick_at(gx, gy, gz, progress=lambda m: note(_P_PICK, m),
-                                       inject_miss=self._consume_inject("_fail_grip"), avoid_xy=avoid)
+                                       inject_miss=self._consume_inject("_fail_grip"), avoid_xy=avoid,
+                                       rotate_candidates=rot)
             if not ok:
+                self._retry_note(rkey, False)
                 if self.referee:
                     self.referee.note_failure(("move", frm, to), "pick_fail", frm)  # 子没动，还在 frm
                 self._park(); return {"ok": False, "message": f"抓取失败：{msg}"}
@@ -386,8 +408,10 @@ class GazeboChessWorld:
             dx, dy, dz = geometry.grasp_xyz(to)
             if self._consume_inject("_fail_place"):     # 放偏注入：放置点加偏移（物理后果如实保留）
                 dx += config.FAIL_PLACE_OFFSET_M
-            ok, msg = self.arm.place_at(dx, dy, dz, progress=lambda m: note(_P_PLACE, m), avoid_xy=avoid)
+            ok, msg = self.arm.place_at(dx, dy, dz, progress=lambda m: note(_P_PLACE, m), avoid_xy=avoid,
+                                        rotate_candidates=rot)
             if not ok:
+                self._retry_note(rkey, False)
                 if self.referee:   # 放置中途失败：子可能还夹着/掉在路上，实际位置世界也说不准 → 不报格
                     self.referee.note_failure(("move", frm, to), "place_fail", None)
                 self._park(); return {"ok": False, "message": f"放置失败：{msg}"}
@@ -398,12 +422,14 @@ class GazeboChessWorld:
             err = math.hypot(p2[0] - exp[0], p2[1] - exp[1]) if p2 else 9.99
             self._park()
             if err <= config.PLACE_TOLERANCE_M:
+                self._retry_note(rkey, True)
                 self.last = f"move {frm}->{to}"
                 suffix = ""
                 if self.referee:   # 物理核实成功 → 裁判记账（凑完一手 → 真值前进 + 可能触发对手应手）
                     suffix = self._after_commit(("move", frm, to), note)
                 return {"ok": True,
                         "message": f"已把子从 {frm} 搬到 {to}（落点误差 {err * 100:.1f}cm）{suffix}"}
+            self._retry_note(rkey, False)
             res = self._classify_move_failure(name, frm, to, p2, err)
             if self.referee:       # 失败自检结果同步给裁判：登记修复上下文（序列指针不动）
                 self.referee.note_failure(("move", frm, to), res["data"]["fail"],
@@ -445,10 +471,14 @@ class GazeboChessWorld:
                 if not legal:
                     return {"ok": False, "message": f"裁判拒绝：{why}", "data": {"refused": "referee"}}
             note(_P_LOCATE, f"已定位 {square} 上的棋子，准备夹去弃子区")
+            rkey = f"remove:{square}"
+            rot = self._retry_rotation(rkey)
             gx, gy, gz = p[0], p[1], p[2] + config.PIECE_GRASP_WAIST_M
             avoid = self._others_xy(name)
-            ok, msg = self.arm.pick_at(gx, gy, gz, progress=lambda m: note(_P_PICK, m), avoid_xy=avoid)
+            ok, msg = self.arm.pick_at(gx, gy, gz, progress=lambda m: note(_P_PICK, m), avoid_xy=avoid,
+                                       rotate_candidates=rot)
             if not ok:
+                self._retry_note(rkey, False)
                 if self.referee:
                     self.referee.note_failure(("remove", square), "pick_fail", square)
                 self._park(); return {"ok": False, "message": f"抓 {square} 的子失败：{msg}"}
@@ -460,12 +490,15 @@ class GazeboChessWorld:
                 dx, dy, dz = bx, by, config.OFFBOARD_SURFACE_Z + config.PIECE_GRASP_WAIST_M
             else:
                 dx, dy, dz = geometry.discard_grasp_xyz(self._discard_n)
-            ok, msg = self.arm.place_at(dx, dy, dz, progress=lambda m: note(_P_PLACE, m), avoid_xy=avoid)
+            ok, msg = self.arm.place_at(dx, dy, dz, progress=lambda m: note(_P_PLACE, m), avoid_xy=avoid,
+                                        rotate_candidates=rot)
             self._park()
             if not ok:
+                self._retry_note(rkey, False)
                 if self.referee:   # 半路失败：子在哪世界说不准（可能还夹着/掉在路上），修复放开格名
                     self.referee.note_failure(("remove", square), "discard_fail", None)
                 return {"ok": False, "message": f"丢到弃子区失败：{msg}"}
+            self._retry_note(rkey, True)
             if config.DISCARD_MODE == "bin":
                 spawn.purge_model(name)     # 放稳后销毁=袋子吞掉；搬运的真实代价已如实花掉
             self._discard_n += 1
@@ -487,10 +520,17 @@ class GazeboChessWorld:
             letter = (piece or "").strip()
             if not letter or letter.lower() not in "pnbrqk":
                 return {"ok": False, "message": f"piece 非法：{piece!r}（应为棋子字母 P/N/B/R/Q/K，大写白小写黑）"}
-            if self.referee:                       # 前置合法闸：place 只在升变最后一步合法
+            restoration = False
+            if self.referee:                       # 前置合法闸：place 用于升变最后一步，或「备用子恢复」
                 legal, why = self.referee.check(("place", square, letter))
                 if not legal:
-                    return {"ok": False, "message": f"裁判拒绝：{why}", "data": {"refused": "referee"}}
+                    # 备用子恢复：真值该格正是这枚子、而物理上格是空的（子被弄丢了）——
+                    # 下真棋这时就是拿备用子摆回原格。恢复不动真值、不清进行中的那手棋。
+                    occ, _ = self._piece_at(square)
+                    if occ is None and self.referee.restoration_ok(square, letter):
+                        restoration = True
+                    else:
+                        return {"ok": False, "message": f"裁判拒绝：{why}", "data": {"refused": "referee"}}
             color = "white" if letter.isupper() else "black"
             note(_P_LOCATE, f"在备用子区备一枚{color}子")
             rx, ry, rz = geometry.reservoir_spawn_xyz()
@@ -499,21 +539,32 @@ class GazeboChessWorld:
                 return {"ok": False, "message": f"备用子区取子失败：{nm}"}
             time.sleep(config.SPAWN_SETTLE_S); self._spin(8)
             grx, gry, grz = geometry.reservoir_grasp_xyz()
+            rkey = f"place:{square}"
+            rot = self._retry_rotation(rkey)
             avoid = self._others_xy(nm)
-            ok, msg = self.arm.pick_at(grx, gry, grz, progress=lambda m: note(_P_PICK, m), avoid_xy=avoid)
+            ok, msg = self.arm.pick_at(grx, gry, grz, progress=lambda m: note(_P_PICK, m), avoid_xy=avoid,
+                                       rotate_candidates=rot)
             if not ok:
+                self._retry_note(rkey, False)
                 if self.referee:
                     self.referee.note_failure(("place", square, letter), "pick_fail", None)
                 self._park(); return {"ok": False, "message": f"从备用区抓子失败：{msg}"}
             note(_P_CARRY, f"已从备用区夹取，正在移向 {square}")
             dx, dy, dz = geometry.grasp_xyz(square)
-            ok, msg = self.arm.place_at(dx, dy, dz, progress=lambda m: note(_P_PLACE, m), avoid_xy=avoid)
+            ok, msg = self.arm.place_at(dx, dy, dz, progress=lambda m: note(_P_PLACE, m), avoid_xy=avoid,
+                                        rotate_candidates=rot)
             self._park()
             if not ok:
+                self._retry_note(rkey, False)
                 if self.referee:
                     self.referee.note_failure(("place", square, letter), "place_fail", None)
                 return {"ok": False, "message": f"摆到 {square} 失败：{msg}"}
+            self._retry_note(rkey, True)
             self.last = f"place {letter}@{square}"
+            if restoration:   # 恢复不进裁判记账：真值本来就有这枚子，物理补回=盘面重新对齐
+                return {"ok": True,
+                        "message": f"已把一枚{color}子补回 {square}（备用子恢复：盘面已与棋局记录对齐，"
+                                   f"接着走你该走的那手棋）"}
             suffix = ""
             if self.referee:
                 suffix = self._after_commit(("place", square, letter), note)

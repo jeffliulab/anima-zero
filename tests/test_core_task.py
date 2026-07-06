@@ -152,3 +152,28 @@ def test_meta_tools_on_toolsheet(tmp_path):
     tools = orch._meta_toolbox(set())
     assert {t.name for t in tools} == {messages.CORE_TASK_SET_TOOL["name"],
                                        messages.CORE_TASK_CLEAR_TOOL["name"]}
+
+
+def test_context_sanitizes_orphan_tool_calls():
+    """结对完整性（v0.7）：孤儿 tool_call 补占位结果；窗口开头无主 tool 结果被丢弃。
+    背景：进程在「调用落档、结果未落」间被杀 → 此后每轮 provider 400、会话报废（2026-07-06 实锤）。"""
+    from anima import context, messages as msgs
+    history = [
+        {"role": "tool", "id": "t0", "name": "x", "content": "无主结果（assistant 已滑出）"},
+        {"role": "user", "text": "开始"},
+        {"role": "assistant", "text": "", "tool_calls": [{"id": "t1", "name": "move", "arguments": {}}]},
+        # t1 的结果因中断丢失
+        {"role": "user", "text": "继续"},
+    ]
+    out = context.build(history, token_budget=10_000)
+    assert out[0]["role"] == "user", "开头无主 tool 结果应被丢弃"
+    tools = [m for m in out if m["role"] == "tool"]
+    assert len(tools) == 1 and tools[0]["id"] == "t1"
+    assert tools[0]["content"] == msgs.ORPHAN_TOOL_RESULT
+    # 有配对结果时不多补
+    history2 = [
+        {"role": "assistant", "text": "", "tool_calls": [{"id": "a", "name": "move", "arguments": {}}]},
+        {"role": "tool", "id": "a", "name": "move", "content": "ok"},
+    ]
+    out2 = context.build(history2, token_budget=10_000)
+    assert sum(1 for m in out2 if m["role"] == "tool") == 1

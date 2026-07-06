@@ -263,6 +263,18 @@ class Referee:
         key = fail or "other"
         self.fails[key] = self.fails.get(key, 0) + 1
 
+    def restoration_ok(self, square: str, letter: str) -> bool:
+        """「备用子恢复」判定：真值棋盘上 square 格正好是这枚子（字母含大小写=颜色）。
+        场景：子被物理弄丢（掉出棋盘找不回）而真值仍有它——下真棋这时就是拿备用子摆回原格。
+        **物理上该格是否为空由世界核实**（裁判是盲的）；恢复不推进真值、不清进行中序列——
+        盘面补回后，该走的那手棋照旧要走。2026-07-06 三盘耐力跑里两盘死于没有这条出路，
+        且大脑三次本能地尝试 place 补子（被旧规则拒绝）——直觉正确，规则补上。"""
+        try:
+            pc = self.board.piece_at(chess.parse_square(square))
+        except ValueError:
+            return False
+        return pc is not None and pc.symbol() == letter
+
     # ---------- 对手侧推进（W2 内置电脑用：走法不经物理原语，直接 push）----------
     def push_direct(self, m: chess.Move) -> dict:
         """把一手（对手瞬移走的）合法棋直接推进真值。返回同 commit 的 advanced 分支。"""

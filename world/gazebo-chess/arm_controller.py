@@ -202,16 +202,24 @@ class ArmController(Node):
         return ja, jg
 
     def pick_at(self, px: float, py: float, pz: float, progress=None,
-                inject_miss: bool = False, avoid_xy=None) -> tuple[bool, str]:
+                inject_miss: bool = False, avoid_xy=None,
+                rotate_candidates: int = 0) -> tuple[bool, str]:
         """在世界点 (px,py,pz) 抓一个子：选一个 IK 可达候选 → 开爪→到接近点→下到抓取点→闭爪→抬回接近点。
 
         progress: 可选的进度上报回调 `progress(message: str)`——每个候选/关键子步各报一句人话，
         让上层（MCP progress → 大脑/仪表盘）看到"臂正在干什么"而不是黑等。不传则静默（行为不变）。
         inject_miss: 失败注入（测补救链路）：动作全走、但**不闭爪**——物理后果=夹空，子留在原地。
-        """
+        rotate_candidates: 重试多样性（v0.7）——同一目标连续物理失败时由 world 递增传入，
+        把候选清单整轮轮换 N 位（首选换人、总集不减）。背景：个别位姿的解带系统性偏差、
+        「同场景同候选同解」= 每抓必空，2026-07-06 三次实锤（a2/g1），确定性失手重试一万次也没用，
+        重试必须**换姿态**才独立（v1.1「重试独立性」原则的物理层落地）。"""
         note = progress or (lambda m: None)
         no_reply0 = self.ik_no_reply
-        for label, approach, grasp in grasp_pose.candidates_for_point(px, py, pz, avoid_xy=avoid_xy):
+        cands = grasp_pose.candidates_for_point(px, py, pz, avoid_xy=avoid_xy)
+        if rotate_candidates:   # 重试多样性：整轮轮换起点（不减候选，只换首选）——见 world 的重试计数
+            r = rotate_candidates % len(cands)
+            cands = cands[r:] + cands[:r]
+        for label, approach, grasp in cands:
             note(f"IK 求解抓取姿态（候选 {label}）")
             sol = self._solve_candidate(approach, grasp)
             if sol is None:
@@ -247,11 +255,15 @@ class ArmController(Node):
         return "所有候选姿态都 IK 不可达"
 
     def place_at(self, px: float, py: float, pz: float, progress=None,
-                 avoid_xy=None) -> tuple[bool, str]:
-        """在世界点放下：到接近点→下到放置点→开爪→抬回接近点。progress/avoid_xy 语义同 pick_at。"""
+                 avoid_xy=None, rotate_candidates: int = 0) -> tuple[bool, str]:
+        """在世界点放下：到接近点→下到放置点→开爪→抬回接近点。参数语义同 pick_at。"""
         note = progress or (lambda m: None)
         no_reply0 = self.ik_no_reply
-        for label, approach, grasp in grasp_pose.candidates_for_point(px, py, pz, avoid_xy=avoid_xy):
+        cands = grasp_pose.candidates_for_point(px, py, pz, avoid_xy=avoid_xy)
+        if rotate_candidates:
+            r = rotate_candidates % len(cands)
+            cands = cands[r:] + cands[:r]
+        for label, approach, grasp in cands:
             note(f"IK 求解放置姿态（候选 {label}）")
             sol = self._solve_candidate(approach, grasp)
             if sol is None:
