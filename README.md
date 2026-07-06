@@ -232,7 +232,7 @@ cd presentation/web && npm install && npm run dev      # 默认 :3000
 ```
 
 然后打开 `localhost:3000`:**新建会话 → 选世界 + 选大脑 → 对话**(例:「把笔移到右上角」)。
-大脑在网页里下拉选(Opus 4.8 / Haiku 4.5 / GPT-5.5 / GPT-4.1-nano / 本地 Qwen3-VL),配置在 `.env`。
+大脑在网页里下拉选(Opus 4.8 / Haiku 4.5 / GPT-5.5 / GPT-5.4 / GPT-5.4-mini / 本地 Qwen3-VL),配置在 `.env`。
 也可以打开 `localhost:8100` 手动拖笔,看 ANIMA 那边能不能观测到变化。
 
 ---
@@ -242,7 +242,7 @@ cd presentation/web && npm install && npm run dev      # 默认 :3000
 下棋不再是一个"模式"——**就是普通对话**。你说「该你了,你执黑」,ANIMA 自己看棋盘截图认局面、
 自己从画面和对话历史推出 FEN、自己调引擎顾问 `best_move(fen)` 拿最佳着法、再自己调世界的 `move` 落子、
 回你一句话。没有循环、没有技能、没有视觉模块兜底——**读错棋盘就读错,这本身就是对模型能力的测量**
-(8B 级小模型基本认不对整盘;演示请用 GPT-5.5 / Claude 这类强脑)。
+(8B 级小模型基本认不对整盘;演示请用 GPT-5.4 / Claude 这类强脑)。
 
 - **world `sim-chess`**(`world/sim-chess/`):独立棋具——握唯一真值、判合法、渲染棋盘、内置电脑棋手
   (自带 `chess_bot.py`,与引擎服务零共享代码)。对大脑只暴露一个动作 `move`,perceive 只给画面、

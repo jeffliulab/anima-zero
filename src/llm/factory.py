@@ -1,9 +1,9 @@
 """选脑工厂:大脑名字 → 具体大脑实现。
 
-五个大脑都登记在下面 `_registry()` 这一张表里(单一真相)。每个大脑写清四样:显示名、版本号、
+全部大脑都登记在下面 `_registry()` 这一张表里(单一真相)。每个大脑写清四样:显示名、版本号、
 是云端还是本地、怎么创建。**版本号只在这张表里写**——以后想给某个大脑换版本,改这里对应那一行即可。
 
-  在线(需要 API key):opus / haiku(ANTHROPIC_API_KEY)、gpt-5.5 / gpt-4.1-nano(OPENAI_API_KEY)
+  在线(需要 API key):opus / haiku(ANTHROPIC_API_KEY)、gpt-5.5 / gpt-5.4 / gpt-5.4-mini(OPENAI_API_KEY)
   本地(经 Ollama,免费):qwen3-vl(OLLAMA_BASE_URL + ANIMA_QWEN3VL_MODEL 版本号)
 
 所有环境变量都在调用时读取(而非 import 时),这样 .env 先加载、再选脑也生效。
@@ -36,7 +36,7 @@ def _ollama_tags(base_url: str) -> set[str]:
 
 
 def _registry() -> dict[str, dict]:
-    """五个大脑的单一登记表。每项:
+    """全部大脑的单一登记表。每项:
         label  显示名      model  版本号(调 API 用的字符串)
         hosting  api / local  build() 创建大脑   ready() 是否配置好(有 key / 模型已 pull)
     要加新大脑,往这张表里加一项即可(详见同目录 README.md)。
@@ -46,7 +46,7 @@ def _registry() -> dict[str, dict]:
     # 模型 id 全部来自中央 config（单一来源，每个 env 可覆盖）
     qwen_model = config.MODEL_QWEN
     opus_model, haiku_model = config.MODEL_OPUS, config.MODEL_HAIKU
-    gpt_model, nano_model = config.MODEL_GPT, config.MODEL_GPT_NANO
+    gpt55_model, gpt54_model, gpt54_mini_model = config.MODEL_GPT_55, config.MODEL_GPT_54, config.MODEL_GPT_54_MINI
     has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
     has_openai = bool(okey)
     tags: set[str] | None = None  # 本地脑可用性才需查 Ollama,惰性求值
@@ -65,11 +65,14 @@ def _registry() -> dict[str, dict]:
         "haiku": {"vendor": "Anthropic", "label": "Claude Haiku 4.5", "model": haiku_model, "hosting": "api",
                   "build": lambda: ClaudeLLM(haiku_model),
                   "ready": lambda: has_anthropic},
-        "gpt-5.5": {"vendor": "OpenAI", "label": "GPT-5.5", "model": gpt_model, "hosting": "api",
-                    "build": lambda: OpenAICompatLLM(gpt_model, None, okey),
+        "gpt-5.5": {"vendor": "OpenAI", "label": "GPT-5.5", "model": gpt55_model, "hosting": "api",
+                    "build": lambda: OpenAICompatLLM(gpt55_model, None, okey),
                     "ready": lambda: has_openai},
-        "gpt-4.1-nano": {"vendor": "OpenAI", "label": "GPT-4.1-nano", "model": nano_model, "hosting": "api",
-                         "build": lambda: OpenAICompatLLM(nano_model, None, okey),
+        "gpt-5.4": {"vendor": "OpenAI", "label": "GPT-5.4", "model": gpt54_model, "hosting": "api",
+                    "build": lambda: OpenAICompatLLM(gpt54_model, None, okey),
+                    "ready": lambda: has_openai},
+        "gpt-5.4-mini": {"vendor": "OpenAI", "label": "GPT-5.4-mini", "model": gpt54_mini_model, "hosting": "api",
+                         "build": lambda: OpenAICompatLLM(gpt54_mini_model, None, okey),
                          "ready": lambda: has_openai},
         # —— 本地大脑(经 Ollama,免费离线;版本号可在 .env 改)——
         "qwen3-vl": {"vendor": "Ollama·本地", "label": "Qwen3-VL 8B", "model": qwen_model, "hosting": "local",
@@ -79,7 +82,7 @@ def _registry() -> dict[str, dict]:
 
 
 def list_brains() -> list[dict]:
-    """五个大脑清单:名字 + 厂商 + 显示名 + 版本号 + 类型 + 是否配置好(给前端选择器 / 连通自检用)。"""
+    """全部大脑清单:名字 + 厂商 + 显示名 + 版本号 + 类型 + 是否配置好(给前端选择器 / 连通自检用)。"""
     return [
         {"name": name, "vendor": spec["vendor"], "label": spec["label"], "model": spec["model"],
          "hosting": spec["hosting"], "available": spec["ready"]()}
