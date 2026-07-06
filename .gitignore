@@ -108,6 +108,7 @@ traces/
 runs/
 outputs/
 eval_results/
+eval/out/
 prompt_logs/
 *.trace.json
 *.run.json

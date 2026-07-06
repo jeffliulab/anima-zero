@@ -15,11 +15,11 @@
 ## 评分标准
 - **ACPL**（平均每步比引擎最佳少走的厘兵）—— 棋力金标准，越低越强；**accuracy%**（lichess 公式由 ACPL 推）；
   命中最佳着率；blunder/mistake/inaccuracy 计数（阈值 300/100/50cp）；**粗略估算 Elo**（量级参考）；ANIMA 视角胜/和/负。
-- 引擎无关（不装引擎也有）：合法率、决策延迟（来自 AWI 日志）、对局数、ANIMA 走子数。
+- 引擎无关（不装引擎也有）：**分世界**的原语成功率与延迟（sim-chess 成功率=合法率；gazebo-chess 失败还含夹空/放偏等物理失败，语义不同、绝不合并）、对局数、物理失败合计。
 
 ## 数据从哪来
 - `logs/games-*.jsonl` —— 世界每局结束落的**完整棋谱**（双方 UCI + 结果 + 谁执子）。下几盘棋就会有。
-- `logs/awi-*.jsonl` —— 脑↔世界流量，取每步 `ms` 延迟与 `resp.ok` 合法率。
+- `logs/awi-*.jsonl` —— 脑↔世界流量，取每次原语 `ms` 延迟与 `resp.ok` 成功率（统计哪些世界由 `EVAL_CHESS_WORLDS` 定，默认 sim-chess,gazebo-chess）。
 
 ## 装引擎（解锁 ACPL/Elo）
 没装 UCI 引擎时，eval **如实只出引擎无关指标**（绝不假装能算棋力分）。装 Stockfish 后自动解锁：
