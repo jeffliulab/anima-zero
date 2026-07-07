@@ -6,8 +6,9 @@
 # 桥进程中途退出/超时未上线则明确报错。之后前台等着桥（Ctrl+C 即停桥，行为和裸跑一致）。
 #
 # 前提：本终端已 source ROS2 + episode-ros-ws（见 运行命令.md 二·4 终端 A2）。
-# 📌 2026-07-06 目录迁移 note（给其他 agent）：episode-ros-ws 已迁至项目根 episode-robot-dev-framework/ 下
-#（本脚本不含其路径，逻辑不受影响）；source 路径见更新后的 运行命令.md，原因见项目根《episode目录迁移公告-NOTE.md》。
+# 📌 2026-07-07 目录迁移 note（给其他 agent）：Episode 套件已作为机器人 infra 迁到 home 下
+#（`~/episode-robot-dev-framework/`，与 ~/IsaacLab 平级）。本脚本不含其路径、逻辑不受影响；
+#  source 路径见更新后的 运行命令.md（已外置成环境变量 $EPISODE_WS）。
 # 用法：
 #   ./start_camera_bridge.sh                 # 默认桥双相机两路话题（GZCHESS_CAM_TOPIC_BASE 可覆盖话题前缀）
 #   ./start_camera_bridge.sh /某/话题 ...     # 显式给话题则只桥给定的（单相机模式用）

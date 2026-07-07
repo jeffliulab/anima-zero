@@ -75,7 +75,7 @@ GZCHESS_SETUP_FEN="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" uvi
 - [x] 俯视相机出图（Gazebo 相机 → `ros_gz_image image_bridge` → JPEG）
 - [x] `arm_controller.py`（MoveIt `/compute_ik` + FK 复核 + `FollowJointTrajectory`）、`grasp_pose.py`
 - [x] `server.py` / `world.py` 接 MCP（`awi_mcp.py`，接口和 sim-chess 同款）
-- [x] **teleop 手动遥控（`:8110`）**：人可顺畅点动这条臂，物理底座已验通（见 `episode-robot-dev-framework/episode-ros-ws` 的 `episode_teleop` + 项目 `运行命令.md`「三 · teleop」）
+- [x] **teleop 手动遥控（`:8110`）**：人可顺畅点动这条臂，物理底座已验通（见 `~/episode-robot-dev-framework/episode-ros-ws` 的 `episode_teleop` + 项目 `运行命令.md`「三 · teleop」；套件 2026-07-07 已作为 infra 迁至 home 下）
 - [x] **ANIMA 自主走子**（大脑发 `move` → 世界真跑一趟夹取搬运）——v0.5 修通（MCP progress，~26s/原语）
 - [x] **多子摆盘**（`GZCHESS_SETUP_FEN`）+ 失败注入/执行自检分类/大脑补救——v0.5 活体验收通过
 - [x] **几何对齐真实摆位 + 径向倾斜抓取 + 64 格全可达**（v0.7 wave0：reach_map 64/64 硬闸 +
