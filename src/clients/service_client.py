@@ -21,8 +21,8 @@ from typing import Any
 
 import httpx
 
-from . import awi_log, config
-from .awi import ActionResult, Capabilities, ToolSpec
+from .. import awi_log, config
+from ..core.awi import ActionResult, Capabilities, ToolSpec
 from .mcp_bridge import run_sync, with_session
 
 PROBE_TIMEOUT = config.WORLD_PROBE_TIMEOUT   # 探在线的短超时（与 world 同款语义）

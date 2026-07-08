@@ -22,7 +22,7 @@ import httpx
 from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
-from . import config
+from .. import config
 
 _T = TypeVar("_T")
 

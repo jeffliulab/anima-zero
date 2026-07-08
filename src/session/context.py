@@ -12,8 +12,8 @@
 """
 from __future__ import annotations
 
-from . import config, messages
-from .llm import ToolCall
+from .. import config, messages
+from ..llm import ToolCall
 
 
 def _est_tokens(s: str) -> int:

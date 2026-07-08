@@ -6,7 +6,8 @@
 3. 没声明 `_progress` 的即时世界（sim-desk/sim-chess/camera 形态）一行不改、照常工作。
 
 测试起一个真 uvicorn（环回随机端口）+ 真 MCP 往返，不 mock 协议层——协议层正是被测对象。
-awi_mcp.py 从 world/gazebo-chess/ 加载（四份字节一致由 test_awi_mcp_copies 守住）。
+awi_mcp.py 从 world/sim-chess/ 加载（各世界这份字节一致由 test_awi_mcp_copies 守住；测的世界是下面
+的 inline mock，借哪个世界的 awi_mcp 都一样——原借 gazebo-chess，它已迁去 soma-zero，改借 sim-chess）。
 """
 from __future__ import annotations
 
@@ -21,7 +22,7 @@ import httpx
 import uvicorn
 from fastapi import FastAPI
 
-from src.mcp_bridge import run_sync, with_session
+from anima.clients.mcp_bridge import run_sync, with_session
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -32,7 +33,7 @@ CALL_TIMEOUT_S = 30.0       # 测试里 MCP 调用的宽裕上限
 
 
 def _load_awi_mcp():
-    p = ROOT / "world" / "gazebo-chess" / "awi_mcp.py"
+    p = ROOT / "world" / "sim-chess" / "awi_mcp.py"
     spec = importlib.util.spec_from_file_location("awi_mcp_under_test", p)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

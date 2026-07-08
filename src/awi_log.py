@@ -10,7 +10,8 @@ import os
 import time
 from collections import deque
 
-from . import config, session_log
+from . import config, paths
+from .session import session_log
 
 # 脑端保留多少条 AWI 流量历史（config，env 可覆盖）。世界端有自己的同名 env;前端显示数须 ≤ 此值。
 AWI_LOG_MAXLEN = config.AWI_LOG_MAXLEN
@@ -19,7 +20,7 @@ _SEQ = 0
 
 # 除了内存(给 /awi 仪表盘实时看),每条流量也落到本地文件,方便追溯历史。
 # 一天一个文件:logs/awi-YYYY-MM-DD.jsonl,每行一条 JSON。logs/ 已在 .gitignore,不入库、不 push。
-_LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs")
+_LOG_DIR = paths.LOGS_DIR
 
 
 def _persist(entry: dict) -> None:

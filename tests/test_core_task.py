@@ -10,10 +10,10 @@ import json
 import os
 
 from anima import messages
-from anima.awi import ActionResult, Capabilities, Observation, ToolSpec
+from anima.core.awi import ActionResult, Capabilities, Observation, ToolSpec
 from anima.llm import LLMReply, ToolCall
-from anima.orchestrator import Orchestrator
-from anima.registry import WorldRegistry
+from anima.core.orchestrator import Orchestrator
+from anima.clients.registry import WorldRegistry
 from anima.session import Session, SessionStore
 
 
@@ -157,7 +157,8 @@ def test_meta_tools_on_toolsheet(tmp_path):
 def test_context_sanitizes_orphan_tool_calls():
     """结对完整性（v0.7）：孤儿 tool_call 补占位结果；窗口开头无主 tool 结果被丢弃。
     背景：进程在「调用落档、结果未落」间被杀 → 此后每轮 provider 400、会话报废（2026-07-06 实锤）。"""
-    from anima import context, messages as msgs
+    from anima import messages as msgs
+    from anima.session import context
     history = [
         {"role": "tool", "id": "t0", "name": "x", "content": "无主结果（assistant 已滑出）"},
         {"role": "user", "text": "开始"},

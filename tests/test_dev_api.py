@@ -16,8 +16,8 @@ class _FakeLLM:
 
 
 def _client(monkeypatch, tmp_path, dev_on: bool):
-    import presentation.server as srv
-    from anima.orchestrator import Orchestrator
+    import anima.presentation.server as srv
+    from anima.core.orchestrator import Orchestrator
     from anima.session import SessionStore
 
     monkeypatch.setattr(config, "DEV_API", dev_on)

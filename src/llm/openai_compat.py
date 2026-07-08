@@ -4,7 +4,7 @@ from __future__ import annotations
 import base64
 import json
 
-from ..awi import ToolSpec
+from ..core.awi import ToolSpec
 from .base import LLMReply, ToolCall, norm_images
 
 

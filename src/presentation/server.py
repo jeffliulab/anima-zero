@@ -15,15 +15,16 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
-from anima import awi_log, config, session_log
+from anima import awi_log, config, paths, session_log
 from anima.llm import LLM, DEFAULT_BRAIN, list_brains, make_llm
-from anima.session_log import LoggingLLM, bound_stream, session_scope
-from anima.orchestrator import Orchestrator
-from anima.registry import WorldRegistry
+from anima.session.session_log import LoggingLLM, bound_stream, session_scope
+from anima.core.orchestrator import Orchestrator
+from anima.clients.registry import WorldRegistry
 from anima.session import SessionStore
 
-# 从 anima-zero/.env 读配置(选脑 / API key / Ollama 地址 / 世界 URL);.env 不入库,模板见 .env.example
-load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+# 从 anima-zero/.env 读配置(选脑 / API key / Ollama 地址 / 世界 URL);.env 不入库,模板见 .env.example。
+# 路径统一走 anima.paths（迁进 src/presentation 后不能再靠 __file__+".." 猜仓库根）。
+load_dotenv(paths.ENV_FILE)
 
 # 世界是独立进程,anima 按 URL 连它;注册时不握手(不硬依赖世界先起)。
 # 世界清单的单一来源在 config.worlds()（ANIMA_WORLDS env 覆盖；默认含所有已知世界，追加不替换——T0）；

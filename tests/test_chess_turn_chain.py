@@ -11,10 +11,10 @@
 from __future__ import annotations
 
 from anima import session_log
-from anima.awi import ActionResult, Capabilities, Observation, ToolSpec
+from anima.core.awi import ActionResult, Capabilities, Observation, ToolSpec
 from anima.llm import LLMReply, ToolCall
-from anima.orchestrator import Orchestrator
-from anima.registry import WorldRegistry
+from anima.core.orchestrator import Orchestrator
+from anima.clients.registry import WorldRegistry
 from anima.session import SessionStore
 
 START_FEN = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"

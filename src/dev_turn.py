@@ -12,21 +12,20 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 
 from dotenv import load_dotenv
 
-from . import config, session_log
+from . import config, paths
 from .llm import DEFAULT_BRAIN, make_llm
-from .orchestrator import Orchestrator
-from .registry import WorldRegistry
-from .session import SessionStore
-from .session_log import LoggingLLM, session_scope
+from .core.orchestrator import Orchestrator
+from .clients.registry import WorldRegistry
+from .session import SessionStore, session_log
+from .session.session_log import LoggingLLM, session_scope
 
 
 def main(argv: list[str] | None = None) -> int:
-    load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env"))
+    load_dotenv(paths.ENV_FILE)
     ap = argparse.ArgumentParser(description="跑一轮完整对话并 dump 该轮的 Session Logs 流水（开发自测用）")
     ap.add_argument("--say", required=True, help="用户这一轮说什么")
     ap.add_argument("--world", default=None, help="连哪个世界（config.worlds() 清单里的名字；不传=纯聊天）")

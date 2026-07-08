@@ -14,10 +14,9 @@ import shutil
 import time
 from dataclasses import asdict, dataclass, field
 
-from . import config
+from .. import config, paths
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_ROOT = os.getenv("ANIMA_SESSION_ROOT", os.path.join(_HERE, "..", "memory", "sessions"))
+_ROOT = os.getenv("ANIMA_SESSION_ROOT", paths.SESSIONS_DIR)
 TITLE_MAX_LEN = config.TITLE_MAX_LEN  # 会话标题取用户首句的前几个字（config）
 
 

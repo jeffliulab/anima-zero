@@ -225,10 +225,10 @@ cd world/sim-desk && pip install -e . && uvicorn server:app --port 8100
 # 2) 起 ANIMA 后端
 pip install -e .                       # 在 anima-zero 根目录
 cp .env.example .env                   # 填一个 API key(或配本地 Ollama)
-uvicorn presentation.server:app --port 8000
+uvicorn anima.presentation.server:app --port 8000
 
 # 3) 起网页
-cd presentation/web && npm install && npm run dev      # 默认 :3000
+cd frontend && npm install && npm run dev      # 默认 :3000
 ```
 
 然后打开 `localhost:3000`:**新建会话 → 选世界 + 选大脑 → 对话**(例:「把笔移到右上角」)。
@@ -260,7 +260,7 @@ cd world/sim-chess && pip install -e . && uvicorn server:app --port 8102
 # 终端2:棋类引擎服务(下棋必起;大脑按 config.services() 默认挂载它)
 ./.venv/bin/uvicorn services.boardgame_engine.app:app --port 8108     # 在 anima-zero 根
 # 终端3:后端(默认清单已含全部世界)
-uvicorn presentation.server:app --port 8000
+uvicorn anima.presentation.server:app --port 8000
 # 网页新建会话(世界选 sim-chess)→ 在 sim-chess 网页(:8102)人执白走一步 → 聊天说"该你了,你执黑"
 ```
 
@@ -286,7 +286,7 @@ cd world/camera && pip install -e . && uvicorn server:app --port 8104
 这一版做两件大事,外加一条诚实的边界。
 
 - **接口从自研 HTTP(AWI)换成业界标准 MCP**:世界＝标准 **MCP server**、脑＝**host**。MCP 三原语 **Tools / Resources / Prompts** 恰好对应我们本来的**动作 / 感知 / 说明书**——`tools/call`＝动作,`resources/read anima://observation`＝感知(画面快照 + 结构 state),`prompts/get "guidance"`＝**说明书**(世界自我介绍怎么跟它打交道,注入脑的系统提示)。世界 server＝三原语齐全的现实;引擎 server＝只有 Tools 的纯计算顾问——同一套协议。下棋引擎独立成一个 MCP server(`:8108`)。
-- **第一个物理世界 `gazebo-chess`(`:8106`)**:sim-chess 那张棋桌的 **Gazebo 3D 物理版**,真实建模六轴臂 + 真实夹爪,对大脑只露和 sim-chess 一样的 MCP 接口,内部把 ROS2 + MoveIt + Gazebo 全包起来。v0.4 先跑通 infra(往 Gazebo spawn 棋盘/棋子/相机、读位姿、俯视相机出图、MoveIt 解 IK + 发轨迹让臂动)。
+- **第一个物理世界 `gazebo-chess`(`:8106`)**:sim-chess 那张棋桌的 **Gazebo 3D 物理版**,真实建模六轴臂 + 真实夹爪,对大脑只露和 sim-chess 一样的 MCP 接口,内部把 ROS2 + MoveIt + Gazebo 全包起来。v0.4 先跑通 infra(往 Gazebo spawn 棋盘/棋子/相机、读位姿、俯视相机出图、MoveIt 解 IK + 发轨迹让臂动)。**(2026-07-08 起,这个世界的代码迁到配套的身体仓 `soma-zero/sim/gazebo-chess/`、作为 soma 的虚拟身体;ANIMA 仍按 `:8106` 连它。)**
 - **teleop 手动遥控(网页 GUI,`:8110`)**:先把「人能顺畅点动这条臂」验通——纯 ROS2(发 `joint_trajectory` 话题)+ MoveIt `/compute_ik` + `joint_trajectory_controller` 插值,平滑的笛卡尔点动。
 
 > **诚实的边界**:ANIMA **自主**走子那条链路(大脑发 `move` → 世界内部解 IK + 夹取 + 搬运 + 放下 + 自检)在 v0.4 会超时,**v0.5 已按框架问题修通**(见下节)。v0.4 交付的是「标准接口 + 物理世界基础设施 + 手动遥控」。

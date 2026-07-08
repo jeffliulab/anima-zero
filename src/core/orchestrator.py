@@ -32,12 +32,13 @@ from typing import Any, TypedDict
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 
-from . import config, context, messages
+from .. import config, messages
+from ..session import context
 from .awi import ActionResult, NON_MUTATING_KINDS, ToolSpec
-from .llm import LLM, LLMReply, ToolCall
-from .registry import WorldRegistry
+from ..llm import LLM, LLMReply, ToolCall
+from ..clients.registry import WorldRegistry
 from .safety import SafetyGate
-from .session import Session, SessionStore
+from ..session import Session, SessionStore
 
 DEFAULT_MAX_STEPS = config.MAX_STEPS  # ReAct 主循环最多转几轮（config，env 可覆盖）
 _NODES_PER_STEP = 3                   # 每轮回环经过的节点数（perceive→agent→act），算 recursion_limit 安全带用

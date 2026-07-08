@@ -6,11 +6,11 @@
 from __future__ import annotations
 
 from anima import awi_log, session_log
-from anima.awi import ActionResult, Capabilities, Observation, ToolSpec
+from anima.core.awi import ActionResult, Capabilities, Observation, ToolSpec
 from anima.llm import LLMReply, ToolCall
-from anima.orchestrator import Orchestrator
-from anima.registry import WorldRegistry
-from anima.service_client import RemoteService
+from anima.core.orchestrator import Orchestrator
+from anima.clients.registry import WorldRegistry
+from anima.clients.service_client import RemoteService
 from anima.session import SessionStore
 
 
@@ -159,8 +159,8 @@ def test_remote_service_invoke_logs_service_call(tmp_path, monkeypatch):
     svc = RemoteService("advisor", "http://localhost:9")
 
     # 不联网：把桥换成直接给结果（假 with_session 返回 None 而非协程，免得挂"未 await"警告）
-    monkeypatch.setattr("anima.service_client.run_sync", lambda coro, timeout: (True, "e7e5", {"result": "e7e5"}))
-    monkeypatch.setattr("anima.service_client.with_session", lambda url, op, t: None)
+    monkeypatch.setattr("anima.clients.service_client.run_sync", lambda coro, timeout: (True, "e7e5", {"result": "e7e5"}))
+    monkeypatch.setattr("anima.clients.service_client.with_session", lambda url, op, t: None)
     with session_log.session_scope("sess-svc"):
         res = svc.invoke("best_move", fen="fake-fen")
     assert res.ok and res.message == "e7e5"
@@ -176,7 +176,7 @@ def test_remote_service_down_returns_readable_error(monkeypatch, tmp_path):
     def boom(coro, timeout):
         raise ConnectionError("refused")
 
-    monkeypatch.setattr("anima.service_client.run_sync", boom)
-    monkeypatch.setattr("anima.service_client.with_session", lambda url, op, t: None)
+    monkeypatch.setattr("anima.clients.service_client.run_sync", boom)
+    monkeypatch.setattr("anima.clients.service_client.with_session", lambda url, op, t: None)
     res = RemoteService("advisor", "http://localhost:9").invoke("best_move", fen="x")
     assert not res.ok and "没有启动" in res.message, "服务没起 → 可读失败（如实反馈不兜底）"

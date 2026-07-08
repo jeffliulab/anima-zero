@@ -25,10 +25,10 @@ import time
 from contextlib import contextmanager
 from typing import Any, Iterable
 
-from . import config
+from .. import config, paths
 
 # 一个 session 一个文件：logs/sessions/session-<id>.jsonl（无 session 的落 misc-<日期>.jsonl）。logs/ 已在 .gitignore。
-_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs", "sessions")
+_DIR = os.path.join(paths.LOGS_DIR, "sessions")
 _SEQ = 0
 
 # 当前 session 标签（请求级上下文变量）：每条日志据此标 session，Session Logs 页可按 session 过滤。

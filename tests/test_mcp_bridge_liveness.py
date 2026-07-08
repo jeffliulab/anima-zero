@@ -10,7 +10,7 @@ import time
 
 import pytest
 
-from anima.mcp_bridge import Beat, CallAborted, HardCapTimeout, LivenessTimeout, run_alive
+from anima.clients.mcp_bridge import Beat, CallAborted, HardCapTimeout, LivenessTimeout, run_alive
 
 # 亚秒级测试节奏（监督器巡检步长是 config.BRIDGE_WATCHDOG_POLL_S=0.25s，参数都取它的量级）
 QUIET_S = 1.2        # "闷头不吭声"的假负载时长

@@ -4,13 +4,13 @@
 """
 from __future__ import annotations
 
-from anima.awi import ActionResult, Capabilities, Observation, ToolSpec
+from anima.core.awi import ActionResult, Capabilities, Observation, ToolSpec
 from anima.llm import LLMReply
 from anima.llm.base import norm_images
 from anima.llm.openai_compat import _messages as oai_messages
 from anima.llm.claude import _messages as claude_messages
-from anima.orchestrator import Orchestrator
-from anima.registry import WorldRegistry
+from anima.core.orchestrator import Orchestrator
+from anima.clients.registry import WorldRegistry
 from anima.session import SessionStore
 
 PNG_A = b"\x89PNG-a"

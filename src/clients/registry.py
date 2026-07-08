@@ -6,7 +6,7 @@
 """
 from __future__ import annotations
 
-from .awi import World
+from ..core.awi import World
 
 
 class WorldRegistry:
@@ -48,7 +48,7 @@ class WorldRegistry:
         标准 MCP 的「Host 组装」：连哪些 server 是大脑（Host）自己的配置决定，server 之间互不相识。
         惰性：建客户端不握手（同 register_world，能力在运行时才真正去问）；同一 URL 只建一个客户端。
         「棋世界要用引擎」这类配对不靠结构绑定——服务工具并进工具单后，模型看画面自选（不相关就不调）。"""
-        from . import config
+        from .. import config
         from .service_client import RemoteService
 
         out = []

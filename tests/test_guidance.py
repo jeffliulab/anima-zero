@@ -6,10 +6,10 @@
 """
 from __future__ import annotations
 
-from anima.awi import ActionResult, Capabilities, Observation, ToolSpec
+from anima.core.awi import ActionResult, Capabilities, Observation, ToolSpec
 
-from anima.orchestrator import Orchestrator
-from anima.registry import WorldRegistry
+from anima.core.orchestrator import Orchestrator
+from anima.clients.registry import WorldRegistry
 from anima.session import SessionStore
 
 

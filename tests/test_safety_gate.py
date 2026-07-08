@@ -5,12 +5,12 @@ Wave 6 安全网：钉住「会改世界的动作要过闸、只读动作不过�
 """
 from __future__ import annotations
 
-from anima.awi import ActionResult, Capabilities, Observation, ToolSpec
+from anima.core.awi import ActionResult, Capabilities, Observation, ToolSpec
 
 from anima.llm import LLMReply, ToolCall
-from anima.orchestrator import Orchestrator
-from anima.registry import WorldRegistry
-from anima.safety import SafetyGate
+from anima.core.orchestrator import Orchestrator
+from anima.clients.registry import WorldRegistry
+from anima.core.safety import SafetyGate
 from anima.session import SessionStore
 
 

@@ -26,8 +26,9 @@ from typing import Any, Callable, Optional
 import httpx
 from pydantic import AnyUrl
 
-from . import awi_log, config, mcp_bridge
-from .awi import ActionResult, Capabilities, Observation, ToolSpec
+from .. import awi_log, config
+from . import mcp_bridge
+from ..core.awi import ActionResult, Capabilities, Observation, ToolSpec
 from .mcp_bridge import run_sync, with_session
 
 DEFAULT_TIMEOUT = config.WORLD_TIMEOUT       # 读操作（capabilities/perceive）的死线（config，env 可覆盖）

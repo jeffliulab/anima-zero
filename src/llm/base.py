@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from .. import config
-from ..awi import ToolSpec
+from ..core.awi import ToolSpec
 
 # 一次回复的最大 token 数（config，env ANIMA_MAX_TOKENS 可覆盖）;两个 provider 共用,行为对称。
 MAX_TOKENS = config.MAX_TOKENS

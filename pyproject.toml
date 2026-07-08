@@ -54,8 +54,14 @@ Homepage = "https://github.com/jeffliulab/anima-zero"
 # 扁平 src/ 映射成 anima 包(不建 src/anima);llm/ 是子包
 [tool.setuptools]
 package-dir = { "anima" = "src" }
-packages = ["anima", "anima.llm"]
+packages = ["anima", "anima.core", "anima.clients", "anima.session", "anima.llm", "anima.presentation"]
+
+[tool.pytest.ini_options]
+cache_dir = ".cache/pytest"       # 把 .pytest_cache 收进 .cache/
+testpaths = ["tests"]
+pythonpath = ["."]                # 仓库根进 sys.path：services.boardgame_engine / src.* 等顶层 import 靠它
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+cache-dir = ".cache/ruff"         # 把 .ruff_cache 收进 .cache/
