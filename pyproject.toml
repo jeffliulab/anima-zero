@@ -35,6 +35,7 @@ dependencies = [
     "uvicorn>=0.32",
     "pillow>=10",
     "pydantic>=2.6",
+    "pydantic-settings>=2.6",  # 中央配置 Settings(BaseSettings)：类型校验+env/.env 读取(v0.8 起;此前是 mcp 的传递依赖,直接 import 必须显式声明)
     "python-dotenv>=1.0",
     "httpx>=0.27",      # 世界客户端(RemoteWorld)直接用;之前仅靠 anthropic/fastapi 传递依赖,现显式声明
     "mcp>=1.2",         # 官方 MCP SDK：大脑作 MCP host/client 连世界/服务(接口采标 MCP);先钉 v1.x
