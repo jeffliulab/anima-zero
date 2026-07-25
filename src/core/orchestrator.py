@@ -10,14 +10,17 @@ v0.5 重构后的极简架构：**大脑里只剩两样东西——这个主循�
 【LangGraph 集成方式：骨架用它、内脏用自己的】
 图结构（一次编译，节点=普通方法，内部全是自有模块——LLM 协议层/MCP 桥不换 LangChain 抽象）：
     START → perceive → agent ─(出文字)→ END
-                         └─(要调工具)→ act ─(步数没到)→ perceive（回环）
-                                          └─(步数到顶)→ overflow → END
+                         └─(要调工具)→ act ─(闸门都没到)→ perceive（回环）
+                                          └─(撞到闸门)→ overflow → END
 - 每条用户消息 = 一次图运行（种子从 SessionStore 读，会话真相始终在 SessionStore）；
   **不启用跨轮 checkpointer**——LangGraph 的持久化/中断/认知子图留给将来（先别做）。
 - 流式：节点经 get_stream_writer() 发自定义事件（perception/thinking/tool_call/progress/
   tool_result/reply），handle_stream 用 stream_mode="custom" 原样转发——SSE 事件形状不变，
   前端零改动；非流式 invoke 下 writer 是安全的 no-op（已验证），handle 与 handle_stream 共用同一张图。
-- 步数上限用 config.MAX_STEPS 做条件边判断（不靠 recursion_limit 报错；limit 只按图深度放宽为安全带）。
+- 一轮**什么时候收尾由 LLM 自己决定**（它一出文字就结束）；三个闸只在它转不出来时兜底，
+  经 act 后的条件边判断（不靠 recursion_limit 报错；limit 只按图深度放宽为安全带）：
+  步数上限 config.MAX_STEPS / 墙钟上限 config.TURN_TIME_BUDGET_S / 用户在网页点了停止。
+  三者都走 overflow 节点=**可续的停顿**（核心任务留在册，用户说「继续」接着来），不是报错。
 编排器完全通用，对各类世界与服务一视同仁——任务专属细节住在 world / service 侧，这里一行都不碰。
 """
 from __future__ import annotations
@@ -27,6 +30,7 @@ import contextvars
 import logging
 import queue
 import threading
+import time
 from typing import Any, TypedDict
 
 from langgraph.config import get_stream_writer
@@ -34,13 +38,15 @@ from langgraph.graph import END, START, StateGraph
 
 from .. import config, messages
 from ..session import context
+from . import interrupt
 from .awi import ActionResult, NON_MUTATING_KINDS, ToolSpec
 from ..llm import LLM, LLMReply, ToolCall
 from ..clients.registry import WorldRegistry
 from .safety import SafetyGate
 from ..session import Session, SessionStore
 
-DEFAULT_MAX_STEPS = config.MAX_STEPS  # ReAct 主循环最多转几轮（config，env 可覆盖）
+DEFAULT_MAX_STEPS = config.MAX_STEPS                     # 单轮步数上限（config，env 可覆盖）
+DEFAULT_TURN_TIME_BUDGET_S = config.TURN_TIME_BUDGET_S   # 单轮墙钟上限（同上）
 _NODES_PER_STEP = 3                   # 每轮回环经过的节点数（perceive→agent→act），算 recursion_limit 安全带用
 _log = logging.getLogger(__name__)
 
@@ -54,6 +60,7 @@ class LoopState(TypedDict, total=False):
     session: Session
     llm: Any                 # LLM 协议对象（自有层，非 LangChain 模型）
     max_steps: int
+    deadline: float          # 本轮墙钟死线（time.monotonic() 基准；到点即收尾）
     step: int                # 已开始第几轮（perceive 时 +1）
     world: Any               # RemoteWorld | None
     svc_routes: dict         # 工具名 → service 客户端（本轮）
@@ -89,10 +96,23 @@ class Orchestrator:
         g.add_conditional_edges("agent", lambda s: END if s.get("done") else "act",
                                 {END: END, "act": "act"})
         g.add_conditional_edges("act",
-                                lambda s: "overflow" if s["step"] >= s["max_steps"] else "perceive",
+                                lambda s: "overflow" if self._stop_reason(s) else "perceive",
                                 {"overflow": "overflow", "perceive": "perceive"})
         g.add_edge("overflow", END)
         return g.compile()
+
+    def _stop_reason(self, state: LoopState) -> str | None:
+        """这一轮该不该在这里收尾？三个闸谁先到算谁；None = 接着转。
+
+        顺序有意：**用户叫停排第一**——他按了停就该停，不该因为"步数还没到"再多走一步。
+        """
+        if interrupt.is_set(state["session"].id):
+            return "interrupt"
+        if state["step"] >= state["max_steps"]:
+            return "steps"
+        if time.monotonic() >= state["deadline"]:
+            return "time"
+        return None
 
     # ==================== 节点（看 → 想 → 动）====================
     # 不变量(改动时务必保持):capabilities 走缓存、perceive 每轮真取、安全闸只拦「会改世界」的动作、
@@ -162,11 +182,20 @@ class Orchestrator:
         return {"trace": state["trace"]}
 
     def _node_overflow(self, state: LoopState) -> dict:
-        """步数到顶：礼貌收尾（用户再说一句即可继续），防转圈。"""
+        """撞到闸门（步数/墙钟/用户叫停）：按原因说一句人话收尾，用户再说一句即可继续。
+
+        收尾语**要落进会话历史**：网页在流结束后用会话记录重绘这一轮，不落库的话这句话会
+        在重绘时凭空消失，看起来像"跑着跑着没了"。
+        """
         emit = get_stream_writer()
-        state["trace"]["reply"] = messages.MAX_STEPS_REPLY
-        emit({"type": "reply", "text": messages.MAX_STEPS_REPLY})
-        return {"final_reply": messages.MAX_STEPS_REPLY, "done": True, "trace": state["trace"]}
+        session = state["session"]
+        reason = self._stop_reason(state) or "steps"
+        interrupt.clear(session.id)     # 这次叫停已被消费，别殃及用户接着说的下一句
+        text = messages.STOP_REPLIES[reason]
+        self.store.append(session.id, {"role": "assistant", "text": text, "brain": session.brain})
+        state["trace"]["reply"] = text
+        emit({"type": "reply", "text": text, "stop_reason": reason})
+        return {"final_reply": text, "done": True, "trace": state["trace"]}
 
     # ==================== 工具执行 ====================
     def _run_tool(self, session: Session, world, svc_routes: dict, kinds: dict,
@@ -195,11 +224,17 @@ class Orchestrator:
         def _on_progress(message, progress, total):
             q.put({"type": "progress", "name": tc.name, "message": message or "", "progress": progress})
 
+        # 世界动作可能几十秒（机器狗走一步就要好几秒）——等待期间也要能被用户叫停，
+        # 否则点了停止还得干等这一步走完。世界客户端本来就支持（0.25s 粒度巡检），接上即可。
+        def _aborted() -> bool:
+            return interrupt.is_set(session.id)
+
         def _work():
             if svc is not None:
                 holder["res"] = svc.invoke(tc.name, **tc.arguments)
             else:
-                holder["res"] = self._dispatch(world, tc.name, tc.arguments, _on_progress=_on_progress)
+                holder["res"] = self._dispatch(world, tc.name, tc.arguments,
+                                               _on_progress=_on_progress, _should_abort=_aborted)
 
         ctx = contextvars.copy_context()             # 后台线程继承 session 标签（session_log 记账不丢归属）
         th = threading.Thread(target=ctx.run, args=(_work,), daemon=True)
@@ -250,11 +285,12 @@ class Orchestrator:
                                 parameters=spec["parameters"], kind="read"))
         return out
 
-    def _dispatch(self, world, name: str, args: dict, _on_progress=None) -> ActionResult:
+    def _dispatch(self, world, name: str, args: dict, _on_progress=None,
+                  _should_abort=None) -> ActionResult:
         if world is None:
             return ActionResult(False, "没连接世界,无法操作。")
         if _on_progress is not None:
-            return world.invoke(name, _on_progress=_on_progress, **args)
+            return world.invoke(name, _on_progress=_on_progress, _should_abort=_should_abort, **args)
         return world.invoke(name, **args)
 
     def _service_toolbox(self, world, world_tool_names: set[str]) -> tuple[list[ToolSpec], dict]:
@@ -314,27 +350,34 @@ class Orchestrator:
         return s
 
     # ==================== 公共接口（签名与 v0.5 一致）====================
-    def _init_state(self, session: Session, user_text: str, llm: LLM, max_steps: int) -> LoopState:
+    def _init_state(self, session: Session, user_text: str, llm: LLM, max_steps: int,
+                    time_budget_s: float) -> LoopState:
         self.store.append(session.id, {"role": "user", "text": user_text})
-        return {"session": session, "llm": llm, "max_steps": max_steps, "step": 0,
+        # 上一轮遗留的叫停不该殃及这一轮（比如点停止时那轮其实已经自己收尾了）。
+        interrupt.clear(session.id)
+        return {"session": session, "llm": llm, "max_steps": max_steps,
+                "deadline": time.monotonic() + time_budget_s, "step": 0,
                 "world": self._world(session), "done": False, "final_reply": "",
                 "trace": {"inputs": [], "thinking": [], "reply": "", "brain": session.brain,
                           "model": llm.model}}
 
     def _graph_config(self, max_steps: int) -> dict:
-        # recursion_limit 只是安全带（真正的步数收口在 act 后的条件边），按图深度放宽到永不误伤。
+        # recursion_limit 只是安全带（真正的收口在 act 后的条件边），按图深度放宽到永不误伤。
         return {"recursion_limit": max_steps * _NODES_PER_STEP + 8}
 
-    def handle(self, session: Session, user_text: str, llm: LLM, max_steps: int = DEFAULT_MAX_STEPS) -> dict:
-        state = self._init_state(session, user_text, llm, max_steps)
+    def handle(self, session: Session, user_text: str, llm: LLM, max_steps: int = DEFAULT_MAX_STEPS,
+               time_budget_s: float = DEFAULT_TURN_TIME_BUDGET_S) -> dict:
+        state = self._init_state(session, user_text, llm, max_steps, time_budget_s)
         out = self._graph.invoke(state, config=self._graph_config(max_steps))
         return {"reply": out.get("final_reply", ""), "trace": out["trace"],
                 "brain": session.brain, "model": llm.model}
 
-    def handle_stream(self, session: Session, user_text: str, llm: LLM, max_steps: int = DEFAULT_MAX_STEPS):
+    def handle_stream(self, session: Session, user_text: str, llm: LLM,
+                      max_steps: int = DEFAULT_MAX_STEPS,
+                      time_budget_s: float = DEFAULT_TURN_TIME_BUDGET_S):
         """流式版：节点发的自定义事件（perception/thinking/tool_call/progress/tool_result/reply）
         经 LangGraph custom 流原样转发——事件形状与 v0.5 相同，前端零改动。"""
-        state = self._init_state(session, user_text, llm, max_steps)
+        state = self._init_state(session, user_text, llm, max_steps, time_budget_s)
         yield {"type": "start", "brain": session.brain, "model": llm.model}
         for ev in self._graph.stream(state, config=self._graph_config(max_steps), stream_mode="custom"):
             yield ev

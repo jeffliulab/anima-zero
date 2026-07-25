@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from anima import awi_log, config, paths, session_log
 from anima.llm import LLM, DEFAULT_BRAIN, list_brains, make_llm
 from anima.session.session_log import LoggingLLM, bound_stream, session_scope
+from anima.core import interrupt
 from anima.core.orchestrator import Orchestrator
 from anima.clients.registry import WorldRegistry
 from anima.session import SessionStore
@@ -167,6 +168,19 @@ class BrainIn(BaseModel):
     brain: str
 
 
+@app.post("/api/sessions/{sid}/interrupt")  # 叫停这个会话正在跑的那一轮（网页「停止」按钮）
+def interrupt_session(sid: str) -> dict:
+    """置一个进程内的叫停旗标；主循环下一个检查点（含动作等待期）就收尾。
+
+    立刻返回、不等那一轮真的停——世界那边正在走的那一步还得走完（机器狗要把这步迈完），
+    前端据此显示「停止中…」。停下来是**可续的停顿**：核心任务留在册，说「继续」就接着来。
+    """
+    if not store.exists(sid):
+        return {"ok": False, "message": "(会话不存在)"}
+    interrupt.request(sid)
+    return {"ok": True}
+
+
 @app.post("/api/sessions/{sid}/brain")  # 中途换脑
 def set_session_brain(sid: str, inp: BrainIn) -> dict:
     if not store.exists(sid):
@@ -238,6 +252,17 @@ def chat_stream(inp: ChatIn) -> StreamingResponse:
 @app.get("/api/status")  # 给前端看连接状态
 def status() -> dict:
     return {"worlds": registry.list_worlds(), "bound": registry.bound_name()}
+
+
+@app.get("/api/config")  # 核心运行参数（网页左下角常驻显示）
+def runtime_config() -> dict:
+    """当前生效的核心运行参数 + 各自的 env 名与说明。
+
+    ⛔ 值/env 名/说明全部现读自 `config.Settings` 的字段定义——网页只是它的显示器，
+    一个数字都不许在前端写死（写两份必然出现"网页显示 60、.env 里是 8"的对不上账）。
+    只读：改参数走 .env + 重启，config.py 保持单一来源。
+    """
+    return {"params": config.runtime_params()}
 
 
 # ---- AWI 仪表盘(/awi 页面用)----

@@ -18,8 +18,8 @@ from anima.config import Settings
 
 
 def test_defaults_match_pre_migration():
+    """迁移前后默认值逐一相同——**除了 v0.9 有意改掉的两项**（见下面那条测试）。"""
     s = Settings(_env_file=None)
-    assert s.max_steps == 8
     assert s.context_token_budget == 6000
     assert s.dev_api is False
     assert s.world_timeout == 30
@@ -29,6 +29,18 @@ def test_defaults_match_pre_migration():
     assert s.max_tokens == 1024
     assert s.default_brain == "gpt-5.4"
     assert s.ollama_base_url == "http://localhost:11434/v1"
+
+
+def test_v09_turn_budget_defaults():
+    """v0.9 有意改掉的默认值——单独立一条，改动是**决定**不是漂移，改了这里就会红。
+
+    背景：v0.8 定 max_steps=8 是回合制的节拍器（每手停下等用户）。v0.9 起口径变成
+    「一个回合做一件事」，一轮什么时候收尾由 LLM 自己出文字决定，步数退化成安全带，
+    另加墙钟闸兜住费用。下棋仍是一手 2-6 步自然收尾、碰不到 60。
+    """
+    s = Settings(_env_file=None)
+    assert s.max_steps == 60, "v0.9：步数上限是安全带（长任务要跑得完），不是节拍器"
+    assert s.turn_time_budget_s == 900, "v0.9：单轮墙钟上限 15 分钟——真正的费用闸"
 
 
 def test_env_override_wins(monkeypatch):

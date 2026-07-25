@@ -34,12 +34,23 @@ class Settings(BaseSettings):
 
     # ---- 编排器 / 上下文 ----
     max_steps: int = Field(
-        8, validation_alias="ANIMA_MAX_STEPS", ge=1,
+        60, validation_alias="ANIMA_MAX_STEPS", ge=1,
         description="ReAct 主循环单轮步数上限（一条用户消息内最多转几个「看→想→动」step）。"
-                    "回合制铁律：每手/每步停下等用户——一手棋实测 2-6 步，8 留足余量。"
-                    "历史教训：v0.7 对局 1-3 曾调到 400 跑「一句话下完整盘」的循环模式，已否定废弃"
-                    "（目标滑出上下文、中途停摆、单会话 900+ 条流水失控）；未来若真要长循环，"
-                    "必须显式设计新模式，禁止靠调大本值复活（见 v0.8 审计）。")
+                    "v0.9 起它是**安全带、不是节拍器**：一轮什么时候收尾由 LLM 自己出文字决定，"
+                    "这个值只在它转不出来时兜底。口径=「一个回合做一件事」——下棋的一件事是一手棋"
+                    "（实测 2-6 步，自然收尾、根本碰不到上限），导航的一件事是「找到厨房」"
+                    "（几十步，要一路跑到收敛）。"
+                    "【为什么 v0.8 的 8 被改掉】v0.8 定 8 是因为当时长回合有三个真病根：目标会滑出"
+                    "上下文、跑起来不可中断、费用不可控。到 v0.9 三个分别有解了——核心任务寄存器"
+                    "（v0.7 起）托住目标、网页有停止按钮、turn_time_budget_s 兜住费用，所以放开。"
+                    "【但 v0.7 那个废案仍然是废案】当年调到 400 是拿单轮去跑「一句话下完整盘」的"
+                    "跨回合循环（单会话 900+ 条流水、45-90 分钟不可中断不可审）——那是把多件事塞进"
+                    "一个回合，与本值大小无关，**不要再那样用**。")
+    turn_time_budget_s: float = Field(
+        900, validation_alias="ANIMA_TURN_TIME_BUDGET_S", gt=0,
+        description="单轮墙钟上限（秒），默认 900=15 分钟。步数管不住「每步很慢」的世界"
+                    "（如机器狗走一步要几秒），墙钟才是真正的费用闸。到顶=走 overflow 礼貌停顿"
+                    "（可续），不是报错。")
     context_token_budget: int = Field(
         6000, validation_alias="ANIMA_CONTEXT_BUDGET", ge=100,
         description="上下文滑窗 token 预算（粗估 3 字符≈1 token）：从最近往前装历史，超预算即截断。")
@@ -139,6 +150,7 @@ _settings = Settings()
 
 # ---- 兼容层：大写常量原名 re-export（消费方 `config.MAX_STEPS` 等零改动）----
 MAX_STEPS = _settings.max_steps
+TURN_TIME_BUDGET_S = _settings.turn_time_budget_s
 CONTEXT_TOKEN_BUDGET = _settings.context_token_budget
 DEV_API = _settings.dev_api
 WORLD_TIMEOUT = _settings.world_timeout
@@ -166,6 +178,35 @@ MODEL_GPT_55 = _settings.model_gpt_55
 MODEL_GPT_54 = _settings.model_gpt_54
 MODEL_GPT_54_MINI = _settings.model_gpt_54_mini
 MODEL_QWEN = _settings.model_qwen
+
+
+# ---- 给网页显示的「核心运行参数」----
+# 收录判据：**决定一个回合能跑多深、多久、记得多少**的三个闸——它们直接决定用户看到的行为，
+# 所以值得常驻在界面上。其余（各类超时、模型 id）属于运维细节，不占界面。
+# ⛔ 名字/值/env 名/说明四样全部从下面 Settings 的字段定义现读，前端一个都不许自己写死。
+_RUNTIME_PARAMS_SHOWN = ("max_steps", "turn_time_budget_s", "context_token_budget")
+# 显示用的中文短名（Settings 的 description 是整段说明，界面上放不下，这里给个一行的标签）。
+_RUNTIME_PARAM_LABELS = {
+    "max_steps": "单轮步数上限",
+    "turn_time_budget_s": "单轮时长上限(秒)",
+    "context_token_budget": "上下文预算(token)",
+}
+
+
+def runtime_params() -> list[dict]:
+    """核心运行参数的当前生效值 + 它们的 env 名与说明（给 GET /api/config，网页只做显示器）。"""
+    out: list[dict] = []
+    for name in _RUNTIME_PARAMS_SHOWN:
+        field = Settings.model_fields[name]
+        alias = field.validation_alias
+        out.append({
+            "key": name,
+            "label": _RUNTIME_PARAM_LABELS.get(name, name),
+            "value": getattr(_settings, name),
+            "env": alias if isinstance(alias, str) else name.upper(),
+            "description": field.description or "",
+        })
+    return out
 
 
 def _s(key: str, default: str) -> str:
