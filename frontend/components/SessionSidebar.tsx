@@ -1,6 +1,14 @@
 "use client";
-import { useState } from "react";
-import { createSession, deleteSession, type Brain, type World, type SessionSummary } from "@/lib/api";
+import { useEffect, useState } from "react";
+import {
+  createSession,
+  deleteSession,
+  getRuntimeConfig,
+  type Brain,
+  type RuntimeParam,
+  type SessionSummary,
+  type World,
+} from "@/lib/api";
 import ThemeToggle from "./ThemeToggle";
 
 export default function SessionSidebar({
@@ -147,6 +155,7 @@ export default function SessionSidebar({
       </div>
 
       <div className="space-y-0.5 border-t border-neutral-800 p-2">
+        <RuntimeParams />
         <button
           onClick={() => onOpenPanel("awi")}
           className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-neutral-300 transition-colors hover:bg-neutral-800 hover:text-neutral-100"
@@ -171,6 +180,29 @@ export default function SessionSidebar({
         </div>
       </div>
     </aside>
+  );
+}
+
+// 核心运行参数：决定一个回合能跑多深、多久、记得多少的三个闸，常驻在这儿。
+// ⛔ 值/env 名/说明全部从后端现读（GET /api/config → config.Settings 字段定义），
+//    前端一个数字都不写死——写两份必然出现"网页显示 60、.env 里是 8"的对不上账。
+// 只读：改参数走 .env + 重启，config.py 保持单一来源。
+function RuntimeParams() {
+  const [params, setParams] = useState<RuntimeParam[]>([]);
+  useEffect(() => {
+    getRuntimeConfig().then(setParams).catch(() => {});
+  }, []);
+  if (!params.length) return null;
+  return (
+    <div className="mb-1 border-b border-neutral-800 px-2 pb-2 text-[10px] text-neutral-500">
+      <div className="mb-1 text-neutral-600">运行参数</div>
+      {params.map((p) => (
+        <div key={p.key} className="flex items-baseline gap-1" title={`${p.env}\n\n${p.description}`}>
+          <span className="truncate">{p.label}</span>
+          <span className="ml-auto shrink-0 tabular-nums text-neutral-400">{p.value}</span>
+        </div>
+      ))}
+    </div>
   );
 }
 

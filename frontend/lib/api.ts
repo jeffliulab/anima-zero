@@ -24,8 +24,19 @@ export type ChatEvent =
   | { type: "tool_call"; name: string; args: Record<string, unknown> }
   | { type: "progress"; name: string; message: string; progress: number } // 长动作实时进度（如夹爪搬运）
   | { type: "tool_result"; name: string; ok: boolean; message: string }
-  | { type: "reply"; text: string }
+  // stop_reason 只在这一轮是被闸门收尾时才有：steps=转太多步 / time=跑太久 / interrupt=用户点了停止。
+  // LLM 自己出文字收尾时没有这个字段。
+  | { type: "reply"; text: string; stop_reason?: "steps" | "time" | "interrupt" }
   | { type: "done" };
+
+// 核心运行参数（左下角显示）。值/env 名/说明都来自后端的 config.Settings，前端不写死任何数字。
+export type RuntimeParam = {
+  key: string;
+  label: string;
+  value: number;
+  env: string;
+  description: string;
+};
 
 export type World = { name: string; url: string; online: boolean };
 
@@ -182,6 +193,19 @@ export async function setSessionBrain(id: string, brain: string): Promise<void> 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ brain }),
   });
+}
+
+// 叫停这个会话正在跑的那一轮。**立刻返回、不等它真的停**：世界那边正在做的那一步还得做完
+// （机器狗要把这步迈完），所以按钮此后显示「停止中…」，直到流自己以停顿语收尾。
+// ⛔ 不要改成 AbortController 掐掉 fetch——那只是前端自己捂住眼睛，后端还在跑、还在花钱。
+export async function interruptSession(id: string): Promise<void> {
+  await fetch(`${BASE}/api/sessions/${encodeURIComponent(id)}/interrupt`, { method: "POST" });
+}
+
+// 核心运行参数（左下角常驻显示）。⛔ 只读、且必须现读——前端写死数字必然和 .env 对不上账。
+export async function getRuntimeConfig(): Promise<RuntimeParam[]> {
+  const r = await fetch(`${BASE}/api/config`);
+  return ((await r.json()) as { params: RuntimeParam[] }).params;
 }
 
 export async function sendChat(sessionId: string, message: string): Promise<{ reply: string }> {

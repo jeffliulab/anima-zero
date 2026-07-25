@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import {
   getSession,
   imgUrl,
+  interruptSession,
   setSessionBrain,
   streamChat,
   type Brain,
@@ -12,6 +13,10 @@ import {
   type RecMsg,
   type SessionSummary,
 } from "@/lib/api";
+
+// 思考区的最大高度：长回合可能几十步，不限高的话思考会把最终回复顶出屏幕、还得手动往下翻。
+// 限高 + 内部滚动 + 自动贴底 = 一眼看得到最新一步，同时最终回复始终在视野里。
+const THINKING_MAX_H = "max-h-72";
 
 type ThinkStep = { text: string; tool_calls: { name: string; args: Record<string, unknown> }[]; tool_results: string[] };
 type Turn = {
@@ -57,8 +62,13 @@ const REPLY_CLASS =
   "[&_p]:my-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 " +
   "[&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:rounded [&_code]:bg-neutral-900 [&_code]:px-1";
 
-function TurnView({ turn, open }: { turn: Turn; open: boolean }) {
+function TurnView({ turn, open, live = false }: { turn: Turn; open: boolean; live?: boolean }) {
   const hasBody = turn.inputs.length > 0 || turn.thinking.length > 0 || turn.reply;
+  // 正在跑的那一轮：每来一步就把思考区滚到底，像看思维链一路往下长。
+  const thinkRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (live && thinkRef.current) thinkRef.current.scrollTop = thinkRef.current.scrollHeight;
+  }, [live, turn.thinking.length, turn.thinking[turn.thinking.length - 1]?.tool_results.length]);
   return (
     <div className="space-y-2">
       {turn.user && (
@@ -86,19 +96,25 @@ function TurnView({ turn, open }: { turn: Turn; open: boolean }) {
           )}
           {turn.thinking.length > 0 && (
             <details open={open} className="rounded-lg bg-neutral-800/50 text-xs">
-              <summary className="cursor-pointer px-3 py-1.5 text-neutral-400">💭 思考过程</summary>
-              <div className="space-y-1 px-3 pb-2 text-neutral-400">
+              <summary className="cursor-pointer px-3 py-1.5 text-neutral-400">
+                💭 思考过程 · {turn.thinking.length} 步
+              </summary>
+              <div ref={thinkRef} className={`space-y-1 overflow-y-auto px-3 pb-2 text-neutral-400 ${THINKING_MAX_H}`}>
                 {turn.thinking.map((th, j) => (
-                  <div key={j}>
-                    {th.text && <div className="text-neutral-300">{th.text}</div>}
-                    {th.tool_calls.map((tc, k) => (
-                      <div key={k} className="text-[11px]">
-                        → 调用 <code>{tc.name}</code>({JSON.stringify(tc.args)})
-                      </div>
-                    ))}
-                    {th.tool_results.map((tr, k) => (
-                      <div key={k} className="text-[11px] text-neutral-500">　结果:{tr}</div>
-                    ))}
+                  <div key={j} className="flex gap-1.5">
+                    {/* 步号：长回合几十步，得能一眼说出"卡在第几步"，也方便对照 Session Logs */}
+                    <span className="shrink-0 tabular-nums text-neutral-600">{j + 1}.</span>
+                    <div className="min-w-0 flex-1">
+                      {th.text && <div className="text-neutral-300">{th.text}</div>}
+                      {th.tool_calls.map((tc, k) => (
+                        <div key={k} className="text-[11px]">
+                          → 调用 <code>{tc.name}</code>({JSON.stringify(tc.args)})
+                        </div>
+                      ))}
+                      {th.tool_results.map((tr, k) => (
+                        <div key={k} className="text-[11px] text-neutral-500">　结果:{tr}</div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -112,6 +128,15 @@ function TurnView({ turn, open }: { turn: Turn; open: boolean }) {
         </div>
       )}
     </div>
+  );
+}
+
+// 停止图标（实心方块，和 ChatGPT 一个语汇）
+function StopIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true">
+      <rect width="10" height="10" rx="1.5" />
+    </svg>
   );
 }
 
@@ -141,7 +166,12 @@ export default function ChatPanel({
   const [live, setLive] = useState<Turn | null>(null);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  // 点了停止之后、这一轮真的收尾之前：世界那边正在做的那一步还得做完，所以有个中间态。
+  const [stopping, setStopping] = useState(false);
+  // 思考区的总开关。auto=正在跑的那轮展开、历史折叠（老行为）；all/none=用户一键全展开/全折叠。
+  const [expand, setExpand] = useState<"auto" | "all" | "none">("auto");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const openFor = (isLive: boolean) => (expand === "all" ? true : expand === "none" ? false : isLive);
 
   const reload = useCallback(async () => {
     if (!session) {
@@ -224,8 +254,17 @@ export default function ChatPanel({
       await reload(); // 用记录里的完整回合替换 live(此后折叠收起)
       setLive(null);
       setBusy(false);
+      setStopping(false);
       onSessionsChanged();
     }
+  }
+
+  // 停止这一轮。只是给后端置个叫停旗标——它会把当前这一步做完再礼貌收尾，
+  // 已经生成的思考和回复照常留在记录里。⛔ 不掐 fetch：那样只是自己捂住眼睛、后端还在跑。
+  async function stop() {
+    if (!session || !busy || stopping) return;
+    setStopping(true);
+    await interruptSession(session.id).catch(() => setStopping(false));
   }
 
   // 大脑名 → 显示名;切换大脑后,在变化处插一条分隔线("开启会话" / "切换为")
@@ -245,7 +284,19 @@ export default function ChatPanel({
       <header className="border-b border-neutral-800 p-3">
         <div className="mb-2 flex items-center justify-between text-xs">
           <span className="font-medium text-neutral-200">和 ANIMA 对话</span>
-          <span className="text-neutral-400">🌐 {session?.world ?? (session ? "纯聊天" : "无会话")}</span>
+          <span className="flex items-center gap-2">
+            {/* 长回合的思考很长——给一个总开关，一下把全部回合的思考区收起或摊开 */}
+            {(turns.length > 0 || live) && (
+              <button
+                onClick={() => setExpand(expand === "all" ? "none" : "all")}
+                title="一键展开 / 折叠所有回合的思考过程"
+                className="rounded border border-neutral-700 px-1.5 py-0.5 text-[10px] text-neutral-400 hover:border-neutral-500"
+              >
+                {expand === "all" ? "折叠思考" : "展开思考"}
+              </button>
+            )}
+            <span className="text-neutral-400">🌐 {session?.world ?? (session ? "纯聊天" : "无会话")}</span>
+          </span>
         </div>
         {session && (
           <div className="flex flex-wrap gap-1.5">
@@ -279,11 +330,15 @@ export default function ChatPanel({
         {turns.map((t, i) => (
           <Fragment key={i}>
             {seps[i] && <Divider text={seps[i]!} />}
-            <TurnView turn={t} open={false} />
+            <TurnView turn={t} open={openFor(false)} />
           </Fragment>
         ))}
-        {live && <TurnView turn={live} open={true} />}
-        {busy && !live?.reply && <div className="text-xs text-neutral-500">ANIMA 思考中…</div>}
+        {live && <TurnView turn={live} open={openFor(true)} live />}
+        {busy && !live?.reply && (
+          <div className="text-xs text-neutral-500">
+            {stopping ? "正在收尾——当前这一步做完就停…" : "ANIMA 思考中…"}
+          </div>
+        )}
         <div ref={bottomRef} />
       </div>
 
@@ -310,21 +365,30 @@ export default function ChatPanel({
           </div>
         ) : (
           <div className="flex gap-2 border-t border-neutral-800 p-3">
+            {/* 生成期间输入框照样能打字(先把下一句写好)，只是回车不发送——send() 里 busy 直接返回 */}
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && send()}
-              placeholder="给 ANIMA 下达一个指令…"
-              disabled={busy}
-              className="flex-1 rounded-xl bg-neutral-800 px-3 py-2 text-sm outline-none placeholder:text-neutral-500 disabled:opacity-50"
+              placeholder={busy ? "这一轮跑完再发下一句…" : "给 ANIMA 下达一个指令…"}
+              className="flex-1 rounded-xl bg-neutral-800 px-3 py-2 text-sm outline-none placeholder:text-neutral-500"
             />
-            <button
-              onClick={send}
-              disabled={busy}
-              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium disabled:opacity-50"
-            >
-              发送
-            </button>
+            {/* 同一个位置两种状态：闲着=发送，跑着=停止。长回合里这是用户唯一的刹车。 */}
+            {busy ? (
+              <button
+                onClick={stop}
+                disabled={stopping}
+                title="停止这一轮（当前这一步做完就停，说「继续」可接着来）"
+                className="flex items-center gap-1.5 rounded-xl bg-neutral-700 px-4 py-2 text-sm font-medium disabled:opacity-60"
+              >
+                <StopIcon />
+                {stopping ? "停止中…" : "停止"}
+              </button>
+            ) : (
+              <button onClick={send} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium">
+                发送
+              </button>
+            )}
           </div>
         )))}
     </aside>
