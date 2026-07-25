@@ -1,0 +1,22 @@
+[project]
+name = "sim-house-nav"
+version = "0.1.0"
+description = "ANIMA 世界：三室住宅里的四足机器狗导航（MuJoCo + 学习步态）"
+requires-python = ">=3.10"
+dependencies = [
+    "mujoco>=3.2",        # 物理与渲染
+    "onnxruntime>=1.17",  # 跑导出的步态策略（CPU 足够）
+    "numpy>=1.24",
+    "pillow>=10.0",       # 帧编码 PNG/JPEG
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "mcp>=1.28",          # AWI over MCP
+    "anyio>=4.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["config", "sim", "world", "awi_mcp", "export_policy", "dump_contract", "test_walk"]

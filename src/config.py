@@ -194,12 +194,14 @@ def worlds() -> list[tuple[str, str]]:
     在【调用时】读 env（不在 import 时）——调用方通常先 load_dotenv，.env 里的地址才生效。"""
     raw = os.getenv("ANIMA_WORLDS", "").strip()
     if not raw:
-        # 各世界默认地址(env 可覆盖)：sim-desk :8100、sim-chess :8102、camera :8104、gazebo-chess :8106
+        # 各世界默认地址(env 可覆盖)：sim-desk :8100、sim-chess :8102、camera :8104、
+        #                              gazebo-chess :8106、sim-house-nav :8112
         return [
             ("sim-desk", _s("SIM_DESK_URL", "http://localhost:8100")),
             ("sim-chess", _s("SIM_CHESS_URL", "http://localhost:8102")),
             ("camera", _s("CAMERA_URL", "http://localhost:8104")),
             ("gazebo-chess", _s("GAZEBO_CHESS_URL", "http://localhost:8106")),
+            ("sim-house-nav", _s("SIM_HOUSE_NAV_URL", "http://localhost:8112")),
         ]
     return _pairs(raw)
 

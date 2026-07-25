@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sim-house-nav · 屋子导航世界</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; font: 15px/1.6 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+         background: #14161a; color: #e8eaed; }
+  header { padding: 16px 22px; border-bottom: 1px solid #2a2e35; }
+  h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  .sub { color: #9aa0a6; font-size: 13px; margin-top: 4px; }
+  main { display: flex; gap: 20px; padding: 20px 22px; flex-wrap: wrap; align-items: flex-start; }
+  .panel { background: #1b1e24; border: 1px solid #2a2e35; border-radius: 10px; padding: 14px; }
+  .cam { flex: 1 1 660px; }
+  .cam img { width: 100%; max-width: 720px; border-radius: 8px; display: block; background: #000; }
+  .side { flex: 0 1 300px; min-width: 260px; }
+  h2 { font-size: 14px; margin: 0 0 10px; color: #cbd0d6; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  td { padding: 5px 0; border-bottom: 1px solid #24272e; }
+  td:first-child { color: #9aa0a6; width: 42%; }
+  .val { font-variant-numeric: tabular-nums; }
+  button { background: #2b6cb0; color: #fff; border: 0; border-radius: 6px; padding: 8px 14px;
+           font-size: 13px; cursor: pointer; }
+  button:hover { background: #2c7bd0; }
+  .note { color: #9aa0a6; font-size: 12px; margin-top: 12px; line-height: 1.7; }
+  .warn { color: #e0a458; }
+</style>
+</head>
+<body>
+<header>
+  <h1>sim-house-nav · 屋子导航世界</h1>
+  <div class="sub">一间三室住宅 + 一只用学习步态真实行走的宇树 Go2。ANIMA 通过下面这只前视相机看世界。</div>
+</header>
+
+<main>
+  <section class="panel cam">
+    <h2>机器狗前视相机（实时）</h2>
+    <img id="cam" src="/stream" alt="机器狗前视画面">
+    <div class="note">这就是 ANIMA 每轮感知时看到的画面。它必须靠这张图认出自己在哪间屋、往哪走——
+      世界不会告诉它坐标，也不会告诉它房间名。</div>
+  </section>
+
+  <section class="panel side">
+    <h2>世界真值（上帝视角 · 不给 ANIMA）</h2>
+    <table>
+      <tr><td>所在房间</td><td class="val" id="room">—</td></tr>
+      <tr><td>位置 x / y</td><td class="val" id="pos">—</td></tr>
+      <tr><td>朝向</td><td class="val" id="head">—</td></tr>
+      <tr><td>躯干倾角</td><td class="val" id="tilt">—</td></tr>
+      <tr><td>是否摔倒</td><td class="val" id="fall">—</td></tr>
+    </table>
+    <div class="note warn">⚠️ 这一栏只给人看、用于验收「它是不是真的走到厨房了」。
+      这些数字绝不进 ANIMA 的观测。</div>
+    <div style="margin-top:14px"><button id="reset">把狗放回出生点</button></div>
+    <div class="note">动作由 ANIMA 通过 AWI(MCP) 调用三个原语驱动：往前走 / 左转 / 右转。</div>
+  </section>
+</main>
+
+<script>
+async function refresh() {
+  try {
+    const s = await (await fetch('/status')).json();
+    document.getElementById('room').textContent = s.room_label ?? '—';
+    document.getElementById('pos').textContent  = `${s.pose.x.toFixed(2)}, ${s.pose.y.toFixed(2)}`;
+    document.getElementById('head').textContent = `${s.pose.heading_deg.toFixed(0)}°`;
+    document.getElementById('tilt').textContent = `${s.tilt_deg.toFixed(1)}°`;
+    document.getElementById('fall').textContent = s.fallen ? '是' : '否';
+  } catch (e) { /* 服务重启中，下一拍再试 */ }
+}
+setInterval(refresh, 500); refresh();
+document.getElementById('reset').onclick = async () => {
+  await fetch('/reset', { method: 'POST' }); refresh();
+};
+</script>
+</body>
+</html>
