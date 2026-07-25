@@ -42,7 +42,10 @@ GUIDANCE = (
     "· 过道：狭长通道，两侧墙上挂画、边柜、绿植，好几扇门开在两边。\n"
     "各个房间的墙色和地面材质也不一样，可以一并作为判断依据。\n"
     "\n"
-    "【你能做什么】三个动作：往前走一段、原地左转、原地右转。狗是靠学出来的步态真的迈腿走路，\n"
+    "【你能做什么】四个动作，地位并列：**往前走一段**、**原地左转**、**原地右转**、**环视一圈**。\n"
+    "前三个让狗动起来；环视是一次把四周看清楚——我带着狗自转一圈、沿途拍好几张，下一次感知"
+    "一起给你。到了新地方、或者被挡住想找出路，用环视比你自己「转一下看一眼」来回几趟省事得多。\n"
+    "狗是靠学出来的步态真的迈腿走路，\n"
     "所以结果不会分毫不差——我会如实告诉你**实际**走了多远、转了多少度。撞到墙或家具会走不动，\n"
     "这时我会明说「被挡住了」，你要据此改变策略（比如先转个方向再走）。\n"
     "\n"
@@ -73,10 +76,23 @@ class HouseNavWorld:
         self.sim = HouseSim()
         self.sim.start()
         self._last_event = "（还没动过）"
+        self._sweep: list[tuple[str, bytes]] | None = None   # look_around 拍的那一组，等下次感知取走
 
     # ---------------------------------------------------------------- 能力声明
     def capabilities(self) -> dict:
-        """告诉大脑这个世界有哪些原子动作。参数用 JSON schema 描述，带默认值与范围说明。"""
+        """告诉大脑这个世界有哪些原子动作。参数用 JSON schema 描述，带默认值与范围说明。
+
+        ┌─ 动作清单（改这里务必同步更新这张表、README 与 GUIDANCE）────────────────────┐
+        │ 名字            作用                    参数            会不会移动位置        │
+        │ move_forward    朝正前方走一段          meters 0~MAX    会（前进）            │
+        │ turn_left       原地逆时针转            degrees 0~MAX   不会（只改朝向）      │
+        │ turn_right      原地顺时针转            degrees 0~MAX   不会（只改朝向）      │
+        │ look_around     原地转一圈拍一组照片    views 3~8       不会（转完回到原朝向）│
+        └────────────────────────────────────────────────────────────────────────────┘
+        四个动作**并列**，没有主次：前三个是移动原语（把高层意图翻成速度指令交给步态策略），
+        look_around 是观察原语（把"转一圈看看"这件本来要来回四趟的事并成一次）。
+        ⛔ 四个都不含任何导航智能——往哪走、这是哪间屋、找到没有，全由大脑看画面判断。
+        """
         return {
             "name": "sim-house-nav",
             "tools": [
@@ -134,6 +150,28 @@ class HouseNavWorld:
                         "required": ["degrees"],
                     },
                 },
+                {
+                    "name": "look_around",
+                    "description": (
+                        "原地转一圈环视四周：我会带着狗**逆时针转满 360 度**，沿途等距拍几张照片，"
+                        f"下一次感知一次性把这一组画面全给你（默认 {C.SWEEP_VIEWS} 张，每张标着"
+                        "它是相对你原来朝向左转多少度拍的）。位置不变；转完**大致**回到原来的朝向"
+                        "（真实步态转一圈会差几度，我会把实际转了多少如实告诉你）。\n"
+                        "什么时候用它：进了一个新地方、想知道四周都有什么、或者被挡住要找出路时。"
+                        "比你自己「转一次→看一眼」来回好几趟省事得多。"),
+                    "kind": "tool",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "views": {
+                                "type": "integer",
+                                "description": (f"转一圈拍几张，{C.SWEEP_VIEWS_MIN} 到 {C.SWEEP_VIEWS_MAX}；"
+                                                "张数越多越细但越慢"),
+                                "default": C.SWEEP_VIEWS,
+                            },
+                        },
+                    },
+                },
             ],
         }
 
@@ -150,6 +188,12 @@ class HouseNavWorld:
             "fallen": self.sim.fallen(),
             "last_action": self._last_event,
         }
+        # 刚做过 look_around：把那一圈照片整组交出去（走多相机通道，大脑本来就支持一轮多图）。
+        # 取一次即清——它是"上一个动作的产物"，不是持续状态；下一轮回到正常的单帧当前画面。
+        if self._sweep is not None:
+            shots, self._sweep = self._sweep, None
+            state["cameras"] = [name for name, _png in shots]     # 顺序=图的顺序（AWI 约定）
+            return state, shots
         return state, self.sim.frame_png()
 
     # ---------------------------------------------------------------- 动作
@@ -160,7 +204,30 @@ class HouseNavWorld:
             return self._turn(float(args.get("degrees", 45.0)), +1, _progress)
         if name == "turn_right":
             return self._turn(float(args.get("degrees", 45.0)), -1, _progress)
+        if name == "look_around":
+            return self._look_around(int(args.get("views", C.SWEEP_VIEWS)), _progress)
         return {"ok": False, "message": f"这个世界没有「{name}」这个动作。"}
+
+    def _look_around(self, views: int, _progress=None) -> dict:
+        n = max(C.SWEEP_VIEWS_MIN, min(views, C.SWEEP_VIEWS_MAX))
+        note = "" if n == views else f"（你要求 {views} 张，我按 {C.SWEEP_VIEWS_MIN}~{C.SWEEP_VIEWS_MAX} 张的范围取了 {n}）"
+        if _progress:
+            _progress(0.1, f"开始环视，转一圈拍 {n} 张…")
+        shots, r = self.sim.sweep(n)
+        if not shots:
+            self._last_event = "环视时没拍到画面"
+            return {"ok": False, "message": "环视失败：一张画面都没取到。", "data": r}
+        self._sweep = shots                       # 交给下一次感知（走多相机通道）
+        if r["fallen"]:
+            self._last_event = f"环视转到一半摔倒了（拍到 {len(shots)} 张）"
+            return {"ok": False,
+                    "message": f"环视转到一半摔倒了，只拍到 {len(shots)} 张{note}。",
+                    "data": r}
+        self._last_event = f"环视了一圈，拍了 {len(shots)} 张"
+        return {"ok": True,
+                "message": (f"环视完毕，转了一圈拍了 {len(shots)} 张{note}——这一组画面在下一次"
+                            f"感知时一起给你，每张标着是相对原朝向左转多少度拍的。位置没变。"),
+                "data": r}
 
     def _move_forward(self, meters: float, _progress=None) -> dict:
         if meters <= 0:

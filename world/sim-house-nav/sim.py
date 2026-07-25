@@ -40,6 +40,11 @@ TERM_ORDER = ("base_ang_vel", "projected_gravity", "velocity_commands",
               "joint_pos_rel", "joint_vel_rel", "last_action")
 
 
+def _wrap(a: float) -> float:
+    """把角度差收进 (-π, π]，免得 ±180° 环绕时算出个假的巨大差值。"""
+    return (a + math.pi) % (2 * math.pi) - math.pi
+
+
 class Contract:
     """训练侧口径的机器可读契约（关节序/默认站姿/增益/缩放/时序）。由 dump_contract.py 生成。"""
 
@@ -319,6 +324,38 @@ class HouseSim:
         rad = math.radians(degrees)
         budget = rad / max(1e-6, C.TURN_RATE) * C.CLOSED_LOOP_TIME_FACTOR + C.CLOSED_LOOP_EXTRA_S
         return self._drive_until(0.0, 0.0, sign * C.TURN_RATE, budget, target_kind="yaw", target=rad)
+
+    def sweep(self, n_views: int) -> tuple[list[tuple[str, bytes]], dict]:
+        """原地转一圈，沿途等距拍 n 张照片，回 [(方位名, png), …] + 执行情况。
+
+        为什么要有这个：狗只会「前进/左转/右转」，想看看四周就得转一次拍一张、来回四趟——
+        每趟都是一次完整的「世界渲染→发给大脑→大脑思考→回一个动作」，几秒钟加一次模型调用。
+        环视把这四趟并成一次动作，由世界自己转、自己拍，一次把全景交给大脑。
+        ⛔ 它只是个"拍照姿势"，不含任何导航智能：往哪走、这是哪间屋，仍然全由大脑看图判断。
+        """
+        step_deg = 360.0 / max(1, n_views)
+        shots: list[tuple[str, bytes]] = []
+        turned_total = 0.0
+        fallen = False
+        _x, _y, yaw0 = self.pose()
+        for i in range(n_views):
+            png = self.frame_png()
+            if png:
+                # 方位名用【相对起始朝向】转过的角度，不用罗盘绝对角——大脑要的是
+                # "这张是我左手边/背后"，相对量才好理解。
+                shots.append((f"左转{round(turned_total):d}度", png))
+            # ⚠️ 拍完最后一张**还要再转一次**才转满 360° 回到原朝向。
+            # （少转这一下的话，4 张只转 270°，狗结束时朝向偏了 90°——工具说明里"转完回到
+            #   原朝向"就成了假话。2026-07-25 实测 heading_drift=-87° 抓到过一次。）
+            r = self.drive_turn(step_deg, +1)        # 统一左转（逆时针）扫一圈
+            turned_total += abs(r["turned_deg"])
+            if r["fallen"]:
+                fallen = True
+                break
+        _x2, _y2, yaw1 = self.pose()
+        return shots, {"n_views": len(shots), "turned_deg": round(turned_total, 1),
+                       "fallen": fallen,
+                       "heading_drift_deg": round(math.degrees(_wrap(yaw1 - yaw0)), 1)}
 
     def _drive_until(self, vx: float, vy: float, wz: float, budget_s: float,
                      target_kind: str | None, target: float) -> dict:

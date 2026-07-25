@@ -45,6 +45,12 @@ STEP_SETTLE_S = _f("HOUSENAV_STEP_SETTLE_S", 0.6)  # 一个动作结束后原地
 MAX_MOVE_M = _f("HOUSENAV_MAX_MOVE_M", 3.0)      # 一次最多走几米（屋子跨度 8m，3m 够跨半间屋）
 MAX_TURN_DEG = _f("HOUSENAV_MAX_TURN_DEG", 180.0)  # 一次最多转多少度
 
+# 环视（look_around）：原地转一圈拍几张。4 张=前/左/后/右，覆盖一圈又不至于太慢；
+# 每多一张就多一次转身+等待稳定，时间线性增加。
+SWEEP_VIEWS = _i("HOUSENAV_SWEEP_VIEWS", 4)
+SWEEP_VIEWS_MIN = _i("HOUSENAV_SWEEP_VIEWS_MIN", 3)   # 少于 3 张转一圈会有大片盲区
+SWEEP_VIEWS_MAX = _i("HOUSENAV_SWEEP_VIEWS_MAX", 8)   # 再多一轮感知塞不下、也太慢
+
 # ---------------------------------------------------------------- 闭环执行
 # 学习步态对速度指令的跟踪不是 1:1（实测直线约 83%、转向约 62%），纯按时间开环下发会系统性
 # 走不够/转不够、导航一路偏。所以导航原语闭环执行：一边走一边量，达标才停。
