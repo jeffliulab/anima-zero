@@ -60,7 +60,7 @@ def main() -> int:
         fails.append(f"转身后读数没跟着轮转（只有 {rotated_ok}/8 对得上），朝向换算可能错了")
 
     # ---- 3) 撞前刹车 ----
-    print(f"\n【3】一路往前走，看会不会在撞上之前停住（阈值 {C.BRAKE_STOP_M} m）")
+    print(f"\n【3】一路往前走，看会不会在撞上之前停住\n      （车头实测 {sim.front_extent_m:.2f} m + 余量 {C.BRAKE_MARGIN_M} m = 刹车线 {sim.brake_stop_m:.2f} m）")
     sim.reset()
     time.sleep(1.0)
     braked = False
@@ -72,7 +72,7 @@ def main() -> int:
         print(f"        回话：{res['message']}")
         if d["reason"] == "braked":
             braked = True
-            if d["front_m"] is None or d["front_m"] > C.BRAKE_STOP_M + 0.2:
+            if d["front_m"] is None or d["front_m"] > sim.brake_stop_m + 0.2:
                 fails.append(f"刹车了却报出 {d['front_m']} m，和阈值对不上")
         if d["fallen"]:
             fails.append("往前走摔倒了")

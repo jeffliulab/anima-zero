@@ -37,7 +37,8 @@ def health() -> dict:
 # ===== 人类页 / 控制（不进 AWI）=====
 @app.get("/streams")   # 有哪几路相机直播（前端据此展示；本世界就狗头一路）
 def streams() -> list[dict]:
-    return [{"name": C.CAM_NAME, "label": "机器狗前视相机", "url": "/stream"}]
+    r = world.sim.robot
+    return [{"name": r["camera"], "label": f'{r["label"]}·头部前视相机', "url": "/stream"}]
 
 
 @app.get("/stream")    # MJPEG 直播：人在网页上实时看到"狗眼前"的画面

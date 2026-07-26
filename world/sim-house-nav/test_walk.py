@@ -39,7 +39,7 @@ def main() -> None:
 
     # 放到客厅中间的空地，给它跑直线的余量（避开家具）
     sim.reset()
-    sim.data.qpos[0:3] = [-1.0, -1.6, L.START_HEIGHT]
+    sim.data.qpos[0:3] = [-1.0, -1.6, float(sim.robot["start_height"])]
     sim.data.qpos[3:7] = [1.0, 0.0, 0.0, 0.0]      # 朝 +x
     sim.start()
     time.sleep(1.0)   # 让它先站稳
@@ -62,7 +62,7 @@ def main() -> None:
 
     # ---- 原地转向 ----
     sim.reset()
-    sim.data.qpos[0:3] = [-1.0, -1.6, L.START_HEIGHT]
+    sim.data.qpos[0:3] = [-1.0, -1.6, float(sim.robot["start_height"])]
     sim.data.qpos[3:7] = [1.0, 0.0, 0.0, 0.0]
     time.sleep(1.0)
     print(f"\n【测试 2】原地左转 wz={C.TURN_RATE} rad/s，4s（理想 ~{math.degrees(C.TURN_RATE*4):.0f}°）")

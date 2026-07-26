@@ -18,6 +18,35 @@ import os
 import config as C
 
 _cached = None
+_robots = None
+
+
+def robots():
+    """Domus 的机器人清单模块（`robots/manifest.py`）：一台机器人一条，写清模型/策略/相机/
+    力矩怎么发/观测要不要拼历史。⛔ 这是"这台机器人是什么"的单一真相源，世界侧不许另抄一份。"""
+    global _robots
+    if _robots is not None:
+        return _robots
+    path = os.path.join(C.DOMUS_ROOT, "robots", "manifest.py")
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"找不到机器人清单 {path}。它随 Domus 资产库走（v0.3 起），"
+            f"老版本的 Domus 没有这个文件——升级资产库，或把 HOUSENAV_DOMUS_ROOT 指到新的。")
+    spec = importlib.util.spec_from_file_location("domus_robots", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    _robots = mod
+    return mod
+
+
+def robot() -> dict:
+    """当前这一版世界要用哪台机器人（`HOUSENAV_ROBOT`，默认清单里的 DEFAULT_ROBOT）。"""
+    r = robots()
+    return r.get(C.ROBOT or r.DEFAULT_ROBOT)
+
+
+def robot_key() -> str:
+    return C.ROBOT or robots().DEFAULT_ROBOT
 
 
 def layout():
@@ -38,6 +67,21 @@ def layout():
     return mod
 
 
+def scene_xml_for(key: str) -> str:
+    """某台机器人对应的场景 MJCF 的完整路径。
+
+    **一台机器人一份场景文件**（`house-go2.xml` / `house-g1.xml`）——机器人的网格路径在编译期
+    就定死了，两台塞不进同一份 MJCF。命名规则与 `domus01/make_house.py` 的 `scene_filename()`
+    是同一条，改名要两边一起改。
+    """
+    path = os.path.join(C.DOMUS_ROOT, C.DOMUS_SCENE, f"house-{key}.xml")
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"找不到场景 {path}。先在 Domus 里生成它：\n"
+            f"    cd {os.path.join(C.DOMUS_ROOT, C.DOMUS_SCENE)} && python make_house.py --robot {key}")
+    return path
+
+
 def scene_xml() -> str:
-    """场景 MJCF（house.xml）的完整路径。"""
-    return os.path.join(C.DOMUS_ROOT, C.DOMUS_SCENE, "house.xml")
+    """当前配置那台机器人的场景路径。"""
+    return scene_xml_for(robot_key())

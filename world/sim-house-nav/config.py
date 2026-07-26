@@ -21,6 +21,12 @@ def _s(name: str, default: str) -> str:
     return os.getenv(name, default)
 
 
+def _b(name: str, default: bool) -> bool:
+    """开关型 env。认 1/true/yes/on（不分大小写），其余一律当关。"""
+    v = os.getenv(name)
+    return default if v is None else v.strip().lower() in ("1", "true", "yes", "on")
+
+
 # ---------------------------------------------------------------- 场景资产（Domus）
 # 场景与机器人模型来自独立的资产库 **Domus**（私有仓 github.com/jeffliulab/domus）。
 # 那边长期迭代（Domus01/02/03…），这里只管把它挂进来——所以路径走配置、不写死。
@@ -28,6 +34,11 @@ DOMUS_ROOT = _s("HOUSENAV_DOMUS_ROOT",
                 os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
                     os.path.dirname(os.path.abspath(__file__))))), "domus"))
 DOMUS_SCENE = _s("HOUSENAV_DOMUS_SCENE", "domus01")   # 用哪一套场景
+
+# 用哪台机器人（Domus 的 robots/manifest.py 里的 key，如 go2 / g1）。空 = 清单里的默认那台。
+# ⚠️ 换身体要重建整个仿真（换模型、换策略、回出生点），所以它是**开跑前**的配置，
+#    不是对话中途能切的东西；网页上的切换走世界的 POST /config，那边会重建。
+ROBOT = _s("HOUSENAV_ROBOT", "")
 
 # ---------------------------------------------------------------- 策略与模型
 # 训好的 Go2 行走策略（ONNX）。默认找仓内 policy/ 目录；换策略只改这个 env。
@@ -53,6 +64,15 @@ DEFAULT_TURN_DEG = _f("HOUSENAV_DEFAULT_TURN_DEG", 45.0)  # 没说转多少时�
 
 # 环视（look_around）：原地转一圈拍几张。4 张=前/左/后/右，覆盖一圈又不至于太慢；
 # 每多一张就多一次转身+等待稳定，时间线性增加。
+#
+# ⛔ **v1.0 起默认关闭**（Jeff 2026-07-26 拍板，两种身体都关）。两个理由：
+#   ① 它建好之后一次实测都没有——v0.9 期间被大脑侧的能力缓存藏了七次实验，
+#      从来没上过工具单。留着一个没验过的能力在清单里，等于声称有而实际没验。
+#   ② 人形根本不会原地转身（实测 wz=0.2 转 8 秒只转 2.8°），"原地转一圈拍一组"
+#      对它就成了走一个直径一米多的圈——两种身体语义不一样，先都不给，
+#      看模型只靠转弯 + 激光测距能不能找到房间。
+# 代码没删（`_look_around` 与 `sweep` 还在，狗那边是能跑的），想开就把这个 env 设成 1。
+LOOK_AROUND = _b("HOUSENAV_LOOK_AROUND", False)
 SWEEP_VIEWS = _i("HOUSENAV_SWEEP_VIEWS", 4)
 SWEEP_VIEWS_MIN = _i("HOUSENAV_SWEEP_VIEWS_MIN", 3)   # 少于 3 张转一圈会有大片盲区
 SWEEP_VIEWS_MAX = _i("HOUSENAV_SWEEP_VIEWS_MAX", 8)   # 再多一轮感知塞不下、也太慢
@@ -81,9 +101,10 @@ LIDAR_Z_OFFSET = _f("HOUSENAV_LIDAR_Z_OFFSET", 0.05)  # 射线高度 = 机身原
 
 # 撞前刹车：往前走的过程中盯着正前方一个锥形区域，太近就停下站住。
 # ⛔ **只停不拐**——绝不自己侧移或绕行。停下来之后怎么办是大脑的事。
-BRAKE_STOP_M = _f("HOUSENAV_BRAKE_STOP_M", 0.55)    # 正前方近于这个距离就刹车(m，从机身原点量起)。
-#   为什么是 0.55：Go2 机身原点到车头最前端约 0.34m，留 0.2m 余量刚好在贴上去之前站住。
-#   ⚠️ 换身体要跟着改——不同机器人的"车头有多长"不一样（wave 3 起由机器人清单按机型覆盖）。
+# 刹车线不是一个写死的距离，而是 **量出来的车头长度 + 这个余量**（见 sim.py 的 _measure_front_extent）。
+# 车头有多长是机器人的客观事实（Go2 实测约 0.34 m、人形约 0.2 m），能算就不该让人填——
+# 填的数会在换模型时悄悄过期；余量才是"我想留多少安全距离"这个人为选择。
+BRAKE_MARGIN_M = _f("HOUSENAV_BRAKE_MARGIN_M", 0.20)
 BRAKE_CONE_DEG = _f("HOUSENAV_BRAKE_CONE_DEG", 40.0)  # 盯多宽的一个锥（度，左右各一半）
 BRAKE_RAYS = _i("HOUSENAV_BRAKE_RAYS", 5)             # 这个锥里打几条射线，取最近的那条
 # 刹车时实际位移不到这个数(m)＝"一开始就贴着东西、一步都没迈出去"，回话措辞不一样：
@@ -96,7 +117,8 @@ FALL_TILT_RAD = _f("HOUSENAV_FALL_TILT_RAD", 0.8)       # 躯干倾斜超过这�
 FALL_HEIGHT_M = _f("HOUSENAV_FALL_HEIGHT_M", 0.18)      # 躯干高度低于此 = 趴地上了
 
 # ---------------------------------------------------------------- 相机 / 画面
-CAM_NAME = _s("HOUSENAV_CAM_NAME", "head_front")   # 机体上那只前视相机的名字（见 world/go2.xml）
+# ⚠️ 前视相机叫什么名字**不在这儿**：那是机器人的事实，住 Domus 的 robots/manifest.py
+#    的 camera 字段（两台机器人都叫 head_front，但那是巧合，不该在这儿再定一次）。
 CAM_W = _i("HOUSENAV_CAM_W", 640)                  # 给大脑看的画面宽
 CAM_H = _i("HOUSENAV_CAM_H", 480)                  # 给大脑看的画面高
 STREAM_FPS = _i("HOUSENAV_STREAM_FPS", 15)         # 人类页 MJPEG 直播帧率

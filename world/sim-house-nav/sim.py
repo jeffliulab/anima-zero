@@ -22,6 +22,7 @@ import math
 import os
 import threading
 import time
+from collections import deque
 
 import numpy as np
 
@@ -32,8 +33,6 @@ import config as C  # noqa: E402
 import domus_scene  # noqa: E402
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-SCENE_PATH = domus_scene.scene_xml()
-POLICY_DIR = os.path.join(C.DOMUS_ROOT, "policies", "go2-velocity-flat")
 
 # 观测项拼接顺序 —— 与训练侧 ObservationsCfg.PolicyCfg 的声明顺序一一对应。
 # （Isaac 的 ObsGroup 按声明顺序拼接，contract.json 会带上这份顺序供核对。）
@@ -55,7 +54,16 @@ LIDAR_BEARINGS = (("正前", 0), ("左前", 45), ("正左", 90), ("左后", 135)
 
 
 class Contract:
-    """训练侧口径的机器可读契约（关节序/默认站姿/增益/缩放/时序）。由 dump_contract.py 生成。"""
+    """训练侧口径的机器可读契约（关节序/默认站姿/增益/缩放/时序/历史帧数）。
+
+    由训练环境导出（`dump_contract.py`，或 locomotion 项目实验 10 的 reference/contract.json）。
+    ⛔ 这里面每一项都是**训练侧的事实**，代码里一律不许手写猜测——G1 sim2sim 用一整天
+    诊断换来的纪律：照"分组直觉"手写关节序会全程无声错位。
+
+    两种历史格式的写法（两边都要认，不然换个机器人就崩）：
+      · `gains`：关节名 → {kp, kd, effort_limit}（Go2 的 dump_contract.py 输出）
+      · `actuators`：按执行器组分，组里几个并列数组（G1 那份 reference 契约的写法）
+    """
 
     def __init__(self, path: str):
         if not os.path.exists(path):
@@ -64,23 +72,57 @@ class Contract:
                 f"它必须由 dump_contract.py 从活的 Isaac 训练环境导出——"
                 f"关节顺序和增益绝不能手写猜测（G1 sim2sim 的血泪教训）。")
         d = json.load(open(path, encoding="utf-8"))
+        self.raw = d
         self.joint_names: list[str] = d["joint_names"]          # Isaac 侧顺序（策略输入输出都按它）
         self.default_jpos = np.asarray(d["default_joint_pos"], np.float64)
         self.scales: dict = d["term_scales"]                    # 各观测项缩放
         self.action_scale = float(d["action"]["scale"])
         self.policy_dt = float(d["timing"]["policy_dt_s"])
-        self.gains: dict = d["gains"]                           # 关节名 → {kp, kd, effort_limit}
+        # 观测要拼几帧历史（旧→新）。契约没写＝1＝只用当前帧。
+        self.history = int(d.get("history_length", 1) or 1)
+        self.gains = self._read_gains(d)                        # 关节名 → {kp, kd, effort_limit}
+        missing = [n for n in self.joint_names if n not in self.gains]
+        if missing:
+            raise ValueError(f"契约里这些关节没有增益：{missing}。拒绝带着缺项跑。")
         order = d.get("term_order")
         if order and tuple(order) != TERM_ORDER:
             raise ValueError(f"契约里的观测项顺序 {order} 与本部署器的 {TERM_ORDER} 不一致——"
                              f"训练配置改过了，拼装器必须同步更新，绝不能带着错位跑。")
 
+    @staticmethod
+    def _read_gains(d: dict) -> dict:
+        """两种契约写法都认，出来的形状统一成 关节名 → {kp, kd, effort_limit}。"""
+        if "gains" in d:
+            return d["gains"]
+        if "actuators" not in d:
+            raise ValueError("契约里既没有 gains 也没有 actuators，读不出增益，拒绝运行。")
+        out: dict = {}
+        for grp in d["actuators"].values():
+            names = grp["joint_names"]
+            for i, n in enumerate(names):
+                def pick(arr, i=i):
+                    """组里可能给每关节一个值，也可能只给一个值全组共用。"""
+                    if not arr:
+                        return 0.0
+                    return float(arr[i]) if i < len(arr) else float(arr[0])
+                out[n] = {"kp": pick(grp.get("stiffness", [])),
+                          "kd": pick(grp.get("damping", [])),
+                          "effort_limit": pick(grp.get("effort_limit", [])) or 1e9}
+        return out
+
 
 class HouseSim:
     """屋子 + 会走路的 Go2。一个实例 = 一个持续运行的仿真。"""
 
-    def __init__(self, policy_path: str = "", contract_path: str = ""):
-        self.model = mujoco.MjModel.from_xml_path(SCENE_PATH)
+    def __init__(self, policy_path: str = "", contract_path: str = "", robot_key: str = ""):
+        # 这台仿真装的是哪台机器人：模型、策略、相机、力矩怎么发，全从 Domus 的机器人清单读，
+        # ⛔ 代码里不为任何一台机器人写死东西（加第三台只往清单里追加一条）。
+        self.robot_key = robot_key or domus_scene.robot_key()
+        self.robot = domus_scene.robots().get(self.robot_key)
+        self.scene_path = domus_scene.scene_xml_for(self.robot_key)
+        self.policy_dir = os.path.join(C.DOMUS_ROOT, self.robot["policy_dir"])
+
+        self.model = mujoco.MjModel.from_xml_path(self.scene_path)
         self.data = mujoco.MjData(self.model)
         self.model.opt.timestep = C.PHYSICS_DT
 
@@ -89,11 +131,14 @@ class HouseSim:
         self._build_joint_map()
         self._find_root_body()
         self._build_ray_mask()
-        self._strip_untrained_joint_effects()
+        self._measure_front_extent()
+        self._apply_actuation_mode()
 
         self.decimation = max(1, int(round(C.CONTROL_DT / C.PHYSICS_DT)))
         self._cmd = np.zeros(3)              # 当前速度指令 (vx, vy, wz)
         self._prev_action = np.zeros(len(self.contract.joint_names), np.float32)
+        # 观测历史缓冲：逐项一个队列（旧→新），长度由契约的 history_length 决定。
+        self._obs_hist: dict[str, deque] | None = None
         self._lock = threading.Lock()        # 只保护"写指令/读位姿"这类小状态
         self._frame: bytes | None = None     # 最新一帧 PNG（原子引用；读方不加锁）
         self._frame_rgb = None               # 最新一帧原始像素（给 MJPEG 直播用，省一次解码）
@@ -104,12 +149,11 @@ class HouseSim:
         self.reset()
 
     # ---------------------------------------------------------------- 初始化零件
-    @staticmethod
-    def _find(configured: str, default_name: str) -> str:
-        """配置里给了就用配置的；否则找 policy/ 下的同名文件。"""
+    def _find(self, configured: str, default_name: str) -> str:
+        """配置里给了就用配置的；否则找这台机器人自己的 policy 目录（清单里的 policy_dir）。"""
         if configured:
             return configured
-        return os.path.join(POLICY_DIR, default_name)
+        return os.path.join(self.policy_dir, default_name)
 
     def _load_policy(self, path: str) -> None:
         if not os.path.exists(path):
@@ -180,6 +224,31 @@ class HouseSim:
                 f"场景里有 {len(free)} 个 free joint，认不出哪个是机器人。"
                 f"这个世界的约定是：场景中有且只有机器人是自由体，房子全是静态几何。")
         self._root_body = free[0]
+
+    def _measure_front_extent(self) -> None:
+        """量出机器人**车头有多长**——从机身原点到自身几何最前端的距离(m)。
+
+        为什么要量而不是每台机器人填一个数：刹车距离必须大于车头长度，否则"离墙 0.5 米"
+        其实早就贴上去了。这个长度是模型的客观事实（Go2 实测约 0.34 m、人形约 0.2 m），
+        能算就不该让人填——填的数会在换模型、改配置时悄悄过期。
+        用 `geom_rbound`（MuJoCo 给每个 geom 算好的包围球半径）取保守上界：
+        网格件没法精确求投影，包围球会略偏大，而刹车距离**宁可偏大**。
+        """
+        mujoco.mj_forward(self.model, self.data)
+        rot = np.zeros(9)
+        mujoco.mju_quat2Mat(rot, self.data.qpos[3:7])
+        fwd = rot.reshape(3, 3)[:, 0]           # 机体 +x 在世界系的方向 = 正前方
+        origin = self.data.xpos[self._root_body]
+        best = 0.0
+        for g in range(self.model.ngeom):
+            if self.model.body_rootid[self.model.geom_bodyid[g]] != self._root_body:
+                continue
+            ahead = float(np.dot(self.data.geom_xpos[g] - origin, fwd)) + float(self.model.geom_rbound[g])
+            best = max(best, ahead)
+        self.front_extent_m = best
+        # 刹车线 = 车头长度 + 余量。余量是**世界的选择**（想留多少安全距离），所以走 config；
+        # 车头长度是**机器人的事实**，所以量出来。两者相加才是"从机身原点起算的刹车距离"。
+        self.brake_stop_m = best + C.BRAKE_MARGIN_M
 
     def _build_ray_mask(self) -> None:
         """算出「射线只看房子、不看机器人自己」的 geom 分组掩码。
@@ -252,19 +321,32 @@ class HouseSim:
         offsets = [0.0] if n == 1 else [-half + 2 * half * i / (n - 1) for i in range(n)]
         return min(self._ray(x, y, z, yaw + o) for o in offsets)
 
-    def _strip_untrained_joint_effects(self) -> None:
-        """清掉 MuJoCo 模型里训练时并不存在的关节阻尼与库仑摩擦。
+    def _apply_actuation_mode(self) -> None:
+        """按这台机器人的 `pd_mode` 布置关节阻尼 —— **两种模式搞反了必倒，这是本文件最容易错的地方**。
 
-        menagerie 的 go2.xml 给关节写了 damping=2 / frictionloss=0.2（面向"手搓控制器"的默认值），
-        但训练侧是 **显式 PD**（kd 由策略回路以力矩形式施加、kp/kd 见契约），并没有这些额外阻力。
-        留着它们等于给狗腿灌了糖浆：策略输出的力矩被吃掉一大截，步态会走样。
-        ⚠️ 与 G1 那次相反：G1 训练侧是隐式 PD，修法是把 kd 放进 dof_damping；Go2 是显式 PD，
-        所以这里要**清零** damping，由本部署器自己算 −kd·qd。（两者搞反必然走不动，务必分清。）
+        两种模式都要清零**库仑摩擦**：模型里的 `frictionloss` 是给"手搓控制器"准备的默认值，
+        训练环境里根本不存在，留着等于给腿灌糖浆。区别在 kd（阻尼）由谁施加：
+
+        · `explicit`（显式 PD，**Go2**）——训练侧 kd 就是策略回路以力矩形式施加的。
+          所以模型的 `dof_damping` **清零**，部署器自己算 `tau = kp·(q*−q) − kd·qd`。
+        · `implicit`（隐式 PD，**G1**）——训练侧 `ImplicitActuatorCfg`，kp/kd 在 PhysX 求解器里
+          隐式施加、无条件稳定。所以 kd 要**写进 `dof_damping`** 让 MuJoCo 用半隐式积分去施加，
+          力矩只发 `kp·(q*−q)`。
+          ⛔ 把 kd 写成外部力矩 `−kd·qd`（当成显式）会让关节速度从第一步就高频振铃
+          （位置跟得住、速度差 L2 约 38）→ 策略收到垃圾 jvel 观测 → 约 1 秒倒。
+          这是 locomotion 项目 2026-07-24 花一整天诊断出来的真根因，别再试第二遍。
+
+        模式是**训练侧的事实**，契约里没导出，所以住在机器人清单里（`robots/manifest.py`）。
         """
-        for i in range(len(self.dadr)):
-            d = self.dadr[i]
-            self.model.dof_damping[d] = 0.0
+        mode = self.robot.get("pd_mode")
+        if mode not in ("explicit", "implicit"):
+            raise ValueError(
+                f"机器人「{self.robot_key}」的 pd_mode 是 {mode!r}，只认 'explicit' / 'implicit'。"
+                f"这一项决定力矩怎么发，猜错了机器人当场倒——拒绝按默认值蒙。")
+        self.pd_mode = mode
+        for i, d in enumerate(self.dadr):
             self.model.dof_frictionloss[d] = 0.0
+            self.model.dof_damping[d] = 0.0 if mode == "explicit" else float(self.kd[i])
 
     # ---------------------------------------------------------------- 仿真状态
     def reset(self) -> None:
@@ -272,12 +354,15 @@ class HouseSim:
         _L = domus_scene.layout()
         mujoco.mj_resetData(self.model, self.data)
         x, y = _L.START_POS_XY
-        self.data.qpos[0:3] = [x, y, _L.START_HEIGHT]
+        # 出生点(x,y)是**这套房子**的事（住 layout.py）；出生高度是**这台机器人**的事
+        # （住 robots/manifest.py：狗 0.445 m、人形 0.80 m）——两者分开，换身体不用改房子。
+        self.data.qpos[0:3] = [x, y, float(self.robot["start_height"])]
         yaw = _L.START_YAW
         self.data.qpos[3:7] = [math.cos(yaw / 2), 0.0, 0.0, math.sin(yaw / 2)]
         self.data.qpos[self.qadr] = self.contract.default_jpos
         self.data.qvel[:] = 0.0
         self._prev_action[:] = 0.0
+        self._obs_hist = None            # 观测历史重来（下一帧会用当前状态填满，不留上一条命的残影）
         with self._lock:
             self._cmd = np.zeros(3)
         mujoco.mj_forward(self.model, self.data)
@@ -302,6 +387,16 @@ class HouseSim:
 
     # ---------------------------------------------------------------- 策略回路
     def _observation(self) -> np.ndarray:
+        """拼一帧策略输入。
+
+        **两种格式一套代码**：契约的 `history_length` 说要拼几帧。
+        · 1（Go2）＝只用当前帧，各项按 TERM_ORDER 首尾相接；
+        · 5（G1 真机格式）＝**逐项**各存 5 帧（旧→新）先拼成块，再把各项的块首尾相接，总维 480。
+        ⛔ 顺序是"逐项历史块"而不是"逐帧全量块"——这两种拼法维度一样、值完全不同，
+        拼错了策略照跑不报错、走两步就倒。G1 那边是拿金标准 trace 四假设对拍锁定的
+        （max|err|=1.8e-08），这里照那个结论实现，不重新发明。
+        第一次调用时用当前帧把历史填满（reset 语义），不是拿零去填。
+        """
         c = self.contract
         d = self.data
         # 机体系角速度 / 重力方向
@@ -326,7 +421,15 @@ class HouseSim:
             "joint_vel_rel": d.qvel[self.dadr] * s["joint_vel_rel"],
             "last_action": self._prev_action * s["last_action"],
         }
-        return np.concatenate([np.asarray(frame[k]).ravel() for k in TERM_ORDER]).astype(np.float32)
+        frame = {k: np.asarray(v, np.float64).ravel() for k, v in frame.items()}
+        if c.history <= 1:
+            return np.concatenate([frame[k] for k in TERM_ORDER]).astype(np.float32)
+        if self._obs_hist is None:      # 首帧：拿当前帧填满历史，不拿零填
+            self._obs_hist = {k: deque([frame[k]] * c.history, maxlen=c.history) for k in TERM_ORDER}
+        else:
+            for k in TERM_ORDER:
+                self._obs_hist[k].append(frame[k])
+        return np.concatenate([np.concatenate(list(self._obs_hist[k])) for k in TERM_ORDER]).astype(np.float32)
 
     def _policy_step(self) -> None:
         obs = self._observation()[None, :]
@@ -335,10 +438,13 @@ class HouseSim:
         # 动作 = 相对默认站姿的关节目标（乘 scale 后叠加），与训练侧 JointPositionAction 一致
         target = self.contract.default_jpos + action.astype(np.float64) * self.contract.action_scale
         q = self.data.qpos[self.qadr]
-        qd = self.data.qvel[self.dadr]
-        tau = self.kp * (target - q) - self.kd * qd      # 显式 PD（Go2 训练侧即显式，见文件头说明）
-        tau = np.clip(tau, -self.tau_max, self.tau_max)
-        self.data.ctrl[self.act_id] = tau
+        tau = self.kp * (target - q)
+        if self.pd_mode == "explicit":
+            # 显式 PD：阻尼这一项由我们自己算成力矩（模型的 dof_damping 已清零）。
+            tau = tau - self.kd * self.data.qvel[self.dadr]
+        # 隐式 PD 则不加这一项——kd 已经写进 dof_damping，由 MuJoCo 半隐式积分施加。
+        # 加了就等于施加两遍阻尼，而且外部那遍会引发高频振铃（见 _apply_actuation_mode）。
+        self.data.ctrl[self.act_id] = np.clip(tau, -self.tau_max, self.tau_max)
 
     # ---------------------------------------------------------------- 后台主循环
     def start(self) -> None:
@@ -378,7 +484,7 @@ class HouseSim:
     def _render_now(self) -> None:
         import io
         from PIL import Image
-        self._renderer.update_scene(self.data, camera=C.CAM_NAME)
+        self._renderer.update_scene(self.data, camera=self.robot["camera"])
         rgb = self._renderer.render()
         buf = io.BytesIO()
         Image.fromarray(rgb).save(buf, format="PNG")
@@ -478,7 +584,7 @@ class HouseSim:
             # ⛔ 只停不拐：停下来站住，绝不自己侧移绕行——往哪走是大脑的决定。
             if target_kind == "dist":
                 front = self.front_clearance()
-                if front < C.BRAKE_STOP_M:
+                if front < self.brake_stop_m:
                     braked_at, reason = front, "braked"
                     break
             x, y, yaw = self.pose()

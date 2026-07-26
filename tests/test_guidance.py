@@ -62,15 +62,28 @@ _ANSWER_KEY_WORDS = (
 )
 
 
-def _house_nav_guidance() -> str:
-    """从世界源码里取出 GUIDANCE 常量。用 ast 静态读——import 会去起 MuJoCo 仿真。"""
-    import ast
+def _house_nav_module(name: str):
+    """加载 sim-house-nav 的一个轻量模块（guidance / config）。
+
+    这两个模块只依赖标准库，**故意**和 world.py / sim.py 分开——那两个一 import 就起 MuJoCo，
+    大脑仓的测试跑不动。说明书之所以能被这里检查，就是因为它住在独立的 guidance.py 里。
+    """
+    import importlib.util
     import pathlib
-    src = pathlib.Path(__file__).resolve().parents[1] / "world" / "sim-house-nav" / "world.py"
-    for node in ast.parse(src.read_text(encoding="utf-8")).body:
-        if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "GUIDANCE":
-            return ast.literal_eval(node.value)
-    raise AssertionError("world/sim-house-nav/world.py 里找不到 GUIDANCE")
+    import sys
+    d = pathlib.Path(__file__).resolve().parents[1] / "world" / "sim-house-nav"
+    sys.path.insert(0, str(d))          # guidance.py 要 import config
+    try:
+        spec = importlib.util.spec_from_file_location(f"housenav_{name}", d / f"{name}.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+    finally:
+        sys.path.remove(str(d))
+
+
+def _house_nav_guidance() -> str:
+    return _house_nav_module("guidance").GUIDANCE
 
 
 def test_house_nav_guidance_has_no_answer_key():
@@ -84,5 +97,22 @@ def test_house_nav_guidance_has_no_answer_key():
 def test_house_nav_guidance_still_explains_how_to_interact():
     """瘦身不等于删光：怎么跟这个世界打交道该说的还得说（别把有用的一起砍了）。"""
     g = _house_nav_guidance()
-    for must in ("前视相机", "往前走", "左转", "环视", "笔记本", "看见就算到"):
+    # ⚠️ 这里**不列环视**：它是可开关的能力（v1.0 默认关），在不在说明书里由开关决定，
+    #    由下面那条 test_..._action_count_matches_switch 管。这里只列"永远该有"的。
+    for must in ("前视相机", "往前走", "左转", "笔记本", "看见就算到", "clearance_m"):
         assert must in g, f"说明书缺了「{must}」——这属于「怎么跟我打交道」，不该被瘦身砍掉"
+
+
+def test_house_nav_guidance_action_count_matches_switch():
+    """说明书说的动作数，必须和**实际注册的工具数**对得上。
+
+    ⛔ "声称有而实际没有" 是本项目明令禁止的一类硬编码。v1.0 把环视默认关掉了，
+    说明书要是还写着"四个动作，其中环视…"，大脑就会去调一个工具单上没有的东西。
+    """
+    g = _house_nav_guidance()
+    cfg = _house_nav_module("config")
+    if cfg.LOOK_AROUND:
+        assert "四个动作" in g and "环视" in g
+    else:
+        assert "三个动作" in g, "环视关着，说明书就该说三个动作"
+        assert "环视" not in g, "环视关着，说明书里不该再提它——大脑会去调一个不存在的工具"
