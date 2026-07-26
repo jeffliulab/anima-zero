@@ -17,10 +17,10 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config as C            # noqa: E402
-from domus_scene import layout  # noqa: E402
+from scene_assets import layout  # noqa: E402
 from sim import HouseSim      # noqa: E402
 
-L = layout()   # 场景布局（Domus 资产库）。⚠️ 2026-07-25 场景外置到 Domus 时这里漏改，
+L = layout()   # 场景布局（资产库）。⚠️ 2026-07-25 场景外置时这里漏改，
                #   一直写着 `import scene.layout`，本文件从那时起就跑不起来（v1.0 wave2 修）。
 
 

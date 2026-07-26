@@ -18,7 +18,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config as C                  # noqa: E402
-from domus_scene import layout      # noqa: E402
+from scene_assets import layout      # noqa: E402
 from world import HouseNavWorld     # noqa: E402
 
 L = layout()

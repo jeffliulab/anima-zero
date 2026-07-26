@@ -124,16 +124,16 @@ ANIMA(脑) ──看画面 + 八向测距──▶ 想「这像客厅，得换�
 
 ## 场景与机器人从哪来
 
-场景和机器人模型都住在独立的资产库 **Domus**（私有仓 `github.com/jeffliulab/domus`），
+场景和机器人模型都住在独立的开源资产库 **alice-house**（MIT，`github.com/jeffliulab/alice-house`），
 这边只管把它挂进来——路径走配置、env 可覆盖：
 
 ```
-HOUSENAV_DOMUS_ROOT    Domus 仓的位置（默认：项目根的 domus/）
-HOUSENAV_DOMUS_SCENE   用哪一套场景（默认：domus01）
+HOUSENAV_ASSETS_ROOT   资产库的位置（默认：项目根的 alice-house/）
+
 HOUSENAV_ROBOT         装哪台机器人（默认：清单里的 DEFAULT_ROBOT）
 ```
 
-**Domus01** = 大平层三室两厅双卫，12 个空间，各房间靠家具和地面材质区分——
+**alice-house** = 大平层三室两厅双卫，12 个空间，各房间靠家具和地面材质区分——
 这是能不能认出房间的关键，也是为什么场景要做得细。
 ⚠️ 具体有哪些房间、摆着什么，**这里可以写**（这是给人看的文档），
 但**世界说明书里绝对不能写**——那是发给大脑的，写了就等于把答案先给了它。
@@ -193,7 +193,7 @@ cd anima-zero/world/sim-house-nav
 这个世界能装两台机器人：**四足机器狗 Go2** 和**人形 G1**。装哪台在网页的 AWI 页上切
 （世界卡的 Config 区），或者起服务前设 `HOUSENAV_ROBOT=g1`。
 
-「这台机器人是什么」的全部事实住在 **Domus 的 `robots/manifest.py`**——模型在哪、出生多高、
+「这台机器人是什么」的全部事实住在**资产库的 `robots/manifest.py`**——模型在哪、出生多高、
 相机叫什么、力矩怎么发。世界侧只是照着它干活，代码里不为任何一台机器人写死东西。
 
 ⛔ **两台的力矩发法是相反的**（清单里的 `pd_mode`，搞反当场倒）：
@@ -210,7 +210,7 @@ G1 是隐式 PD（kd 写进 `dof_damping` 交给 MuJoCo，力矩只发 kp 那一
 - **红线**：这一路**绝不进 `observe()`**。给大脑上帝视角＝把这个世界要考的能力直接送掉，
   而且不报错不崩、只让结果虚高。红线在三处落实（`observe()` 不碰它、`/streams` 标
   `awi=false`、网页分两块显示），大脑仓 `tests/test_third_person.py` 逐条钉着。
-- 渲染时关掉天花板那一组几何体（Domus 早把天花板单独归了组，就是为了这种俯视需求）。
+- 渲染时关掉天花板那一组几何体（资产库早把天花板单独归了组，就是为了这种俯视需求）。
 - ⚠️ **方位角就是机身朝向，不要 +180**。MuJoCo 自由相机的 `azimuth` 描述的是「相机往哪个方向看」，不是「相机在哪个方位」——加了 180 镜头会跑到正前方去拍脸，而且**画面看着挺像回事**（一样能看到机器人、一样有背景），不盯着看根本发现不了。
   判据别靠推理，看画面：**跟拍的背景应该和第一视角看到的是同一片东西**。
   2026-07-26 就是这么抓到的——加 180 时背景是它身后的柜子，不加时背景是它正对着的两个门洞。
@@ -245,7 +245,7 @@ server.py          世界服务（AWI + 人类页）
 world.py           AWI 世界对象：capabilities / observe / invoke + 世界说明书
 sim.py             物理与策略线程；闭环导航原语 drive_distance / drive_turn；激光测距
 config.py          全部可调项（env 可覆盖）
-domus_scene.py     按配置加载 Domus 场景（布局定义 + house.xml 路径）——收口，别再各处抄
+scene_assets.py    按配置加载场景资产库（布局/机器人清单/场景 MJCF）——收口，别再各处抄
 export_policy.py   训练 checkpoint → ONNX（自带 torch/onnx 一致性自检，对不上就拒绝交付）
 dump_contract.py   从活的 Isaac 环境导出观测契约
 test_walk.py       无头自测：给速度指令，机器人能不能真走真转不摔

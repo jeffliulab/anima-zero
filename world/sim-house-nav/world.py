@@ -1,6 +1,6 @@
 """sim-house-nav 世界对象 —— 实现 AWI 三件事：capabilities() / observe() / invoke()。
 
-这个世界 = 一套住宅（Domus 资产库里的场景）+ 一台会用真实步态走路的机器人，头上一只前视相机。
+这个世界 = 一套住宅（场景资产库里的场景）+ 一台会用真实步态走路的机器人，头上一只前视相机。
 ANIMA 只能【看画面】+【发导航原语】，靠自己认出身处哪间屋、决定往哪走。
 
 ⛔ 给大脑的观测里**绝不含**坐标、房间名、屋子地图——那是世界的上帝视角真值（走 /status，
@@ -13,12 +13,12 @@ from __future__ import annotations
 import math
 
 import config as C
-import domus_scene
-from domus_scene import layout
+import scene_assets
+from scene_assets import layout
 from guidance import GUIDANCE  # noqa: F401  （世界说明书，server.py 从这里 import）
 from sim import HouseSim
 
-L = layout()          # Domus 场景的布局定义（只给 /status 判房间用，绝不进 AWI 观测）
+L = layout()          # 场景资产库的布局定义（只给 /status 判房间用，绝不进 AWI 观测）
 
 class HouseNavWorld:
     """AWI 世界对象。动作真的驱动物理，观测真的来自相机。"""
@@ -166,9 +166,9 @@ class HouseNavWorld:
         因为换身体是**人**在开跑前做的场地配置，不是大脑在对话中途该做的事
         （换身体要重建整个仿真，位置姿态全没了）。大脑读到的只是"你现在是什么身体"，
         就像真机器人知道自己是什么身体一样。
-        选项**从 Domus 的机器人清单现读**，不在这儿另抄一份名单。
+        选项**从资产库的机器人清单现读**，不在这儿另抄一份名单。
         """
-        rs = domus_scene.robots()
+        rs = scene_assets.robots()
         return {
             "options": [{
                 "key": self.CONFIG_KEY,
@@ -183,7 +183,7 @@ class HouseNavWorld:
         """换身体：把整个仿真重建一遍。带外调用（网页），不走 AWI。"""
         if key != self.CONFIG_KEY:
             return {"ok": False, "message": f"这个世界没有「{key}」这项配置。"}
-        rs = domus_scene.robots()
+        rs = scene_assets.robots()
         if value not in rs.ROBOTS:
             return {"ok": False,
                     "message": f"没有名叫「{value}」的机器人。现有：{', '.join(rs.ROBOTS)}"}

@@ -27,15 +27,18 @@ def _b(name: str, default: bool) -> bool:
     return default if v is None else v.strip().lower() in ("1", "true", "yes", "on")
 
 
-# ---------------------------------------------------------------- 场景资产（Domus）
-# 场景与机器人模型来自独立的资产库 **Domus**（私有仓 github.com/jeffliulab/domus）。
-# 那边长期迭代（Domus01/02/03…），这里只管把它挂进来——所以路径走配置、不写死。
-DOMUS_ROOT = _s("HOUSENAV_DOMUS_ROOT",
-                os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-                    os.path.dirname(os.path.abspath(__file__))))), "domus"))
-DOMUS_SCENE = _s("HOUSENAV_DOMUS_SCENE", "domus01")   # 用哪一套场景
+# ---------------------------------------------------------------- 场景资产库
+# 场景、机器人模型、运动策略都来自一个独立的资产库；当前挂的是
+# **alice-house**（开源 MIT，github.com/jeffliulab/alice-house）。
+# 那边长期迭代，这里只管把它挂进来——所以路径走配置、不写死。
+# ⚠️ 变量名**故意不带库名**（ASSETS 而不是 ALICE）：这个库 2026-07-26 从 Domus 改名成
+#    alice-house，那次改名之所以要动世界侧代码，就是因为当初把库名写进了变量名。
+DEFAULT_ASSETS_DIR = "alice-house"
+ASSETS_ROOT = _s("HOUSENAV_ASSETS_ROOT",
+                 os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+                     os.path.dirname(os.path.abspath(__file__))))), DEFAULT_ASSETS_DIR))
 
-# 用哪台机器人（Domus 的 robots/manifest.py 里的 key，如 go2 / g1）。空 = 清单里的默认那台。
+# 用哪台机器人（资产库 robots/manifest.py 里的 key，如 go2 / g1）。空 = 清单里的默认那台。
 # ⚠️ 换身体要重建整个仿真（换模型、换策略、回出生点），所以它是**开跑前**的配置，
 #    不是对话中途能切的东西；网页上的切换走世界的 POST /config，那边会重建。
 ROBOT = _s("HOUSENAV_ROBOT", "")
@@ -126,7 +129,10 @@ THIRD_PERSON_W = _i("HOUSENAV_THIRD_PERSON_W", 640)
 THIRD_PERSON_H = _i("HOUSENAV_THIRD_PERSON_H", 480)
 # 帧率比第一视角低一档：多一路渲染就多一份开销，而"看着它走"不需要那么流畅。
 THIRD_PERSON_FPS = _i("HOUSENAV_THIRD_PERSON_FPS", 8)
-# 机位：跟在机器人正后方多远、抬高多少（米，机体坐标系）。
+# 机位：跟在机器人正后方多远、抬高多少（米）。
+# ⚠️ 这里是**兜底默认值**——正常情况下由资产库的机器人清单按机器人给
+#    （`chase_back_m` / `chase_up_m`）：狗站立约 0.4 m、人形 1.38 m，同一组机位对谁都不合适。
+#    清单没写才用下面这组。
 # 屋里空间窄，退太远会退到墙里去；1.8 m 大约是"人站在它身后一步半"的距离。
 THIRD_PERSON_BACK_M = _f("HOUSENAV_THIRD_PERSON_BACK_M", 2.2)
 THIRD_PERSON_UP_M = _f("HOUSENAV_THIRD_PERSON_UP_M", 1.0)
@@ -138,7 +144,7 @@ THIRD_PERSON_MIN_M = _f("HOUSENAV_THIRD_PERSON_MIN_M", 0.8)
 # 太平又会被自己的身体挡住前方。2.2/1.0 这一组能同时看见机器人和它面前那片空间。
 
 # ---------------------------------------------------------------- 相机 / 画面
-# ⚠️ 前视相机叫什么名字**不在这儿**：那是机器人的事实，住 Domus 的 robots/manifest.py
+# ⚠️ 前视相机叫什么名字**不在这儿**：那是机器人的事实，住资产库的 robots/manifest.py
 #    的 camera 字段（两台机器人都叫 head_front，但那是巧合，不该在这儿再定一次）。
 CAM_W = _i("HOUSENAV_CAM_W", 640)                  # 给大脑看的画面宽
 CAM_H = _i("HOUSENAV_CAM_H", 480)                  # 给大脑看的画面高

@@ -30,7 +30,7 @@ os.environ.setdefault("MUJOCO_GL", "egl")   # 无头渲染（服务器上没有�
 import mujoco  # noqa: E402
 
 import config as C  # noqa: E402
-import domus_scene  # noqa: E402
+import scene_assets  # noqa: E402
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -115,12 +115,12 @@ class HouseSim:
     """屋子 + 会走路的 Go2。一个实例 = 一个持续运行的仿真。"""
 
     def __init__(self, policy_path: str = "", contract_path: str = "", robot_key: str = ""):
-        # 这台仿真装的是哪台机器人：模型、策略、相机、力矩怎么发，全从 Domus 的机器人清单读，
+        # 这台仿真装的是哪台机器人：模型、策略、相机、力矩怎么发，全从资产库的机器人清单读，
         # ⛔ 代码里不为任何一台机器人写死东西（加第三台只往清单里追加一条）。
-        self.robot_key = robot_key or domus_scene.robot_key()
-        self.robot = domus_scene.robots().get(self.robot_key)
-        self.scene_path = domus_scene.scene_xml_for(self.robot_key)
-        self.policy_dir = os.path.join(C.DOMUS_ROOT, self.robot["policy_dir"])
+        self.robot_key = robot_key or scene_assets.robot_key()
+        self.robot = scene_assets.robots().get(self.robot_key)
+        self.scene_path = scene_assets.scene_xml_for(self.robot_key)
+        self.policy_dir = os.path.join(C.ASSETS_ROOT, self.robot["policy_dir"])
 
         self.model = mujoco.MjModel.from_xml_path(self.scene_path)
         self.data = mujoco.MjData(self.model)
@@ -148,6 +148,9 @@ class HouseSim:
         self._third_cam = None
         self._third_opt = None
         self._chase_body = self._find_chase_body()
+        # 跟拍机位按机器人取（狗矮人形高，同一组机位对谁都不合适）；清单没写就退回世界的默认值。
+        self._chase_offset = (float(self.robot.get("chase_back_m") or C.THIRD_PERSON_BACK_M),
+                              float(self.robot.get("chase_up_m") or C.THIRD_PERSON_UP_M))
         self._running = False
         self._thread: threading.Thread | None = None
         self._renderer: mujoco.Renderer | None = None
@@ -374,7 +377,7 @@ class HouseSim:
     # ---------------------------------------------------------------- 仿真状态
     def reset(self) -> None:
         """把狗放回出生点、站好、清空历史。"""
-        _L = domus_scene.layout()
+        _L = scene_assets.layout()
         mujoco.mj_resetData(self.model, self.data)
         x, y = _L.START_POS_XY
         # 出生点(x,y)是**这套房子**的事（住 layout.py）；出生高度是**这台机器人**的事
@@ -492,7 +495,7 @@ class HouseSim:
             self._third_cam.type = mujoco.mjtCamera.mjCAMERA_FREE
             self._third_opt = mujoco.MjvOption()
             # 关掉天花板那一组：从斜上方看进去否则只有一片屋顶。
-            self._third_opt.geomgroup[domus_scene.layout().CEILING_GROUP] = 0
+            self._third_opt.geomgroup[scene_assets.layout().CEILING_GROUP] = 0
         next_render = 0.0
         next_third = 0.0
         render_period = 1.0 / max(1, C.STREAM_FPS)
@@ -532,7 +535,7 @@ class HouseSim:
 
         怎么跟拍：用自由相机，每帧把 lookat 放到机器人身上、机位放到它斜后上方——
         位置跟着走，朝向固定在世界系（不跟着机身摇），画面才不会因为步态起伏一直晃。
-        天花板那一组几何体关掉：不然从斜上方看进去只有一片屋顶（Domus 早就把天花板单独归了组，
+        天花板那一组几何体关掉：不然从斜上方看进去只有一片屋顶（资产库早就把天花板单独归了组，
         就是为了这种俯视需求）。
         """
         cam = self._third_cam
@@ -541,13 +544,14 @@ class HouseSim:
         cam.lookat[:] = pos
         # distance/azimuth/elevation 是"绕着 lookat 转"的语义：方位角跟着机身朝向走，
         # 相机就永远待在它**背后**（不然狗一转弯就变成拍脸）。
-        want = math.hypot(C.THIRD_PERSON_BACK_M, C.THIRD_PERSON_UP_M)
+        back_m, up_m = self._chase_offset
+        want = math.hypot(back_m, up_m)
         # ⚠️ 方位角就是机身朝向，**不要 +180**。MuJoCo 自由相机的 azimuth 描述的是
         # "相机往哪个方向看"，不是"相机在哪个方位"——加了 180 就跑到正前方去拍脸了。
         # 判据（别靠推理，看画面）：跟拍的背景应该和第一视角看到的是同一片东西。
         # 2026-07-26 实测：加 180 时背景是身后的柜子，不加时背景是它正对着的两个门洞 ✅。
         cam.azimuth = math.degrees(yaw)
-        cam.elevation = -math.degrees(math.atan2(C.THIRD_PERSON_UP_M, C.THIRD_PERSON_BACK_M))
+        cam.elevation = -math.degrees(math.atan2(up_m, back_m))
         # 被墙或家具挡住就把镜头拉近——屋里空间窄，机位常常正好落在一件家具后面，
         # 不拉近的话画面里就是一块柜子背板。（游戏里第三人称相机的标准做法；这里正好复用
         # 已有的射线机制：从机器人往机位方向打一条，撞上了就退到撞点前面一点。）
