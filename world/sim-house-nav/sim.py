@@ -542,7 +542,11 @@ class HouseSim:
         # distance/azimuth/elevation 是"绕着 lookat 转"的语义：方位角跟着机身朝向走，
         # 相机就永远待在它**背后**（不然狗一转弯就变成拍脸）。
         want = math.hypot(C.THIRD_PERSON_BACK_M, C.THIRD_PERSON_UP_M)
-        cam.azimuth = math.degrees(yaw) + 180.0
+        # ⚠️ 方位角就是机身朝向，**不要 +180**。MuJoCo 自由相机的 azimuth 描述的是
+        # "相机往哪个方向看"，不是"相机在哪个方位"——加了 180 就跑到正前方去拍脸了。
+        # 判据（别靠推理，看画面）：跟拍的背景应该和第一视角看到的是同一片东西。
+        # 2026-07-26 实测：加 180 时背景是身后的柜子，不加时背景是它正对着的两个门洞 ✅。
+        cam.azimuth = math.degrees(yaw)
         cam.elevation = -math.degrees(math.atan2(C.THIRD_PERSON_UP_M, C.THIRD_PERSON_BACK_M))
         # 被墙或家具挡住就把镜头拉近——屋里空间窄，机位常常正好落在一件家具后面，
         # 不拉近的话画面里就是一块柜子背板。（游戏里第三人称相机的标准做法；这里正好复用
