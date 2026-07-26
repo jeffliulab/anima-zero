@@ -148,10 +148,10 @@ class Orchestrator:
         emit = get_stream_writer()
         session, llm, world = state["session"], state["llm"], state["world"]
         svc_tools_present = bool(state["svc_routes"])
-        stored = self.store.get(session.id)      # 每步现读：历史 + 核心任务寄存器（本轮内改写立即生效）
+        stored = self.store.get(session.id)      # 每步现读：历史 + 两个寄存器（本轮内改写立即生效）
         history = context.build(stored.messages)
         reply: LLMReply = llm.chat(self._system(world, has_services=svc_tools_present,
-                                                core_task=stored.core_task),
+                                                core_task=stored.core_task, notes=stored.notes),
                                    history, state["tools"], state["image"])
 
         if not reply.tool_calls:    # 出文字 → 最终回复,收尾
@@ -224,7 +224,7 @@ class Orchestrator:
         def _on_progress(message, progress, total):
             q.put({"type": "progress", "name": tc.name, "message": message or "", "progress": progress})
 
-        # 世界动作可能几十秒（机器狗走一步就要好几秒）——等待期间也要能被用户叫停，
+        # 世界动作可能几十秒（物理世界迈一步、搬一次东西都要好几秒）——等待期间也要能被用户叫停，
         # 否则点了停止还得干等这一步走完。世界客户端本来就支持（0.25s 粒度巡检），接上即可。
         def _aborted() -> bool:
             return interrupt.is_set(session.id)
@@ -254,8 +254,9 @@ class Orchestrator:
         return result
 
     def _run_meta_tool(self, session: Session, tc: ToolCall, emit) -> ActionResult:
-        """内建元工具：操作大脑自己的会话状态（核心任务寄存器）。通用机制——「当前在执行什么任务」
-        是状态不是聊天记录，由 LLM 亲自登记/改写/清除，常驻注入系统提示（见 _system）。"""
+        """内建元工具：操作大脑自己的会话状态（两个寄存器）。通用机制，与任务无关——
+        「当前在执行什么任务」和「一路上发现了什么」都是状态而非聊天记录，由 LLM 亲自增删改，
+        常驻注入系统提示（见 _system），不随上下文滑窗被遗忘。"""
         if tc.name == messages.CORE_TASK_SET_TOOL["name"]:
             task = str(tc.arguments.get("task", "")).strip()
             if not task:
@@ -264,20 +265,53 @@ class Orchestrator:
                 self.store.set_core_task(session.id, task)
                 session.core_task = task
                 result = ActionResult(True, messages.CORE_TASK_SET_REPLY.format(task=task))
-        else:                                        # clear_core_task
+        elif tc.name == messages.CORE_TASK_CLEAR_TOOL["name"]:
             self.store.set_core_task(session.id, "")
             session.core_task = ""
             result = ActionResult(True, messages.CORE_TASK_CLEAR_REPLY)
+        else:                                        # add_note / drop_note
+            result = self._run_note_tool(session, tc)
         self.store.append(session.id, {"role": "tool", "id": tc.id, "name": tc.name,
                                        "content": result.message})
         emit({"type": "tool_result", "name": tc.name, "ok": result.ok, "message": result.message})
         return result
 
+    def _run_note_tool(self, session: Session, tc: ToolCall) -> ActionResult:
+        """笔记本的增/删。整本读出来改完整本写回——编号就是位置，这样最不容易错位。
+        ⛔ 三种拒绝都**明确告诉 LLM 为什么**，绝不静默截断或丢弃：截一半的笔记比没有更糟，
+        而被悄悄丢掉的笔记会让它以为自己记住了。"""
+        notes = list(self.store.get(session.id).notes)
+        if tc.name == messages.NOTE_ADD_TOOL["name"]:
+            note = str(tc.arguments.get("note", "")).strip()
+            if not note:
+                return ActionResult(False, messages.NOTE_EMPTY_REPLY)
+            if len(note) > config.NOTE_MAX_CHARS:
+                return ActionResult(False, messages.NOTE_TOO_LONG_REPLY.format(
+                    n=len(note), limit=config.NOTE_MAX_CHARS))
+            if len(notes) >= config.NOTES_MAX:
+                return ActionResult(False, messages.NOTE_FULL_REPLY.format(limit=config.NOTES_MAX))
+            notes.append(note)
+            self.store.set_notes(session.id, notes)
+            session.notes = notes
+            return ActionResult(True, messages.NOTE_ADD_REPLY.format(n=len(notes), note=note))
+        # drop_note：编号是给人/LLM 看的 1 起编号，越界就报清楚现在一共几条
+        try:
+            n = int(tc.arguments.get("number", 0))
+        except (TypeError, ValueError):
+            n = 0
+        if not 1 <= n <= len(notes):
+            return ActionResult(False, messages.NOTE_DROP_BAD_REPLY.format(n=n, total=len(notes)))
+        dropped = notes.pop(n - 1)
+        self.store.set_notes(session.id, notes)
+        session.notes = notes
+        return ActionResult(True, messages.NOTE_DROP_REPLY.format(n=n, note=dropped))
+
     def _meta_toolbox(self, taken_names: set[str]) -> list[ToolSpec]:
-        """内建元工具单（当前只有核心任务两件）。与世界/服务同名冲突时**元工具让位**并记警告
+        """内建元工具单（核心任务两件 + 笔记本两件）。与世界/服务同名冲突时**元工具让位**并记警告
         （对外保持「world 赢」的一致惯例；正常情况下不会撞名）。kind=read：不改世界。"""
         out: list[ToolSpec] = []
-        for spec in (messages.CORE_TASK_SET_TOOL, messages.CORE_TASK_CLEAR_TOOL):
+        for spec in (messages.CORE_TASK_SET_TOOL, messages.CORE_TASK_CLEAR_TOOL,
+                     messages.NOTE_ADD_TOOL, messages.NOTE_DROP_TOOL):
             if spec["name"] in taken_names:
                 _log.warning("内建元工具与世界/服务工具同名，元工具让位：%s", spec["name"])
                 continue
@@ -319,13 +353,24 @@ class Orchestrator:
         return tools, routes
 
     # ==================== 系统提示 ====================
-    def _system(self, world, has_services: bool = False, core_task: str = "") -> str:
+    @staticmethod
+    def _registers_block(core_task: str, notes: list | None) -> str:
+        """两个状态通道的常驻注入块（有内容才注入）。核心任务在前、笔记本在后——
+        先说「我在干什么」，再说「我发现了什么」。"""
+        s = ""
+        if core_task:
+            s += messages.CORE_TASK_BLOCK.format(task=core_task)
+        if notes:
+            listed = "\n".join(f"{i}. {n}" for i, n in enumerate(notes, 1))
+            s += messages.NOTES_BLOCK.format(notes=listed)
+        return s
+
+    def _system(self, world, has_services: bool = False, core_task: str = "",
+                notes: list | None = None) -> str:
         base = messages.system_prompt()
         if world is None:
             s = base + "\n\n当前:未连接任何世界(纯聊天)。"
-            if core_task:
-                s += messages.CORE_TASK_BLOCK.format(task=core_task)
-            return s
+            return s + self._registers_block(core_task, notes)
         # 这个世界能不能操作,由它的【能力声明】决定(通用,不针对具体世界):
         #   有工具 → 可在需要时调用;空工具(如 camera 摄像头世界)→ 只能看 + 聊,无任何动作可调。
         # capabilities() 在 RemoteWorld 侧已缓存,这里再读一次不发 HTTP。
@@ -345,9 +390,8 @@ class Orchestrator:
             s += f"\n\n【这个世界的说明书（它自己写的，教你怎么跟它打交道）】\n{guidance}"
         if has_services:
             s += messages.SERVICES_HINT
-        if core_task:   # 核心任务寄存器：状态通道常驻注入，不占历史窗口、无「滑出」概念
-            s += messages.CORE_TASK_BLOCK.format(task=core_task)
-        return s
+        # 两个寄存器：状态通道常驻注入，不占历史窗口、无「滑出」概念
+        return s + self._registers_block(core_task, notes)
 
     # ==================== 公共接口（签名与 v0.5 一致）====================
     def _init_state(self, session: Session, user_text: str, llm: LLM, max_steps: int,

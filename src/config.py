@@ -49,11 +49,22 @@ class Settings(BaseSettings):
     turn_time_budget_s: float = Field(
         900, validation_alias="ANIMA_TURN_TIME_BUDGET_S", gt=0,
         description="单轮墙钟上限（秒），默认 900=15 分钟。步数管不住「每步很慢」的世界"
-                    "（如机器狗走一步要几秒），墙钟才是真正的费用闸。到顶=走 overflow 礼貌停顿"
+                    "（物理世界做一个动作就要几秒），墙钟才是真正的费用闸。到顶=走 overflow 礼貌停顿"
                     "（可续），不是报错。")
     context_token_budget: int = Field(
         6000, validation_alias="ANIMA_CONTEXT_BUDGET", ge=100,
         description="上下文滑窗 token 预算（粗估 3 字符≈1 token）：从最近往前装历史，超预算即截断。")
+
+    # ---- 笔记寄存器（v1.0：LLM 自管的第二个状态通道）----
+    notes_max: int = Field(
+        20, validation_alias="ANIMA_NOTES_MAX", ge=1,
+        description="笔记本最多存几条。核心任务管「我在干什么」（一句话），笔记管「我发现了什么」"
+                    "（一条条追加）——两者都常驻注入系统提示、不随对话变长滑走。"
+                    "记满了**不静默丢弃**：加不进去时明确告诉 LLM，让它自己划掉没用的再记。")
+    note_max_chars: int = Field(
+        120, validation_alias="ANIMA_NOTE_MAX_CHARS", ge=10,
+        description="单条笔记的字数上限。笔记是备忘不是日记；超长就退回让它自己缩写，"
+                    "**绝不截断**（截断会把一条笔记变成半句话，比没有更糟）。")
 
     # ---- 开发自测接口（仅开发用，默认关）----
     dev_api: bool = Field(
@@ -152,6 +163,8 @@ _settings = Settings()
 MAX_STEPS = _settings.max_steps
 TURN_TIME_BUDGET_S = _settings.turn_time_budget_s
 CONTEXT_TOKEN_BUDGET = _settings.context_token_budget
+NOTES_MAX = _settings.notes_max
+NOTE_MAX_CHARS = _settings.note_max_chars
 DEV_API = _settings.dev_api
 WORLD_TIMEOUT = _settings.world_timeout
 WORLD_PROBE_TIMEOUT = _settings.world_probe_timeout
@@ -184,12 +197,14 @@ MODEL_QWEN = _settings.model_qwen
 # 收录判据：**决定一个回合能跑多深、多久、记得多少**的三个闸——它们直接决定用户看到的行为，
 # 所以值得常驻在界面上。其余（各类超时、模型 id）属于运维细节，不占界面。
 # ⛔ 名字/值/env 名/说明四样全部从下面 Settings 的字段定义现读，前端一个都不许自己写死。
-_RUNTIME_PARAMS_SHOWN = ("max_steps", "turn_time_budget_s", "context_token_budget")
+_RUNTIME_PARAMS_SHOWN = ("max_steps", "turn_time_budget_s", "context_token_budget",
+                         "notes_max")
 # 显示用的中文短名（Settings 的 description 是整段说明，界面上放不下，这里给个一行的标签）。
 _RUNTIME_PARAM_LABELS = {
     "max_steps": "单轮步数上限",
     "turn_time_budget_s": "单轮时长上限(秒)",
     "context_token_budget": "上下文预算(token)",
+    "notes_max": "笔记本容量(条)",
 }
 
 

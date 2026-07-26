@@ -45,6 +45,12 @@ STEP_SETTLE_S = _f("HOUSENAV_STEP_SETTLE_S", 0.6)  # 一个动作结束后原地
 MAX_MOVE_M = _f("HOUSENAV_MAX_MOVE_M", 3.0)      # 一次最多走几米（屋子跨度 8m，3m 够跨半间屋）
 MAX_TURN_DEG = _f("HOUSENAV_MAX_TURN_DEG", 180.0)  # 一次最多转多少度
 
+# 大脑没填参数时按这个走。⚠️ 必须只有这一处：工具的 JSON schema `default` 与 invoke 的兜底
+# 读的是同一个常量——两边各写一个字面量的话，改了一处忘了另一处就会出现"说明书说 1 米、
+# 实际走 2 米"这种查不出来的错。（2026-07-26 审计：原先真的是两处各写一遍。）
+DEFAULT_MOVE_M = _f("HOUSENAV_DEFAULT_MOVE_M", 1.0)     # 没说走多远时走几米
+DEFAULT_TURN_DEG = _f("HOUSENAV_DEFAULT_TURN_DEG", 45.0)  # 没说转多少时转几度
+
 # 环视（look_around）：原地转一圈拍几张。4 张=前/左/后/右，覆盖一圈又不至于太慢；
 # 每多一张就多一次转身+等待稳定，时间线性增加。
 SWEEP_VIEWS = _i("HOUSENAV_SWEEP_VIEWS", 4)
@@ -59,6 +65,11 @@ CLOSED_LOOP_EXTRA_S = _f("HOUSENAV_CL_EXTRA_S", 1.5)          # 再加这么多�
 DRIVE_POLL_S = _f("HOUSENAV_DRIVE_POLL_S", 0.02)              # 闭环查询间隔(s)
 STALL_EPS = _f("HOUSENAV_STALL_EPS", 0.02)                    # 进展小于此值(米/弧度)视为没长进
 STALL_TIMEOUT_S = _f("HOUSENAV_STALL_TIMEOUT_S", 1.5)         # 连续这么久没长进 = 判定卡住(撞墙)
+
+# 动作刚开工时先报一次进度，让网页立刻看到"它动起来了"（值本身没有物理含义，只是进度条起点）。
+PROGRESS_START = _f("HOUSENAV_PROGRESS_START", 0.1)
+# 关仿真时等后台线程收工的上限；超时就不等了（daemon 线程随主进程一起走）。
+SHUTDOWN_JOIN_S = _f("HOUSENAV_SHUTDOWN_JOIN_S", 3.0)
 
 # ---------------------------------------------------------------- 卡住 / 摔倒判定
 STUCK_MIN_RATIO = _f("HOUSENAV_STUCK_MIN_RATIO", 0.35)  # 实际位移不足目标的这个比例 = 判为"被挡住了"

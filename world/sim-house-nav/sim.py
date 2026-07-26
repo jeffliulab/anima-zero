@@ -258,7 +258,7 @@ class HouseSim:
     def stop(self) -> None:
         self._running = False
         if self._thread:
-            self._thread.join(timeout=3.0)
+            self._thread.join(timeout=C.SHUTDOWN_JOIN_S)
 
     def _loop(self) -> None:
         """物理 + 策略 + 渲染，全在这一个线程里（EGL 上下文有线程亲和性，渲染不能跨线程）。"""

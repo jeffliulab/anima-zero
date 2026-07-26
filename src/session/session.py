@@ -40,13 +40,17 @@ class Session:
     # 每轮常驻注入系统提示——「当前在执行什么任务」是状态不是聊天记录，不该随滑动窗口被遗忘。
     # 必须带默认值：load() 用 Session(**data) 构造，旧会话 JSON 没有这个键。
     core_task: str = ""
+    # 笔记本（v1.0）：和核心任务同一套路（LLM 经 add_note/drop_note 亲自增删），区别在形状——
+    # 核心任务是一句话「我在干什么」，笔记本是一条条「我发现了什么」。同样常驻注入系统提示。
+    # 同样必须带默认值：load() 用 Session(**data) 构造，旧会话 JSON 里没有这个键。
+    notes: list = field(default_factory=list)
     messages: list = field(default_factory=list)
 
     def summary(self) -> dict:
         return {
             "id": self.id, "world": self.world, "brain": self.brain,
             "status": self.status, "created_at": self.created_at, "title": self.title,
-            "core_task": self.core_task,
+            "core_task": self.core_task, "notes": list(self.notes),
         }
 
 
@@ -168,6 +172,13 @@ class SessionStore:
         """写核心任务寄存器（空串=清除）。调用方=编排器的内建元工具，别处不该写它。"""
         s = self.load(sid)
         s.core_task = task
+        self.save(s)
+
+    def set_notes(self, sid: str, notes: list) -> None:
+        """整本覆盖笔记本。调用方=编排器的内建元工具（add_note/drop_note），别处不该写它。
+        整本写而不是 append 单条：编号即位置，增删都要以最新的一本为准，一次落盘最不容易错位。"""
+        s = self.load(sid)
+        s.notes = list(notes)
         self.save(s)
 
     def is_active(self, sid: str) -> bool:

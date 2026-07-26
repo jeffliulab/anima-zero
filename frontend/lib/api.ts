@@ -47,6 +47,9 @@ export type SessionSummary = {
   status: "active" | "frozen";
   created_at: string;
   title: string;
+  // ANIMA 自己的两个工作记忆通道（它经内建元工具亲自增删；网页只做显示器，不提供编辑）
+  core_task: string;   // 一句话：我在干什么
+  notes: string[];     // 一条条：我发现了什么
 };
 
 // 会话记录里的一条(后端落盘格式)

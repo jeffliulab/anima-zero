@@ -143,7 +143,8 @@ def test_old_session_json_without_field_loads(tmp_path):
 
 
 def test_meta_tools_on_toolsheet(tmp_path):
-    """工具单里有两件元工具（LLM 能看到才可能调用）。"""
+    """工具单里有全部内建元工具（LLM 能看到才可能调用）。
+    ⛔ T0：这是「全集」断言——以后加元工具往里【追加】，别把已有的换掉。"""
     world = _World()
     orch, session = _orch(tmp_path, world)
     llm = _SeqLLM([LLMReply(text="hi")])
@@ -151,7 +152,9 @@ def test_meta_tools_on_toolsheet(tmp_path):
     # _SeqLLM 只记了 system；改从消息面验证：直接构建一次工具单
     tools = orch._meta_toolbox(set())
     assert {t.name for t in tools} == {messages.CORE_TASK_SET_TOOL["name"],
-                                       messages.CORE_TASK_CLEAR_TOOL["name"]}
+                                       messages.CORE_TASK_CLEAR_TOOL["name"],
+                                       messages.NOTE_ADD_TOOL["name"],
+                                       messages.NOTE_DROP_TOOL["name"]}
 
 
 def test_context_sanitizes_orphan_tool_calls():
