@@ -85,6 +85,58 @@ def worlds() -> list:
     return out
 
 
+# ---- 世界配置（v1.0 的 AWI 新通道）----
+# 世界经 AWI **声明**它能配什么（大脑握手时读到，见 world_client）；**改**它走世界本地的
+# 带外 HTTP。后端这两个端点只是转发 + 改完让大脑重新握手，自己不理解任何具体配置项。
+# ⛔ 通用：不认识 body/机器人/任何键名——世界声明什么就转发什么，网页照着渲染。
+
+@app.get("/api/worlds/{name}/config")  # 这个世界能配什么、现在是什么
+def world_config(name: str) -> dict:
+    w = registry.get(name)
+    if w is None:
+        return {"ok": False, "message": f"没有名叫「{name}」的世界。", "options": []}
+    try:
+        return {"ok": True, **(w.capabilities().config or {"options": []})}
+    except Exception as e:
+        return {"ok": False, "message": f"读不到这个世界的配置：{e}", "options": []}
+
+
+@app.post("/api/worlds/{name}/config")  # 改配置（如换身体）
+def set_world_config(name: str, body: dict) -> dict:
+    w = registry.get(name)
+    if w is None:
+        return {"ok": False, "message": f"没有名叫「{name}」的世界。"}
+    try:
+        r = w.set_config(str(body.get("key", "")), str(body.get("value", "")))
+    except Exception as e:
+        return {"ok": False, "message": f"改配置失败：{e}"}
+    # 改完必须重新握手：换了配置，世界的工具单/说明书都可能变了。
+    # ⛔ 不重新握手就是 v0.9 那个坑——大脑握着旧的能力清单，新工具永远上不了工具单。
+    if r.get("ok"):
+        w.refresh()
+    return r
+
+
+@app.post("/api/worlds/{name}/refresh")  # 重新握手：丢掉能力缓存，下次现问世界
+def refresh_world(name: str) -> dict:
+    """世界那边改了工具 / 重启了，让大脑重新问一遍。
+
+    背景（v0.9 踩的坑，值得一个端点）：`RemoteWorld` 在首次握手时缓存世界的能力清单、
+    之后不再重问。世界加了新工具、后端没重启 → 新工具**永远**上不了 LLM 的工具单。
+    上一版新增的环视就这么被藏了七次实验，还一度被误判成"模型不想用"。
+    """
+    w = registry.get(name)
+    if w is None:
+        return {"ok": False, "message": f"没有名叫「{name}」的世界。"}
+    w.refresh()
+    try:
+        caps = w.capabilities()
+        return {"ok": True, "message": f"已重新握手，现在有 {len(caps.tools)} 个工具。",
+                "tools": [t.name for t in caps.tools]}
+    except Exception as e:
+        return {"ok": False, "message": f"重新握手失败（世界可能没起来）：{e}"}
+
+
 @app.get("/api/perceive")  # 左边传感区:显示当前会话所连世界的图
 def perceive(session_id: str | None = None) -> Response:
     if session_id and store.exists(session_id):
@@ -293,7 +345,8 @@ def awi_overview() -> dict:
         w = registry.get(name)
         online = w.online() if hasattr(w, "online") else True
         info = {"name": name, "url": getattr(w, "base", ""), "kind": "world", "online": online,
-                "version": "", "tools": [], "state": None, "status": None, "state_schema": {}, "guidance": ""}
+                "version": "", "tools": [], "state": None, "status": None, "state_schema": {},
+                "guidance": "", "config": {}}
         if online:
             try:
                 caps = w.capabilities()  # 命中握手缓存,不再问世界(见 RemoteWorld.capabilities)
@@ -306,6 +359,8 @@ def awi_overview() -> dict:
                 info["state_schema"] = caps.state_schema
                 # guidance = 世界的「说明书」(= MCP prompt)。面板第四区 GUIDANCE 显示;大脑也读它进系统提示。
                 info["guidance"] = caps.guidance
+                # config = 世界声明的可配置项(v1.0 新通道)。面板据此渲染一个下拉;改它走带外 HTTP。
+                info["config"] = caps.config or {}
                 # status = 世界自身的真实状态(仅人看的调试台,走世界本地 /status,人的上帝视角),绝不给 ANIMA。
                 # 这跟 ANIMA 的 perceive 明确分开:sim-chess 的真值(局面/轮次/胜负)藏在 /status、绝不进 perceive。
                 # 没有 /status 的世界(如 sim-desk,它的 perceive 本就是真值)→ 回退到 perceive 的 state。

@@ -13,20 +13,13 @@ from __future__ import annotations
 import math
 
 import config as C
+import domus_scene
 from domus_scene import layout
 from guidance import GUIDANCE  # noqa: F401  （世界说明书，server.py 从这里 import）
 from sim import HouseSim
 
 L = layout()          # Domus 场景的布局定义（只给 /status 判房间用，绝不进 AWI 观测）
 
-# 世界说明书（= MCP prompt "guidance"）：世界自我介绍怎么跟它打交道。
-# 让大脑保持纯净通用——不为这个世界在大脑里写死任何逻辑，改由世界自述、大脑读了就懂。
-#
-# ⛔ **这里绝不能写「屋子里有哪些房间、各房间摆着什么、哪间挨着哪间」**（v1.0 起，Jeff 定）。
-#    v0.9 曾把十二个房间的家具逐间点名、还附了一张「厨房＝灶眼/抽油烟机/烤箱」的标志物对照表，
-#    等于替大脑做了识别——而且**答案喂到那个份上，四个目标房间它还是错了三个**。
-#    这个世界要考的就是「自己看画面认出这是哪间屋」，喂答案测出来的分数没有意义。
-#    判定标准：这句话是在讲**怎么跟我打交道**（该写），还是在讲**屋子里有什么**（不该写）。
 class HouseNavWorld:
     """AWI 世界对象。动作真的驱动物理，观测真的来自相机。"""
 
@@ -162,6 +155,54 @@ class HouseNavWorld:
             state["cameras"] = [name for name, _png in shots]     # 顺序=图的顺序（AWI 约定）
             return state, shots
         return state, self.sim.frame_png()
+
+    # ---------------------------------------------------------------- 世界配置（AWI 声明通道）
+    CONFIG_KEY = "body"     # 这个世界只有一项可配：装的是哪台机器人
+
+    def config(self) -> dict:
+        """我有哪些可配置项、每项能选什么、现在是哪个。
+
+        ⚠️ 这是**声明**，不是操作入口——改它走带外的 `POST /config`（和 `/reset` 一个类别），
+        因为换身体是**人**在开跑前做的场地配置，不是大脑在对话中途该做的事
+        （换身体要重建整个仿真，位置姿态全没了）。大脑读到的只是"你现在是什么身体"，
+        就像真机器人知道自己是什么身体一样。
+        选项**从 Domus 的机器人清单现读**，不在这儿另抄一份名单。
+        """
+        rs = domus_scene.robots()
+        return {
+            "options": [{
+                "key": self.CONFIG_KEY,
+                "label": "身体",
+                "description": "这个世界里站着哪台机器人。切换会重建仿真，机器人回到出生点。",
+                "value": self.sim.robot_key,
+                "choices": [{"value": k, "label": v["label"]} for k, v in rs.ROBOTS.items()],
+            }],
+        }
+
+    def set_config(self, key: str, value: str) -> dict:
+        """换身体：把整个仿真重建一遍。带外调用（网页），不走 AWI。"""
+        if key != self.CONFIG_KEY:
+            return {"ok": False, "message": f"这个世界没有「{key}」这项配置。"}
+        rs = domus_scene.robots()
+        if value not in rs.ROBOTS:
+            return {"ok": False,
+                    "message": f"没有名叫「{value}」的机器人。现有：{', '.join(rs.ROBOTS)}"}
+        if value == self.sim.robot_key:
+            return {"ok": True, "message": f"本来就是{rs.ROBOTS[value]['label']}，没改动。",
+                    "config": self.config()}
+        old = self.sim
+        try:
+            new = HouseSim(robot_key=value)     # 换模型、换策略，构造失败就保持原样
+        except Exception as e:
+            return {"ok": False, "message": f"换成「{value}」失败，仍在用原来那台：{e}"}
+        old.stop()                              # 新的建成了才停旧的，免得中途两头空
+        self.sim = new
+        self.sim.start()
+        self._last_event = "（刚换了身体，放在出生点）"
+        self._sweep = None
+        return {"ok": True,
+                "message": f"已换成{rs.ROBOTS[value]['label']}，放回出生点。",
+                "config": self.config()}
 
     # ---------------------------------------------------------------- 动作
     def invoke(self, name: str, *, _progress=None, **args) -> dict:

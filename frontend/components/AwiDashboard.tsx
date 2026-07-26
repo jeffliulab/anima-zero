@@ -1,6 +1,9 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { getAwi, awiEventsUrl, AWI_LOG_SHOWN, POLL_AWI_MS, type AwiOverview, type AwiWorld, type AwiService, type AwiTool } from "@/lib/api";
+import {
+  getAwi, awiEventsUrl, AWI_LOG_SHOWN, POLL_AWI_MS, setWorldConfig, refreshWorld,
+  type AwiOverview, type AwiWorld, type AwiService, type AwiTool, type WorldConfigOption,
+} from "@/lib/api";
 
 // 回方向(server→ANIMA)的结构化返回；不同 method 用不同字段
 type Resp = {
@@ -114,11 +117,22 @@ function WorldCard({ w }: { w: AwiWorld }) {
           🌍 {w.name}{" "}
           <span className="text-xs text-neutral-500">World Server · ANIMA 栖身的现实{w.version ? ` v${w.version}` : ""}</span>
         </span>
-        <span className={`text-xs ${online ? "text-green-400" : "text-red-400"}`}>● {online ? "在线" : "离线"}</span>
+        <div className="flex items-center gap-2">
+          <RefreshTools name={w.name} online={online} />
+          <span className={`text-xs ${online ? "text-green-400" : "text-red-400"}`}>● {online ? "在线" : "离线"}</span>
+        </div>
       </div>
       <div className="mt-1 text-[11px] text-neutral-500">{w.url}</div>
 
       <div className="mt-3 space-y-3">
+        {online && (w.config?.options?.length ?? 0) > 0 && (
+          <Region title="Config" color="#a78bfa"
+            sub="这个世界的场地配置（世界经 AWI 声明；⚠️ 由你来改，ANIMA 只被告知现状、改不了）">
+            {w.config!.options!.map((o) => (
+              <ConfigOption key={o.key} world={w.name} opt={o} />
+            ))}
+          </Region>
+        )}
         <Region title="Tools" color="#3fb950" sub="ANIMA 可调用的工具（会改世界的过安全闸）">
           {w.tools.map((t) => (
             <CapCard key={t.name} name={t.name} kind={(t as AwiTool).kind} desc={t.description}
@@ -163,6 +177,74 @@ function WorldCard({ w }: { w: AwiWorld }) {
         </Region>
       </div>
     </div>
+  );
+}
+
+// 世界配置的一项：一个下拉 + 一个"改"。⛔ 前端不认识任何具体键名（body/相机/…）——
+// 世界声明什么就渲染什么，加新配置项不用改这里一行代码。
+// 改完要整页重取：换了配置，世界的工具单/说明书都可能变了（后端已顺手让大脑重新握手）。
+function ConfigOption({ world, opt }: { world: string; opt: WorldConfigOption }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const choices = opt.choices ?? [];
+  async function pick(v: string) {
+    if (v === opt.value || busy) return;
+    setBusy(true);
+    setMsg("正在切换…（世界要重建，可能要几秒）");
+    const r = await setWorldConfig(world, opt.key, v).catch(() => ({ ok: false, message: "连不上后端" }));
+    setMsg(r.message ?? (r.ok ? "已切换" : "没成功"));
+    setBusy(false);
+  }
+  return (
+    <div className="rounded-md border border-neutral-800 bg-neutral-950/50 p-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[12px] text-violet-300">{opt.label || opt.key}</span>
+        {choices.length ? (
+          <select
+            value={opt.value}
+            disabled={busy}
+            onChange={(e) => pick(e.target.value)}
+            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-[12px] text-neutral-200 disabled:opacity-50"
+          >
+            {choices.map((c) => (
+              <option key={c.value} value={c.value}>{c.label || c.value}</option>
+            ))}
+          </select>
+        ) : (
+          <span className="font-mono text-[12px] text-neutral-300">{opt.value}</span>
+        )}
+      </div>
+      {opt.description && <div className="mt-1 text-[11px] text-neutral-500">{opt.description}</div>}
+      {msg && <div className="mt-1 text-[11px] text-amber-400">{msg}</div>}
+    </div>
+  );
+}
+
+// 「重新握手」：让大脑重新问一遍这个世界有哪些工具。
+// 为什么值得一个按钮（v0.9 踩过）：能力清单在首次握手时被缓存，世界那边加了新工具而后端没重启的话，
+// 新工具**永远**上不了 LLM 的工具单——上一版新增的环视就这么被藏了七次实验，还一度被误判成"模型不想用"。
+function RefreshTools({ name, online }: { name: string; online: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  if (!online) return null;
+  return (
+    <span className="flex items-center gap-1">
+      {msg && <span className="text-[11px] text-neutral-400">{msg}</span>}
+      <button
+        disabled={busy}
+        title="世界那边改了工具或重启了，点这个让大脑重新问一遍（能力清单是握手时缓存的）"
+        onClick={async () => {
+          setBusy(true);
+          setMsg("重新握手中…");
+          const r = await refreshWorld(name).catch(() => ({ ok: false, message: "连不上后端" }));
+          setMsg(r.message ?? "");
+          setBusy(false);
+        }}
+        className="rounded border border-neutral-700 bg-neutral-800 px-2 py-0.5 text-[11px] text-neutral-300 hover:bg-neutral-700 disabled:opacity-50"
+      >
+        重新握手
+      </button>
+    </span>
   );
 }
 

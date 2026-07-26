@@ -11,7 +11,9 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-WORLDS = ["sim-desk", "sim-chess", "camera"]
+# ⛔ 全集：加了新世界就往这里【追加】。sim-house-nav 于 v0.9 加入时漏登记，
+#    v1.0 补上（当时五份其实没漂，纯属守卫没覆盖到——但那正是守卫会失效的方式）。
+WORLDS = ["sim-desk", "sim-chess", "camera", "sim-house-nav"]
 
 
 def test_awi_mcp_four_copies_byte_identical():
@@ -19,5 +21,5 @@ def test_awi_mcp_four_copies_byte_identical():
     ref = WORLDS[0]
     for w, data in contents.items():
         assert data == contents[ref], (
-            f"awi_mcp.py 漂移：world/{w} 与 world/{ref} 不一致——改协议要四处同步"
+            f"awi_mcp.py 漂移：world/{w} 与 world/{ref} 不一致——改协议要各处同步"
         )

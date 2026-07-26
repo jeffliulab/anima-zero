@@ -36,6 +36,7 @@ ONLINE_PROBE_TIMEOUT = config.WORLD_PROBE_TIMEOUT  # 探在线的短超时
 
 # MCP 契约常量（世界侧适配器 awi_mcp.py 用同样的字符串，两边必须一致）。
 OBSERVATION_URI = "anima://observation"   # 感知资源：读它拿到 state(text) + 画面(image/png blob)
+CONFIG_URI = "anima://config"             # 世界配置资源：世界声明它能配什么、现在是什么
 GUIDANCE_PROMPT = "guidance"              # 说明书提示词名
 
 
@@ -71,22 +72,50 @@ class RemoteWorld:  # 实现 World 协议(AWI 客户端)
                                        if getattr(m.content, "text", None))
             except Exception:
                 pass
-            return tools, guidance
+            # 世界配置（可选通道）：世界没声明就读不到，读不到就是没有——不是错误，别让它挂掉握手。
+            cfg: dict = {}
+            try:
+                rl = await s.list_resources()
+                if any(str(r.uri) == CONFIG_URI for r in rl.resources):
+                    rd = await s.read_resource(AnyUrl(CONFIG_URI))
+                    for c in rd.contents:
+                        if getattr(c, "text", None):
+                            cfg = json.loads(c.text) or {}
+                            break
+            except Exception:
+                pass
+            return tools, guidance, cfg
 
         t0 = time.perf_counter()
-        tools, guidance = run_sync(with_session(self.mcp_url, op, self.timeout),
-                                   self.timeout + config.BRIDGE_GRACE_S)
+        tools, guidance, cfg = run_sync(with_session(self.mcp_url, op, self.timeout),
+                                        self.timeout + config.BRIDGE_GRACE_S)
         self._caps = Capabilities(name=self.name, version="", tools=tools, state_schema={},
-                                  guidance=guidance)
+                                  guidance=guidance, config=cfg)
         awi_log.record(self.name, "capabilities", "capabilities() 握手[mcp]",
                        (time.perf_counter() - t0) * 1000,
                        resp={"transport": "mcp", "n_tools": len(tools),
-                             "tools": [t.name for t in tools], "has_guidance": bool(guidance)})
+                             "tools": [t.name for t in tools], "has_guidance": bool(guidance),
+                             "config": cfg.get("options", [])})
         return self._caps
 
     def refresh(self) -> None:
         """丢掉能力缓存,下次 capabilities() 重新握手(世界换了工具 / 重启后用)。"""
         self._caps = None
+
+    # ---------- 世界配置：读走 AWI（握手时一起拿），改走带外 HTTP ----------
+    def set_config(self, key: str, value: str) -> dict:
+        """改这个世界的一项配置（如换身体）。
+
+        ⚠️ **走带外普通 HTTP，不走 MCP**——和 `/status`、`/reset` 一个类别。
+        理由：改配置是**人**的动作，不是大脑的动作；MCP 那条线是脑↔世界的，
+        把人的操作塞进去会让大脑以为自己能改（它没有对应的工具，说了只会去调不存在的东西）。
+        """
+        try:
+            r = self._client.post(self.base + "/config", json={"key": key, "value": value},
+                                  timeout=config.WORLD_STATUS_TIMEOUT)
+            return r.json()
+        except Exception as e:
+            return {"ok": False, "message": f"世界「{self.name}」没应答（它起来了吗）：{e}"}
 
     # ---------- 感知（快速读，固定死线）----------
     def perceive(self) -> Observation:

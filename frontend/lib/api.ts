@@ -40,6 +40,38 @@ export type RuntimeParam = {
 
 export type World = { name: string; url: string; online: boolean };
 
+// 世界的一项可配置项（v1.0 的 AWI 声明通道）。世界声明什么，网页就渲染什么——
+// ⛔ 前端不认识任何具体键名（body/相机/…），加新配置项不用改前端。
+export type WorldConfigOption = {
+  key: string;
+  label?: string;
+  description?: string;
+  value: string;
+  choices?: { value: string; label?: string }[];
+};
+
+export async function getWorldConfig(name: string): Promise<WorldConfigOption[]> {
+  const r = await fetch(`${BASE}/api/worlds/${encodeURIComponent(name)}/config`);
+  const j = await r.json();
+  return (j.options ?? []) as WorldConfigOption[];
+}
+
+export async function setWorldConfig(name: string, key: string, value: string) {
+  const r = await fetch(`${BASE}/api/worlds/${encodeURIComponent(name)}/config`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key, value }),
+  });
+  return (await r.json()) as { ok: boolean; message?: string };
+}
+
+// 让大脑重新问一遍这个世界有哪些工具。
+// 背景：能力清单在首次握手时被缓存，世界加了新工具而后端没重启的话，新工具永远上不了工具单。
+export async function refreshWorld(name: string) {
+  const r = await fetch(`${BASE}/api/worlds/${encodeURIComponent(name)}/refresh`, { method: "POST" });
+  return (await r.json()) as { ok: boolean; message?: string; tools?: string[] };
+}
+
 export type SessionSummary = {
   id: string;
   world: string | null;
@@ -91,6 +123,7 @@ export type AwiWorld = {
   status: Record<string, unknown> | null; // 世界自身真实状态，仅人看：走世界本地 /status（人的上帝视角），ANIMA 看不到，如 FEN
   state_schema: Record<string, string>; // 世界【声明】的 perceive.state 契约（键→含义）——面板据此显示，不靠缓存上次 perceive 猜
   guidance: string; // 世界的「说明书」（= MCP prompt）：自我介绍怎么跟它打交道；大脑读它进系统提示，面板第四区显示
+  config?: { options?: WorldConfigOption[] }; // 世界声明的可配置项（v1.0 新通道；改它走带外 HTTP，大脑只读）
 };
 // Engine Server（引擎顾问，如棋类引擎）：和 World Server 一样都是标准 MCP server，只是纯计算——
 // 只有 tools，无画面(resource)、无说明书(prompt)。由 ANIMA（Host）按 config.services() 挂载

@@ -3,6 +3,8 @@
 把一个实现 `capabilities()/observe()/invoke()` 的世界对象，暴露成标准 **MCP server**：
   - **tools**    ← `world.capabilities()["tools"]`（含 JSON schema；kind∈{read,judge} → readOnlyHint=真）
   - **resource** ← `anima://observation`：读它返回 state(json text) + 画面(image/png blob)
+  - **resource** ← `anima://config`：世界**声明**自己有哪些可配置项、每项有哪些取值、现在是哪个
+                   （可选；世界实现 `config()` 才有）
   - **prompt**   ← `guidance`：世界说明书（世界作者写的一段自我介绍）
 
 用法（世界的 FastAPI server.py）：
@@ -40,11 +42,26 @@ from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 
 NON_MUTATING = {"read", "judge"}          # 非「改世界」的能力
 OBSERVATION_URI = "anima://observation"   # 感知资源 URI（大脑侧 world_client.py 用同一串）
+CONFIG_URI = "anima://config"             # 世界配置资源 URI（同上，两边必须一致）
 GUIDANCE_PROMPT = "guidance"              # 说明书提示词名
+
+# 「世界配置」是什么、为什么走 AWI（v1.0 新增）
+# ------------------------------------------------
+# 有些世界不止一种"布置法"——同一间屋子里站的是四足机器狗还是人形，同一台相机接的是哪个设备。
+# 这类**开跑前的场地配置**既不是动作（不是大脑该调的工具），也不是感知（不是每轮都在变的画面），
+# 所以两条现有通道都放不下，给它一条新的。
+#
+# ⚠️ 分工：世界经 AWI **声明**"我能配什么、现在是什么"（这是世界的自我描述，和 guidance 同类）；
+#    **改**它走世界本地的普通 HTTP（`POST /config`，和 `/reset` 一个类别）——
+#    因为改配置是**人**的动作，不是大脑的动作。大脑只是被告知"你现在的身体是什么"，
+#    就像真机器人知道自己是什么身体一样。
+# ⛔ 别把它做成工具让大脑自己切：换身体要重建整个仿真（位置、姿态全没了），
+#    在对话中途做这件事语义很怪，而且大脑没有任何理由去换。
 
 
 def build_awi_mcp(world=None, *, guidance: str = "",
-                  server_name: str = "world", caps_fn=None, observe_fn=None, invoke_fn=None):
+                  server_name: str = "world", caps_fn=None, observe_fn=None, invoke_fn=None,
+                  config_fn=None):
     """返回 (asgi_handler, lifespan)：挂到世界 FastAPI 的 /mcp，并用作 app 的 lifespan。
 
     默认从 `world` 取 capabilities()/observe()/invoke()；若世界的动作方法名不同（如 sim-desk 是 step），
@@ -56,6 +73,8 @@ def build_awi_mcp(world=None, *, guidance: str = "",
     _caps = caps_fn or world.capabilities        # () -> {"tools":[...], ...}
     _observe = observe_fn or world.observe        # () -> (state, image_png|None)
     _invoke = invoke_fn or world.invoke           # (name, **args) -> {"ok","message","data"}
+    # 世界配置是**可选**的：世界没实现 config() 就整条通道不存在（旧世界零改动）。
+    _config = config_fn or getattr(world, "config", None)   # () -> {"options":[...]}
     # 签名探测：世界声明了 keyword-only `_progress` 才把进度上报函数传给它（即时世界零改动、不误传）。
     try:
         _wants_progress = "_progress" in inspect.signature(_invoke).parameters
@@ -111,14 +130,28 @@ def build_awi_mcp(world=None, *, guidance: str = "",
 
     @srv.list_resources()
     async def _list_resources():
-        return [t.Resource(
+        out = [t.Resource(
             uri=OBSERVATION_URI, name="observation",
             description="当前画面 + 结构 state（大脑感知；绝不含世界真值）",
             mimeType="application/json",
         )]
+        if _config is not None:
+            out.append(t.Resource(
+                uri=CONFIG_URI, name="config",
+                description="这个世界有哪些可配置项、每项能选什么、现在是哪个（改它走世界本地 HTTP）",
+                mimeType="application/json",
+            ))
+        return out
 
     @srv.read_resource()
     async def _read_resource(uri):
+        if str(uri) == CONFIG_URI:
+            if _config is None:
+                return [ReadResourceContents(content=json.dumps({"options": []}),
+                                             mime_type="application/json")]
+            cfg = await anyio.to_thread.run_sync(_config)
+            return [ReadResourceContents(content=json.dumps(cfg or {"options": []}),
+                                         mime_type="application/json")]
         # 感知同样下工作线程（gazebo 的 observe 要拿世界锁 + spin ROS，不许堵循环）。
         state, image = await anyio.to_thread.run_sync(_observe)
         out = [ReadResourceContents(content=json.dumps(state or {}), mime_type="application/json")]

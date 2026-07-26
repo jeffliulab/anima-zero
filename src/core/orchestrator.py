@@ -55,6 +55,19 @@ def _tc_dict(tc: ToolCall) -> dict:
     return {"id": tc.id, "name": tc.name, "arguments": tc.arguments}
 
 
+def _config_value_label(opt: dict) -> str:
+    """把世界配置项的当前值翻成人话：选项里有对应的 label 就用 label，没有就用原值。
+
+    （世界声明 value="g1"、choices 里 g1 的 label="人形机器人（宇树 G1，29 自由度）"——
+      给大脑看 label 才有信息量；但不强求世界一定给 choices，没给就照原值转述。）
+    ⛔ 通用：不认识任何具体键名，世界声明什么就转述什么。"""
+    val = opt.get("value")
+    for c in opt.get("choices") or []:
+        if c.get("value") == val:
+            return str(c.get("label") or val)
+    return str(val)
+
+
 class LoopState(TypedDict, total=False):
     """一次图运行的状态（不序列化、不跨轮持久——会话真相在 SessionStore）。"""
     session: Session
@@ -378,8 +391,10 @@ class Orchestrator:
             caps = world.capabilities()
             has_tools = bool(caps.tools)
             guidance = caps.guidance
+            world_config = caps.config or {}
         except Exception:
-            has_tools, guidance = True, ""   # 读不到能力时不臆断"不可操作",保持旧行为(由后续真正调用兜底)
+            # 读不到能力时不臆断"不可操作",保持旧行为(由后续真正调用兜底)
+            has_tools, guidance, world_config = True, "", {}
         if has_tools:
             s = base + f"\n\n当前已连接世界「{world.name}」,你能在需要时调用它的工具。"
         else:
@@ -388,6 +403,13 @@ class Orchestrator:
         # 不为某个世界写死逻辑，改由世界自述、大脑读了就懂。
         if guidance:
             s += f"\n\n【这个世界的说明书（它自己写的，教你怎么跟它打交道）】\n{guidance}"
+        # 世界当前的配置（v1.0）：只告诉它「现在是什么样」，**不告诉它能怎么改**——
+        # 改配置是人的动作，大脑没有对应的工具，说了只会让它去调一个不存在的东西。
+        # 通用：不认识 body/相机/任何具体键名，世界声明什么就转述什么。
+        lines = [f"· {o.get('label') or o.get('key')}：{_config_value_label(o)}"
+                 for o in (world_config.get("options") or []) if o.get("key")]
+        if lines:
+            s += messages.WORLD_CONFIG_BLOCK.format(items="\n".join(lines))
         if has_services:
             s += messages.SERVICES_HINT
         # 两个寄存器：状态通道常驻注入，不占历史窗口、无「滑出」概念
