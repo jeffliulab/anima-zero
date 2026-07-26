@@ -116,6 +116,27 @@ STUCK_MIN_RATIO = _f("HOUSENAV_STUCK_MIN_RATIO", 0.35)  # 实际位移不足目�
 FALL_TILT_RAD = _f("HOUSENAV_FALL_TILT_RAD", 0.8)       # 躯干倾斜超过这个角度 = 摔倒（对齐训练侧终止条件）
 FALL_HEIGHT_M = _f("HOUSENAV_FALL_HEIGHT_M", 0.18)      # 躯干高度低于此 = 趴地上了
 
+# ---------------------------------------------------------------- 第三视角（只给人看）
+# 从斜后上方跟拍机器人的一路画面，让你像看比赛转播一样看着它在屋里走。
+# ⛔⛔ **这一路 ANIMA 绝对看不到**：只走直播端点，绝不进 observe()。
+#     大脑的眼睛只有机器人头上那一只——给它上帝视角就等于把这个 demo 要考的能力直接送掉。
+#     红线在三处落实：observe() 不碰它、/streams 标 awi=false、tests/test_third_person.py 钉着。
+THIRD_PERSON = _b("HOUSENAV_THIRD_PERSON", True)
+THIRD_PERSON_W = _i("HOUSENAV_THIRD_PERSON_W", 640)
+THIRD_PERSON_H = _i("HOUSENAV_THIRD_PERSON_H", 480)
+# 帧率比第一视角低一档：多一路渲染就多一份开销，而"看着它走"不需要那么流畅。
+THIRD_PERSON_FPS = _i("HOUSENAV_THIRD_PERSON_FPS", 8)
+# 机位：跟在机器人正后方多远、抬高多少（米，机体坐标系）。
+# 屋里空间窄，退太远会退到墙里去；1.8 m 大约是"人站在它身后一步半"的距离。
+THIRD_PERSON_BACK_M = _f("HOUSENAV_THIRD_PERSON_BACK_M", 2.2)
+THIRD_PERSON_UP_M = _f("HOUSENAV_THIRD_PERSON_UP_M", 1.0)
+# 被挡住时把镜头拉近到撞点前面这么多（m），以及无论如何不小于这个距离——
+# 太近会糊成一团、也会钻进机器人身体里。
+THIRD_PERSON_CLEAR_M = _f("HOUSENAV_THIRD_PERSON_CLEAR_M", 0.15)
+THIRD_PERSON_MIN_M = _f("HOUSENAV_THIRD_PERSON_MIN_M", 0.8)
+# 为什么是这个角度（俯角约 24°）：机位太高会拍成俯视图、满屏地板，看不见它**要往哪走**；
+# 太平又会被自己的身体挡住前方。2.2/1.0 这一组能同时看见机器人和它面前那片空间。
+
 # ---------------------------------------------------------------- 相机 / 画面
 # ⚠️ 前视相机叫什么名字**不在这儿**：那是机器人的事实，住 Domus 的 robots/manifest.py
 #    的 camera 字段（两台机器人都叫 head_front，但那是巧合，不该在这儿再定一次）。

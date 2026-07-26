@@ -36,10 +36,21 @@ def health() -> dict:
 
 
 # ===== 人类页 / 控制（不进 AWI）=====
-@app.get("/streams")   # 有哪几路相机直播（前端据此展示；本世界就狗头一路）
+@app.get("/streams")   # 有哪几路直播，以及**大脑看不看得见**
 def streams() -> list[dict]:
+    """每一路多一个 `awi` 字段：这一路是不是大脑真正看到的画面。
+
+    ⚠️ 契约（v1.0 新增，向后兼容）：没写 `awi` 的按 true 处理——老世界零改动。
+    网页据此把传感区分成两块，第三视角那块明确标着"ANIMA 看不到"。
+    不加这个字段的话，网页会把跟拍画面也摆在「ANIMA 看到的画面」标题下面——那是**撒谎**。
+    """
     r = world.sim.robot
-    return [{"name": r["camera"], "label": f'{r["label"]}·头部前视相机', "url": "/stream"}]
+    out = [{"name": r["camera"], "label": f'{r["label"]}·头部前视相机',
+            "url": "/stream", "awi": True}]
+    if C.THIRD_PERSON:
+        out.append({"name": "third_person", "label": "第三视角跟拍",
+                    "url": "/stream/third", "awi": False})
+    return out
 
 
 @app.get("/stream")    # MJPEG 直播：人在网页上实时看到"狗眼前"的画面
@@ -50,6 +61,18 @@ async def stream() -> StreamingResponse:
             if jpg is not None:
                 yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpg + b"\r\n"
             await asyncio.sleep(1 / max(1, C.STREAM_FPS))
+
+    return StreamingResponse(gen(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+
+@app.get("/stream/third")   # ⛔ 第三视角跟拍：**只给人看**，大脑绝对看不到这一路
+async def stream_third() -> StreamingResponse:
+    async def gen():
+        while True:
+            jpg = world.sim.third_person_jpeg()
+            if jpg is not None:
+                yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpg + b"\r\n"
+            await asyncio.sleep(1 / max(1, C.THIRD_PERSON_FPS))
 
     return StreamingResponse(gen(), media_type="multipart/x-mixed-replace; boundary=frame")
 

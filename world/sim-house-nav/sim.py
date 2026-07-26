@@ -142,6 +142,12 @@ class HouseSim:
         self._lock = threading.Lock()        # 只保护"写指令/读位姿"这类小状态
         self._frame: bytes | None = None     # 最新一帧 PNG（原子引用；读方不加锁）
         self._frame_rgb = None               # 最新一帧原始像素（给 MJPEG 直播用，省一次解码）
+        # 第三视角（⛔ 只给人看，绝不进 observe()）：单独一路像素与渲染器。
+        self._third_rgb = None
+        self._third_renderer: mujoco.Renderer | None = None
+        self._third_cam = None
+        self._third_opt = None
+        self._chase_body = self._find_chase_body()
         self._running = False
         self._thread: threading.Thread | None = None
         self._renderer: mujoco.Renderer | None = None
@@ -225,6 +231,16 @@ class HouseSim:
                 f"这个世界的约定是：场景中有且只有机器人是自由体，房子全是静态几何。")
         self._root_body = free[0]
 
+    def _find_chase_body(self) -> int:
+        """第三视角跟拍挂在哪个部件上（机器人清单的 `chase_body`，如狗的 base、人形的 torso_link）。
+        名字对不上就退回根 body 并告警——跟拍是给人看的，不该因为一个名字写错就让世界起不来。"""
+        name = self.robot.get("chase_body") or ""
+        bid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, name) if name else -1
+        if bid < 0:
+            print(f"[warn] 机器人清单里的 chase_body «{name}» 在模型里找不到，第三视角改跟根部件。")
+            return self._root_body
+        return bid
+
     def _measure_front_extent(self) -> None:
         """量出机器人**车头有多长**——从机身原点到自身几何最前端的距离(m)。
 
@@ -282,16 +298,23 @@ class HouseSim:
         self._ray_mask = mask
         self._ray_gid = np.zeros(1, np.int32)  # mj_ray 的输出槽（复用，免得每次分配）
 
+    def _ray_vec(self, pnt, vec) -> float:
+        """从 pnt 沿 vec 打一条射线，返回撞到房子的距离(m)；没撞上返回 -1。
+
+        ⚠️ flg_static 必须为 1：墙和家具都是静态几何体，设 0 的话什么都打不到（实测全返回 -1）。
+        掩码把机器人自己排除在外（见 _build_ray_mask）。
+        """
+        return float(mujoco.mj_ray(self.model, self.data, np.asarray(pnt, np.float64),
+                                   np.asarray(vec, np.float64),
+                                   self._ray_mask, 1, -1, self._ray_gid))
+
     def _ray(self, x: float, y: float, z: float, ang: float) -> float:
-        """从 (x,y,z) 沿世界系水平方位角 ang 打一条射线，返回撞上东西的距离(m)。
+        """沿世界系**水平**方位角 ang 打一条射线，返回距离(m)。
 
         没撞上（或超出量程）一律返回量程值——**不返回 -1 这种要调用方去理解的哨兵**，
         对大脑来说"看不到那么远"和"8 米内没东西"是同一件事。
-        ⚠️ flg_static 必须为 1：墙和家具都是静态几何体，设 0 的话什么都打不到（实测全返回 -1）。
         """
-        vec = np.array([math.cos(ang), math.sin(ang), 0.0])
-        d = mujoco.mj_ray(self.model, self.data, np.array([x, y, z]), vec,
-                          self._ray_mask, 1, -1, self._ray_gid)
+        d = self._ray_vec([x, y, z], [math.cos(ang), math.sin(ang), 0.0])
         return C.LIDAR_RANGE_M if d < 0 else min(float(d), C.LIDAR_RANGE_M)
 
     def _ray_origin(self) -> tuple[float, float, float, float]:
@@ -462,8 +485,18 @@ class HouseSim:
     def _loop(self) -> None:
         """物理 + 策略 + 渲染，全在这一个线程里（EGL 上下文有线程亲和性，渲染不能跨线程）。"""
         self._renderer = mujoco.Renderer(self.model, C.CAM_H, C.CAM_W)
+        if C.THIRD_PERSON:
+            # ⚠️ 必须在**这个线程**里建：EGL 上下文有线程亲和性，跨线程渲染会崩。
+            self._third_renderer = mujoco.Renderer(self.model, C.THIRD_PERSON_H, C.THIRD_PERSON_W)
+            self._third_cam = mujoco.MjvCamera()
+            self._third_cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+            self._third_opt = mujoco.MjvOption()
+            # 关掉天花板那一组：从斜上方看进去否则只有一片屋顶。
+            self._third_opt.geomgroup[domus_scene.layout().CEILING_GROUP] = 0
         next_render = 0.0
+        next_third = 0.0
         render_period = 1.0 / max(1, C.STREAM_FPS)
+        third_period = 1.0 / max(1, C.THIRD_PERSON_FPS)
         t_wall = time.perf_counter()
         while self._running:
             self._policy_step()
@@ -473,6 +506,9 @@ class HouseSim:
             if now >= next_render:
                 self._render_now()
                 next_render = now + render_period
+            if self._third_renderer is not None and now >= next_third:
+                self._render_third_person()
+                next_third = now + third_period
             # 按真实时间推进，让画面像直播（REALTIME_FACTOR 可加速）
             t_wall += C.CONTROL_DT / max(1e-6, C.REALTIME_FACTOR)
             lag = t_wall - time.perf_counter()
@@ -490,6 +526,47 @@ class HouseSim:
         Image.fromarray(rgb).save(buf, format="PNG")
         self._frame = buf.getvalue()      # 原子引用赋值：读方无需加锁
         self._frame_rgb = rgb
+
+    def _render_third_person(self) -> None:
+        """渲染第三视角跟拍。⛔⛔ 这一路只写进 `_third_rgb`，**绝不进 observe()**。
+
+        怎么跟拍：用自由相机，每帧把 lookat 放到机器人身上、机位放到它斜后上方——
+        位置跟着走，朝向固定在世界系（不跟着机身摇），画面才不会因为步态起伏一直晃。
+        天花板那一组几何体关掉：不然从斜上方看进去只有一片屋顶（Domus 早就把天花板单独归了组，
+        就是为了这种俯视需求）。
+        """
+        cam = self._third_cam
+        pos = self.data.xpos[self._chase_body]
+        _x, _y, yaw = self.pose()
+        cam.lookat[:] = pos
+        # distance/azimuth/elevation 是"绕着 lookat 转"的语义：方位角跟着机身朝向走，
+        # 相机就永远待在它**背后**（不然狗一转弯就变成拍脸）。
+        want = math.hypot(C.THIRD_PERSON_BACK_M, C.THIRD_PERSON_UP_M)
+        cam.azimuth = math.degrees(yaw) + 180.0
+        cam.elevation = -math.degrees(math.atan2(C.THIRD_PERSON_UP_M, C.THIRD_PERSON_BACK_M))
+        # 被墙或家具挡住就把镜头拉近——屋里空间窄，机位常常正好落在一件家具后面，
+        # 不拉近的话画面里就是一块柜子背板。（游戏里第三人称相机的标准做法；这里正好复用
+        # 已有的射线机制：从机器人往机位方向打一条，撞上了就退到撞点前面一点。）
+        el = math.radians(cam.elevation)
+        az = math.radians(cam.azimuth)
+        back = np.array([-math.cos(el) * math.cos(az), -math.cos(el) * math.sin(az),
+                         math.sin(-el)])          # 由 lookat 指向机位的单位向量
+        hit = self._ray_vec(pos, back)
+        cam.distance = max(C.THIRD_PERSON_MIN_M, min(want, hit - C.THIRD_PERSON_CLEAR_M)) \
+            if hit > 0 else want
+        self._third_renderer.update_scene(self.data, camera=cam, scene_option=self._third_opt)
+        self._third_rgb = self._third_renderer.render()
+
+    def third_person_jpeg(self) -> bytes | None:
+        """第三视角的最新一帧（JPEG）。只给人类页的直播用。"""
+        rgb = self._third_rgb
+        if rgb is None:
+            return None
+        import io
+        from PIL import Image
+        buf = io.BytesIO()
+        Image.fromarray(rgb).save(buf, format="JPEG", quality=C.STREAM_QUALITY)
+        return buf.getvalue()
 
     def frame_png(self) -> bytes | None:
         return self._frame
