@@ -29,9 +29,10 @@ os.environ.setdefault("MUJOCO_GL", "egl")   # 无头渲染（服务器上没有�
 import mujoco  # noqa: E402
 
 import config as C  # noqa: E402
+import domus_scene  # noqa: E402
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-SCENE_PATH = os.path.join(C.DOMUS_ROOT, C.DOMUS_SCENE, "house.xml")
+SCENE_PATH = domus_scene.scene_xml()
 POLICY_DIR = os.path.join(C.DOMUS_ROOT, "policies", "go2-velocity-flat")
 
 # 观测项拼接顺序 —— 与训练侧 ObservationsCfg.PolicyCfg 的声明顺序一一对应。
@@ -43,6 +44,14 @@ TERM_ORDER = ("base_ang_vel", "projected_gravity", "velocity_commands",
 def _wrap(a: float) -> float:
     """把角度差收进 (-π, π]，免得 ±180° 环绕时算出个假的巨大差值。"""
     return (a + math.pi) % (2 * math.pi) - math.pi
+
+
+# 激光测距报哪几个方向 —— **域常量，不是配置项**。
+# 名字和条数是绑死的：8 个方向正好把 360° 按 45° 切开，也正好对得上人说方向的习惯
+# （"正前""左前""正左"…）。改条数就得重编一套名字，不是调个数字的事，所以不做成 env。
+# 角度 = 相对机身正前方逆时针的度数。
+LIDAR_BEARINGS = (("正前", 0), ("左前", 45), ("正左", 90), ("左后", 135),
+                  ("正后", 180), ("右后", 225), ("正右", 270), ("右前", 315))
 
 
 class Contract:
@@ -78,6 +87,8 @@ class HouseSim:
         self.contract = Contract(contract_path or self._find(C.CONTRACT_PATH, "contract.json"))
         self._load_policy(policy_path or self._find(C.POLICY_PATH, "policy.onnx"))
         self._build_joint_map()
+        self._find_root_body()
+        self._build_ray_mask()
         self._strip_untrained_joint_effects()
 
         self.decimation = max(1, int(round(C.CONTROL_DT / C.PHYSICS_DT)))
@@ -156,6 +167,91 @@ class HouseSim:
         # 基座自由关节（读位姿用）
         self.root_qadr = 0   # freejoint 的 qpos 从 0 开始：xyz(3) + quat(4)
 
+    def _find_root_body(self) -> None:
+        """找出机器人的根 body = 挂着 free joint 的那个（躯干/骨盆）。
+
+        按**关节类型**找而不是按名字（Go2 叫 base、G1 叫 pelvis，写死名字换个身体就断）。
+        场景里只有机器人有 free joint，房子是静态的——找不到或找到多个都当场报错，不猜。
+        """
+        free = [int(self.model.jnt_bodyid[j]) for j in range(self.model.njnt)
+                if self.model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE]
+        if len(free) != 1:
+            raise ValueError(
+                f"场景里有 {len(free)} 个 free joint，认不出哪个是机器人。"
+                f"这个世界的约定是：场景中有且只有机器人是自由体，房子全是静态几何。")
+        self._root_body = free[0]
+
+    def _build_ray_mask(self) -> None:
+        """算出「射线只看房子、不看机器人自己」的 geom 分组掩码。
+
+        为什么必须过滤：射线从机身原点往外打，第一个撞上的必然是机器人自己的躯干/腿
+        （实测正前方 0.127 m 就打在自己身上）。
+        为什么用**分组掩码**而不是"打到自己就跳过去接着打"：实测正前方向连着穿过 6 个自身
+        geom 还没出来（躯干盒 + 头部圆柱 + 球 + 前腿 + 视觉网格…），靠固定重试次数根本不可靠。
+        分组掩码是一次到位的精确过滤。
+
+        ⛔ 两边分组撞上了就**拒绝启动**，不猜。撞上意味着没法区分"这条射线打到的是墙还是自己
+        的胳膊"，带病跑出来的距离读数会让大脑做出错误判断——那比没有雷达更糟。
+        （menagerie 惯例本来就分得开：视觉 group 2 / 碰撞 group 3；房子用 0 和 1。）
+        """
+        root = self._root_body
+        is_self = [self.model.body_rootid[self.model.geom_bodyid[g]] == root
+                   for g in range(self.model.ngeom)]
+        self_groups = {int(self.model.geom_group[g]) for g in range(self.model.ngeom) if is_self[g]}
+        world_groups = {int(self.model.geom_group[g]) for g in range(self.model.ngeom) if not is_self[g]}
+        clash = self_groups & world_groups
+        if clash:
+            raise ValueError(
+                f"机器人和房子共用了 geom 分组 {sorted(clash)}，激光测距没法把两者分开。\n"
+                f"（机器人用 {sorted(self_groups)}，房子用 {sorted(world_groups)}）\n"
+                f"请把机器人模型的 geom 分组改成房子没用到的组"
+                f"（menagerie 惯例：视觉 group 2、碰撞 group 3）。拒绝带着错读数运行。")
+        mask = np.zeros(6, np.uint8)          # MuJoCo 的分组固定 6 个槽
+        for g in world_groups:
+            if 0 <= g < len(mask):
+                mask[g] = 1
+        self._ray_mask = mask
+        self._ray_gid = np.zeros(1, np.int32)  # mj_ray 的输出槽（复用，免得每次分配）
+
+    def _ray(self, x: float, y: float, z: float, ang: float) -> float:
+        """从 (x,y,z) 沿世界系水平方位角 ang 打一条射线，返回撞上东西的距离(m)。
+
+        没撞上（或超出量程）一律返回量程值——**不返回 -1 这种要调用方去理解的哨兵**，
+        对大脑来说"看不到那么远"和"8 米内没东西"是同一件事。
+        ⚠️ flg_static 必须为 1：墙和家具都是静态几何体，设 0 的话什么都打不到（实测全返回 -1）。
+        """
+        vec = np.array([math.cos(ang), math.sin(ang), 0.0])
+        d = mujoco.mj_ray(self.model, self.data, np.array([x, y, z]), vec,
+                          self._ray_mask, 1, -1, self._ray_gid)
+        return C.LIDAR_RANGE_M if d < 0 else min(float(d), C.LIDAR_RANGE_M)
+
+    def _ray_origin(self) -> tuple[float, float, float, float]:
+        """射线的出发点 (x, y, z) 和当前朝向 yaw。高度=机身原点往上一点，跟着机身走——
+        所以四足狗和人形各自量在自己合适的高度上，不用为每种身体单独配。"""
+        x, y, yaw = self.pose()
+        return x, y, float(self.data.qpos[2]) + C.LIDAR_Z_OFFSET, yaw
+
+    def clearances(self) -> dict[str, float]:
+        """八个方向各能直着走多远(m)。这是给大脑的**传感器读数**，和 IMU 朝向一样属于
+        "真实机器人身上本来就有的东西"。⛔ 不含坐标、不含房间名、不是地图。"""
+        x, y, z, yaw = self._ray_origin()
+        return {name: round(self._ray(x, y, z, yaw + math.radians(deg)), 2)
+                for name, deg in LIDAR_BEARINGS}
+
+    def front_clearance(self) -> float:
+        """正前方那个锥形区域里**最近**的障碍距离(m)——撞前刹车用的。
+
+        为什么用锥而不是一条线：一条线会从门框边、桌腿之间穿过去，报"前面很空"，
+        然后肩膀撞上去。取锥内最小值才是"我这么宽的身子往前走会不会碰到"。
+        （报给大脑的 clearances 则是每个方向**一条**线：那个数字的含义是"朝这个方位直着走
+        能走多远"，精确、好理解；两者用途不同，故意不共用。）
+        """
+        x, y, z, yaw = self._ray_origin()
+        n = max(1, C.BRAKE_RAYS)
+        half = math.radians(C.BRAKE_CONE_DEG) / 2.0
+        offsets = [0.0] if n == 1 else [-half + 2 * half * i / (n - 1) for i in range(n)]
+        return min(self._ray(x, y, z, yaw + o) for o in offsets)
+
     def _strip_untrained_joint_effects(self) -> None:
         """清掉 MuJoCo 模型里训练时并不存在的关节阻尼与库仑摩擦。
 
@@ -173,10 +269,7 @@ class HouseSim:
     # ---------------------------------------------------------------- 仿真状态
     def reset(self) -> None:
         """把狗放回出生点、站好、清空历史。"""
-        import importlib.util  # 延迟 import：布局定义住在 Domus 资产库里
-        _spec = importlib.util.spec_from_file_location(
-            "domus_layout", os.path.join(C.DOMUS_ROOT, C.DOMUS_SCENE, "layout.py"))
-        _L = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(_L)
+        _L = domus_scene.layout()
         mujoco.mj_resetData(self.model, self.data)
         x, y = _L.START_POS_XY
         self.data.qpos[0:3] = [x, y, _L.START_HEIGHT]
@@ -376,10 +469,18 @@ class HouseSim:
         t_stall = time.perf_counter()
         t_end = time.perf_counter() + max(0.0, budget_s)
         reason = "budget"
+        braked_at = 0.0          # 刹车时正前方还剩多远（如实报给大脑）
         while time.perf_counter() < t_end:
             if self.fallen():
                 reason = "fallen"
                 break
+            # 撞前刹车：只在**往前走**时管，原地转身不管（转身本来就是贴着东西也能做的事）。
+            # ⛔ 只停不拐：停下来站住，绝不自己侧移绕行——往哪走是大脑的决定。
+            if target_kind == "dist":
+                front = self.front_clearance()
+                if front < C.BRAKE_STOP_M:
+                    braked_at, reason = front, "braked"
+                    break
             x, y, yaw = self.pose()
             acc_yaw += math.atan2(math.sin(yaw - prev_yaw), math.cos(yaw - prev_yaw))
             prev_yaw = yaw
@@ -407,4 +508,5 @@ class HouseSim:
                 "turned_deg": math.degrees(acc_yaw),
                 "fallen": self.fallen(),
                 "reason": reason,
+                "front_m": round(braked_at, 2) if reason == "braked" else None,
                 "pose": {"x": x1, "y": y1, "yaw_deg": math.degrees(yaw1)}}

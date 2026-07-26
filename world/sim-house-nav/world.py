@@ -13,12 +13,10 @@ from __future__ import annotations
 import math
 
 import config as C
-import importlib.util as _ilu
-import os as _os
-_spec = _ilu.spec_from_file_location(
-    "domus_layout", _os.path.join(C.DOMUS_ROOT, C.DOMUS_SCENE, "layout.py"))
-L = _ilu.module_from_spec(_spec); _spec.loader.exec_module(L)   # Domus 场景的布局定义
+from domus_scene import layout
 from sim import HouseSim
+
+L = layout()          # Domus 场景的布局定义（只给 /status 判房间用，绝不进 AWI 观测）
 
 # 世界说明书（= MCP prompt "guidance"）：世界自我介绍怎么跟它打交道。
 # 让大脑保持纯净通用——不为这个世界在大脑里写死任何逻辑，改由世界自述、大脑读了就懂。
@@ -32,15 +30,24 @@ GUIDANCE = (
     "我是「屋子导航」世界：一套住宅里有一台机器人，你通过它的**头部前视相机**看世界。\n"
     "你第一次来，对这套房子一无所知——什么格局、有哪些房间、各在哪个方向，全要你自己看出来。\n"
     "\n"
-    "【你能看到什么】每次感知给你一张它当前看到的画面，外加它的朝向（IMU 罗盘角度）和是否摔倒。\n"
-    "我**不会**告诉你它在什么坐标、在哪个房间、屋子长什么样——这些要你自己看画面判断。\n"
+    "【你能看到什么】每次感知给你一张它当前看到的画面，外加：\n"
+    "· 朝向（IMU 罗盘角度）和是否摔倒；\n"
+    "· `clearance_m` —— 机身上一圈激光测距的读数，八个方向（正前/左前/正左/左后/正后/右后/"
+    "正右/右前）各**沿那条方位线能直着走多远**（米）。这是眼睛之外的另一路感官：画面告诉你"
+    "「那是什么」，测距告诉你「哪边走得通、有多远」。相机只看得见正前方，测距是**四周都有**，"
+    "背后有没有出路只有它知道。\n"
+    "· `front_cone_m` —— 正前方一个**锥形范围**内最近的东西有多远（米）。刹车就是照它判的。\n"
+    "  ⚠️ `clearance_m` 的每个方向是**一条**射线，`front_cone_m` 是正前方一**片**。"
+    "两者差很大，意味着正前方那条线通着、但紧挨两侧有东西。\n"
+    "我**不会**告诉你它在什么坐标、在哪个房间、屋子长什么样——这些要你自己判断。\n"
     "\n"
     "【你能做什么】四个动作，地位并列：**往前走一段**、**原地左转**、**原地右转**、**环视一圈**。\n"
     "前三个让它动起来；环视是一次把四周看清楚——我带着它自转一圈、沿途拍好几张，下一次感知"
     "一起给你，比你自己「转一下看一眼」来回几趟省事得多。\n"
     "它靠学出来的步态**真的迈腿走路**，所以结果不会分毫不差——我会如实告诉你**实际**走了多远、"
-    "转了多少度。撞到墙或家具会走不动，这时我只会告诉你「被挡住了、只走了多少」这个事实，"
-    "接下来怎么办由你决定。\n"
+    "转了多少度。前面太近时我会**主动刹车站住**（真机器人的低层保护，防止磕在家具上），"
+    "并告诉你停在哪、正前方还剩多远；真撞上走不动了我也只报「被挡住了、只走了多少」这个事实。"
+    "⛔ 我**不会**替你绕开障碍——停下来之后往哪走，永远是你的决定。\n"
     "\n"
     "【找一个房间是一件完整的事，一口气做完】不知道目标房间在哪很正常，那就**去找**。\n"
     "**别走几步就停下来问用户**——一直找到为止。两种情况才收尾：**找到了**（判据见下），\n"
@@ -88,8 +95,10 @@ class HouseNavWorld:
                 {
                     "name": "move_forward",
                     "description": (
-                        f"让机器狗朝当前正前方走一段距离（米）。最多一次 {C.MAX_MOVE_M:g} 米。"
-                        "狗用真实步态行走，实际距离会有出入；撞上墙或家具会提前停下，我会如实告诉你。"),
+                        f"让机器人朝当前正前方走一段距离（米）。最多一次 {C.MAX_MOVE_M:g} 米。"
+                        "它用真实步态行走，实际距离会有出入；前面太近会自动刹车站住、"
+                        "撞上墙或家具会走不动，两种情况我都如实告诉你走了多远、前面还剩多远。"
+                        "⛔ 我不会替你绕开障碍——想走多远、走不动了怎么办，都由你决定。"),
                     "kind": "tool",
                     "parameters": {
                         "type": "object",
@@ -106,7 +115,7 @@ class HouseNavWorld:
                 {
                     "name": "turn_left",
                     "description": (
-                        f"机器狗原地向左（逆时针）转一个角度。最多一次 {C.MAX_TURN_DEG:g} 度。"
+                        f"机器人原地向左（逆时针）转一个角度。最多一次 {C.MAX_TURN_DEG:g} 度。"
                         "转完站定，方便你重新看画面。"),
                     "kind": "tool",
                     "parameters": {
@@ -124,7 +133,7 @@ class HouseNavWorld:
                 {
                     "name": "turn_right",
                     "description": (
-                        f"机器狗原地向右（顺时针）转一个角度。最多一次 {C.MAX_TURN_DEG:g} 度。"
+                        f"机器人原地向右（顺时针）转一个角度。最多一次 {C.MAX_TURN_DEG:g} 度。"
                         "转完站定，方便你重新看画面。"),
                     "kind": "tool",
                     "parameters": {
@@ -142,7 +151,7 @@ class HouseNavWorld:
                 {
                     "name": "look_around",
                     "description": (
-                        "原地转一圈环视四周：我会带着狗**逆时针转满 360 度**，沿途等距拍几张照片，"
+                        "原地转一圈环视四周：我会带着它**逆时针转满 360 度**，沿途等距拍几张照片，"
                         f"下一次感知一次性把这一组画面全给你（默认 {C.SWEEP_VIEWS} 张，每张标着"
                         "它是相对你原来朝向左转多少度拍的）。位置不变；转完**大致**回到原来的朝向"
                         "（真实步态转一圈会差几度，我会把实际转了多少如实告诉你）。\n"
@@ -174,6 +183,13 @@ class HouseNavWorld:
         _x, _y, yaw = self.sim.pose()
         state = {
             "heading_deg": round(math.degrees(yaw) % 360.0, 1),   # IMU 罗盘朝向（真机也有）
+            # 激光测距：八个方向各能直着走多远(m)。和罗盘一样是机器人自己身上的传感器读数。
+            # ⛔ 不是地图：它只说"朝这个方位走能走多远"，不说那儿是什么、更不说房间名。
+            "clearance_m": self.sim.clearances(),
+            # 正前方那个锥（不是一条线）里最近的东西 —— 刹车就是照它判的。
+            # 为什么要单给：一条中心线会从门缝里穿过去报"前面 8 米空着"，而肩膀其实要撞上。
+            # 两个数差很大 = 中间那条线通着、两侧有东西（实测出生点旁就有这么一处）。
+            "front_cone_m": round(self.sim.front_clearance(), 2),
             "fallen": self.sim.fallen(),
             "last_action": self._last_event,
         }
@@ -230,6 +246,19 @@ class HouseNavWorld:
         if r["fallen"]:
             self._last_event = "刚才往前走的时候摔倒了"
             return {"ok": False, "message": f"糟糕，走的过程中摔倒了（只挪了 {moved:.2f} 米）。", "data": r}
+        # 撞前刹车：还没碰上就主动停住了（真机低层控制器同款保护）。如实说停在哪、前面还剩多远。
+        if r["reason"] == "braked":
+            if moved < C.BRAKE_ZERO_MOVE_M:      # 一开始就贴着东西，一步都迈不出去
+                self._last_event = f"前面只剩 {r['front_m']:.2f} 米，没法往前走"
+                return {"ok": True,
+                        "message": (f"没往前走——正前方只剩 {r['front_m']:.2f} 米，"
+                                    f"已经贴到安全距离了，这个朝向走不了。"),
+                        "data": r}
+            self._last_event = f"往前走了 {moved:.2f} 米，前面太近主动停住了"
+            return {"ok": True,
+                    "message": (f"往前走了 {moved:.2f} 米就停住了{note}——正前方只剩 "
+                                f"{r['front_m']:.2f} 米，再走就撞上了，我按安全距离停下站住。"),
+                    "data": r}
         # 撞墙/被家具挡住：闭环里已判出"卡住"，或者实际位移远不及目标
         if r["reason"] == "stalled" or moved < capped * C.STUCK_MIN_RATIO:
             self._last_event = f"往前走被挡住，只走了 {moved:.2f} 米"
@@ -259,7 +288,7 @@ class HouseNavWorld:
 
     # ---------------------------------------------------------------- 上帝视角（只给人看）
     def status(self) -> dict:
-        """世界真值：狗在哪、在哪间屋、有没有摔。**绝不进 AWI 观测**，只供人类页与验收使用。"""
+        """世界真值：机器人在哪、在哪间屋、有没有摔。**绝不进 AWI 观测**，只供人类页与验收使用。"""
         x, y, yaw = self.sim.pose()
         room = L.room_at(x, y)
         return {
@@ -274,4 +303,4 @@ class HouseNavWorld:
     def reset(self) -> dict:
         self.sim.reset()
         self._last_event = "（刚被放回出生点）"
-        return {"ok": True, "message": "机器狗已放回出生点。"}
+        return {"ok": True, "message": "机器人已放回出生点。"}
