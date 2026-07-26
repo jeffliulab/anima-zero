@@ -30,6 +30,24 @@ class HouseNavWorld:
         self._sweep: list[tuple[str, bytes]] | None = None   # look_around 拍的那一组，等下次感知取走
 
     # ---------------------------------------------------------------- 能力声明
+    def _turn_drift_note(self) -> str:
+        """转弯会不会顺带往前挪——**按当前这台机器人的实际情况说**。
+
+        四足狗真的原地转（一句话都不用多说）；人形站着不动几乎迈不动腿，必须带一点前进速度，
+        转 90° 会往前挪约 0.3 米。⛔ 不说的话大脑会以为位置没变、对自己在哪的估计就错了——
+        这属于"世界如实报告"的本分，不是可选的贴心提示。
+        """
+        vx = float(self.sim.robot.get("turn_vx") or 0.0)
+        if vx <= 0:
+            return "它是**原地**转，位置不变。"
+        # ⛔ 这里**故意不给具体挪多少米**。按命令值算（前进速度 ÷ 角速度）得 0.6 米，
+        #    而实测只有约 0.31 米——学出来的步态对角速度和线速度的跟踪率不一样，
+        #    拿命令值当结果是本项目明令禁止的一类假数据。
+        #    真实数字每次动作完都会如实报给大脑（`moved_m`），比这里写一个会过期的常数可靠。
+        return ("⚠️ 这台机器人**不能原地转**（站着不动它迈不动腿），转弯时会顺带往前走一小段，"
+                "和真人转身一样——转得越多走得越多。每次转完我都会如实告诉你"
+                "**实际**转了多少度、往前走了多远，按那个数来。")
+
     def capabilities(self) -> dict:
         """告诉大脑这个世界有哪些原子动作。参数用 JSON schema 描述，带默认值与范围说明。
 
@@ -70,8 +88,8 @@ class HouseNavWorld:
                 {
                     "name": "turn_left",
                     "description": (
-                        f"机器人原地向左（逆时针）转一个角度。最多一次 {C.MAX_TURN_DEG:g} 度。"
-                        "转完站定，方便你重新看画面。"),
+                        f"让机器人向左（逆时针）转一个角度。最多一次 {C.MAX_TURN_DEG:g} 度。"
+                        f"{self._turn_drift_note()}转完站定，方便你重新看画面。"),
                     "kind": "tool",
                     "parameters": {
                         "type": "object",
@@ -88,8 +106,8 @@ class HouseNavWorld:
                 {
                     "name": "turn_right",
                     "description": (
-                        f"机器人原地向右（顺时针）转一个角度。最多一次 {C.MAX_TURN_DEG:g} 度。"
-                        "转完站定，方便你重新看画面。"),
+                        f"让机器人向右（顺时针）转一个角度。最多一次 {C.MAX_TURN_DEG:g} 度。"
+                        f"{self._turn_drift_note()}转完站定，方便你重新看画面。"),
                     "kind": "tool",
                     "parameters": {
                         "type": "object",
@@ -288,7 +306,13 @@ class HouseNavWorld:
         if r["fallen"]:
             self._last_event = f"向{side}转的时候摔倒了"
             return {"ok": False, "message": f"糟糕，转身时摔倒了（只转了 {turned:.0f} 度）。", "data": r}
+        moved = r["moved_m"]
         self._last_event = f"向{side}转了 {turned:.0f} 度"
+        if moved >= C.TURN_REPORT_MOVE_M:      # 转弯顺带挪了位置就如实说，别让大脑以为原地没动
+            self._last_event += f"（顺带往前挪了 {moved:.2f} 米）"
+            return {"ok": True,
+                    "message": f"向{side}转了 {turned:.0f} 度{note}，顺带往前挪了 {moved:.2f} 米。",
+                    "data": r}
         return {"ok": True, "message": f"向{side}转了 {turned:.0f} 度{note}。", "data": r}
 
     # ---------------------------------------------------------------- 上帝视角（只给人看）

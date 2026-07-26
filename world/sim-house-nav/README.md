@@ -182,7 +182,6 @@ cd anima-zero/world/sim-house-nav
 | `HOUSENAV_ROBOT` | 空 | 装哪台机器人（`go2`/`g1`）；空=清单里的默认那台 |
 | `HOUSENAV_LOOK_AROUND` | 0 | 开不开环视（v1.0 默认关）|
 | `HOUSENAV_THIRD_PERSON` | 1 | 开不开第三视角跟拍（只给人看）|
-| `HOUSENAV_PORT` | 8112 | 服务端口 |
 
 ⚠️ **刹车距离是算出来的，不是填的**：`车头长度（从模型量出来）+ BRAKE_MARGIN_M`。
 车头有多长是机器人的客观事实（Go2 实测 0.39 m），能算就不该让人填——填的数会在换模型时

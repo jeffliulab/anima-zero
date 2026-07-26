@@ -604,10 +604,18 @@ class HouseSim:
         return self._drive_until(C.WALK_SPEED, 0.0, 0.0, budget, target_kind="dist", target=meters)
 
     def drive_turn(self, degrees: float, sign: int) -> dict:
-        """原地转到**实测**转角达标为止（闭环）。sign: +1 左转 / −1 右转。"""
+        """转到**实测**转角达标为止（闭环）。sign: +1 左转 / −1 右转。
+
+        ⚠️ **有的机器人转弯时必须带一点前进速度**（清单里的 `turn_vx`）——人形站着不动时
+        几乎不转（策略选择站住省力，实测 3.8°/s，转 90° 要 23.6 秒）；带 0.3 m/s 之后
+        变成 28.9°/s、转 90° 要 3.1 秒、转弯半径 0.20 m，和四足狗持平。
+        四足狗的 `turn_vx` 是 0（它原地打转照样迈腿），行为与以前完全一致。
+        代价是人形转 90° 会往前挪约 0.3 米——世界如实把这个位移报给大脑，不假装没动。
+        """
         rad = math.radians(degrees)
+        vx = float(self.robot.get("turn_vx") or 0.0)
         budget = rad / max(1e-6, C.TURN_RATE) * C.CLOSED_LOOP_TIME_FACTOR + C.CLOSED_LOOP_EXTRA_S
-        return self._drive_until(0.0, 0.0, sign * C.TURN_RATE, budget, target_kind="yaw", target=rad)
+        return self._drive_until(vx, 0.0, sign * C.TURN_RATE, budget, target_kind="yaw", target=rad)
 
     def sweep(self, n_views: int) -> tuple[list[tuple[str, bytes]], dict]:
         """原地转一圈，沿途等距拍 n 张照片，回 [(方位名, png), …] + 执行情况。

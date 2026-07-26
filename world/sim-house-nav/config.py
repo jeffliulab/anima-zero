@@ -114,6 +114,10 @@ BRAKE_RAYS = _i("HOUSENAV_BRAKE_RAYS", 5)             # 这个锥里打几条射
 # 说"走了 0.00 米就停住了"听着像它动过，说"这个朝向走不了"才是大脑需要的信息。
 BRAKE_ZERO_MOVE_M = _f("HOUSENAV_BRAKE_ZERO_MOVE_M", 0.05)
 
+# 转弯顺带挪的位移超过这个数(m)就在回话里明说。低于它的是步态自然的一点晃动，
+# 每次都报反而是噪音（四足狗原地转也会有几厘米的漂移）。
+TURN_REPORT_MOVE_M = _f("HOUSENAV_TURN_REPORT_MOVE_M", 0.15)
+
 # ---------------------------------------------------------------- 卡住 / 摔倒判定
 STUCK_MIN_RATIO = _f("HOUSENAV_STUCK_MIN_RATIO", 0.35)  # 实际位移不足目标的这个比例 = 判为"被挡住了"
 FALL_TILT_RAD = _f("HOUSENAV_FALL_TILT_RAD", 0.8)       # 躯干倾斜超过这个角度 = 摔倒（对齐训练侧终止条件）
@@ -157,5 +161,7 @@ CONTROL_DT = _f("HOUSENAV_CONTROL_DT", 0.02)       # 策略推理周期(s)=50Hz�
 REALTIME_FACTOR = _f("HOUSENAV_REALTIME_FACTOR", 1.0)  # 1=按真实时间跑（画面才像直播）；调大=加速
 
 # ---------------------------------------------------------------- 服务
-PORT = _i("HOUSENAV_PORT", 8112)                   # 世界服务端口（避开 8100/8102/8104/8106/8108）
+# ⚠️ 端口**不在这儿**：它由启动命令决定（`uvicorn server:app --port 8112`），和其余四个世界一致。
+#    这里曾有一个 `PORT = 8112`，但没有任何代码读它——设了 `HOUSENAV_PORT` 不会生效，
+#    却在 README 的可调项表里写着"服务端口"。**声称有而实际没有**，2026-07-26 死配置扫描抓到，已删。
 CORS_ORIGINS = [o.strip() for o in _s("ANIMA_CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()]
