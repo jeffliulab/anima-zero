@@ -151,6 +151,69 @@ function Divider({ text }: { text: string }) {
   );
 }
 
+// 笔记区最大高度：够看四五条，再多在里面滚——它是对话的配角，不许把对话挤下去。
+const NOTES_MAX_H = "max-h-40";
+
+// ANIMA 自己的两个状态寄存器，钉在对话顶上（v1.0；v1.0.1 从侧栏挪来）。
+//
+// **为什么在这儿**：它们是「这场对话的状态」，属于当前会话、不属于整个应用——
+// 原先摆在侧栏底部那堆全局项（运行参数 / AWI 仪表盘 / 外观）里，看着像是全局的东西，
+// 而且离它所属的那个会话行隔了半个屏幕。钉在对话上方还有个好处：**不随消息滚走**，
+// 长回合里始终看得见它在干什么。
+//
+// **两个寄存器不是一回事，所以分开显示**：
+//   核心任务 = 一句话「我在干什么」，LLM 自己 set/clear，实测多为「一轮建、做完清」；
+//   笔记本   = 一条条「我发现了什么」，只增删不改写。
+// （曾经给这两样起过一个总称叫「工作记忆」——那个词代码里根本没有，反而让人以为是第三样东西，已弃用。）
+//
+// ⛔ 网页只做显示器、不提供编辑：能被人改的记忆就不是它自己的记忆了。
+// 刷新时机：每轮结束（onSessionsChanged）。回合进行中想看实时的，思考流里 add_note 是逐条显示的。
+function Notebook({ session }: { session: SessionSummary | null }) {
+  const task = session?.core_task ?? "";
+  const notes = session?.notes ?? [];
+  const [open, setOpen] = useState(false);
+  if (!task && !notes.length) return null;
+  return (
+    <div className="border-b border-neutral-800 bg-neutral-900/40 px-3 py-1.5 text-[11px]">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-1.5 text-left text-neutral-500 hover:text-neutral-300"
+        title="ANIMA 自己记的，不随对话变长被遗忘；网页只读。点击展开/折叠"
+      >
+        <span className={`transition-transform ${open ? "rotate-90" : ""}`}>›</span>
+        {task ? (
+          <span className="min-w-0 flex-1 truncate">
+            <span className="text-neutral-600">正在做 </span>
+            <span className="text-neutral-300">{task}</span>
+          </span>
+        ) : (
+          <span className="flex-1 text-neutral-600">笔记本</span>
+        )}
+        {!!notes.length && (
+          <span className="shrink-0 tabular-nums text-neutral-600">📓 {notes.length}</span>
+        )}
+      </button>
+      {open && (
+        <div className={`mt-1.5 space-y-1 overflow-y-auto ${NOTES_MAX_H}`}>
+          {task && (
+            <div className="rounded bg-neutral-800/60 px-2 py-1 leading-snug text-neutral-300">
+              <span className="text-neutral-600">核心任务 </span>
+              {task}
+            </div>
+          )}
+          {!notes.length && <div className="text-neutral-600">（还没记笔记）</div>}
+          {notes.map((n, i) => (
+            <div key={i} className="flex gap-1.5 leading-snug">
+              <span className="shrink-0 tabular-nums text-neutral-600">{i + 1}.</span>
+              <span className="text-neutral-400">{n}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ChatPanel({
   session,
   brains,
@@ -322,6 +385,8 @@ export default function ChatPanel({
           </div>
         )}
       </header>
+
+      <Notebook session={session} />
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
         {!session && !paused && (

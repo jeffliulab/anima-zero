@@ -118,7 +118,7 @@ export default function SessionSidebar({
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="min-h-24 flex-1 overflow-y-auto p-2">
         {sessions.length === 0 && (
           <div className="p-3 text-xs text-neutral-500">还没有会话,点上面新建。</div>
         )}
@@ -154,8 +154,7 @@ export default function SessionSidebar({
         ))}
       </div>
 
-      <div className="space-y-0.5 border-t border-neutral-800 p-2">
-        <WorkingMemory session={sessions.find((s) => s.id === currentId) ?? null} />
+      <div className="shrink-0 space-y-0.5 border-t border-neutral-800 p-2">
         <RuntimeParams />
         <button
           onClick={() => onOpenPanel("awi")}
@@ -181,37 +180,6 @@ export default function SessionSidebar({
         </div>
       </div>
     </aside>
-  );
-}
-
-// ANIMA 的工作记忆（v1.0）：两个状态通道的当前内容，常驻显示。
-// 核心任务 = 一句话「我在干什么」；笔记本 = 一条条「我发现了什么」。两者都由 ANIMA 经内建元工具
-// 亲自增删（set_core_task / add_note / drop_note），⛔ 网页只做显示器、不提供编辑——
-// 能被人改的记忆就不是它自己的记忆了。
-// 刷新时机：每轮结束（ChatPanel 收尾时 onSessionsChanged）。回合进行中想看实时的，
-// 右边思考流里 add_note 的调用是逐条显示的。
-function WorkingMemory({ session }: { session: SessionSummary | null }) {
-  const task = session?.core_task ?? "";
-  const notes = session?.notes ?? [];
-  if (!task && !notes.length) return null;
-  return (
-    <div className="mb-1 border-b border-neutral-800 px-2 pb-2 text-[10px] text-neutral-500">
-      <div className="mb-1 text-neutral-600" title="ANIMA 自己记的，不随对话变长被遗忘；网页只读">
-        工作记忆
-      </div>
-      {task && (
-        <div className="mb-1 rounded bg-neutral-800/50 px-1.5 py-1 leading-snug text-neutral-300">
-          <span className="text-neutral-600">任务 </span>
-          {task}
-        </div>
-      )}
-      {notes.map((n, i) => (
-        <div key={i} className="flex gap-1 leading-snug">
-          <span className="shrink-0 tabular-nums text-neutral-600">{i + 1}.</span>
-          <span className="text-neutral-400">{n}</span>
-        </div>
-      ))}
-    </div>
   );
 }
 
