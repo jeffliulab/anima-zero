@@ -1,0 +1,145 @@
+NOTICE — licensing of ANIMA Zero and the third-party material around it
+NOTICE —— ANIMA Zero 的许可证，以及它周围第三方成分的情况
+
+===============================================================================
+1. This project
+1. 本项目
+===============================================================================
+
+ANIMA Zero is MIT-licensed from v1.1 onwards. See LICENSE.
+
+"Zero" is a series name, not a version number. It means this line stays open source.
+Any future commercial edition will carry a different name and is not covered here.
+
+ANIMA Zero 自 v1.1 起采用 MIT 许可证，见 LICENSE。
+
+"Zero" 是系列名、不是版本号，含义是这条线永远开源。将来若有商业版，会另起名字，
+不在本文件的范围内。
+
+-------------------------------------------------------------------------------
+Licence history — which terms apply to which release
+许可证沿革 —— 哪个版本受哪套条款约束
+-------------------------------------------------------------------------------
+
+  up to and including v0.6.0    Apache-2.0
+  v0.7.0 through v1.0.1         AGPL-3.0 + a separately negotiated commercial licence
+  v1.1 onwards                  MIT
+
+  ≤ v0.6.0            Apache-2.0
+  v0.7.0 – v1.0.1     AGPL-3.0 + 另行商谈的商业授权
+  v1.1 起             MIT
+
+Releases keep the terms they were published under; a tag you already hold is not
+retroactively re-licensed by this change. The commercial dual-licensing offer applied
+only to the AGPL releases and no longer exists — MIT already permits closed-source
+commercial use, so there is nothing left to buy.
+
+已发布的版本保留它发布时的条款；你手上已有的 tag 不会因为这次变更而被追溯改授权。
+商业双授权只适用于那段 AGPL 版本，现已取消——MIT 本身就允许闭源商用，没有什么可买的了。
+
+The copyright in this repository is held by a single author, which is what made the
+relicensing possible without collecting permission from contributors.
+
+本仓的版权归单一作者所有，这正是这次改授权无需向贡献者逐一征求同意的原因。
+
+===============================================================================
+2. Runtime dependencies
+2. 运行时依赖
+===============================================================================
+
+Every package the brain, the worlds and the engine service install at runtime is under
+a permissive licence. This was verified package by package, not assumed:
+
+  backend environment            69 packages, all permissive
+  sim-house-nav world            46 packages, all permissive (includes MuJoCo, ONNX Runtime)
+
+大脑、各世界与引擎 service 在运行时安装的每一个包都是宽松协议。这是逐包核过的，不是假设的：
+
+  后端环境              69 个包，全部宽松
+  sim-house-nav 世界    46 个包，全部宽松（含 MuJoCo、ONNX Runtime）
+
+Up to v1.0.1 there was one exception: python-chess (GPL-3.0), used for chess rules. It
+was replaced in v1.1 by packages/anima-chess, an MIT rules library written for this
+project. See that package's README for why and how.
+
+到 v1.0.1 为止有一个例外：python-chess（GPL-3.0），用于国际象棋规则。v1.1 已把它换成
+packages/anima-chess——一个为本项目写的 MIT 规则库。原因与做法见该包的 README。
+
+===============================================================================
+3. Frontend build-time dependencies
+3. 前端构建期依赖
+===============================================================================
+
+The web app pulls about 150 transitive npm packages. Six are not MIT-style. All six are
+build-time tooling; none of them ends up in the browser bundle, and none of them affects
+the licence of this project's own code.
+
+网页应用会拉进约 150 个间接 npm 依赖，其中六个不是 MIT 类。这六个全部是**构建期**工具，
+一个都不会进浏览器包，也都不影响本项目自身代码的授权。
+
+  @img/sharp-libvips-linux-x64        LGPL-3.0-or-later
+  @img/sharp-libvips-linuxmusl-x64    LGPL-3.0-or-later
+      Native image library behind Next.js image optimisation. Dynamically linked and not
+      modified, which is what the LGPL is designed to allow.
+      Next.js 图片优化背后的原生库。动态链接、未修改——LGPL 设计出来就是允许这种用法的。
+
+  lightningcss                        MPL-2.0
+  lightningcss-linux-x64-gnu          MPL-2.0
+  lightningcss-linux-x64-musl         MPL-2.0
+      The CSS compiler used by Tailwind v4. MPL is file-level copyleft: it would only
+      reach us if we modified lightningcss's own files, which we do not.
+      Tailwind v4 用的 CSS 编译器。MPL 是文件级 copyleft：只有改动 lightningcss 自己的文件
+      才会波及到我们，而我们没有改。
+
+  caniuse-lite                        CC-BY-4.0
+      Browser-support data used by autoprefixer at build time. It is data, not code, and
+      CC-BY asks only for attribution — which this entry provides.
+      构建期给 autoprefixer 用的浏览器支持**数据**。它是数据不是代码，CC-BY 只要求署名
+      ——本条就是那个署名。
+
+===============================================================================
+4. Optional tools that are NOT dependencies
+4. 可选工具（**不是**依赖）
+===============================================================================
+
+eval/ is an offline scorecard generator for finished games. It needs two things this
+project does not install and does not ship:
+
+  python-chess    GPL-3.0    PGN parsing and UCI engine communication
+  Stockfish       GPL-3.0    a strong engine, used as the scoring benchmark
+
+eval/ 是一个对已下完的对局做事后评分的离线工具。它需要两样本项目**不安装、也不分发**的东西：
+
+  python-chess    GPL-3.0    解析 PGN、与 UCI 引擎通信
+  Stockfish       GPL-3.0    强引擎，用作评分基准
+
+Installing them is the user's own decision and creates no obligation for this project.
+anima-chess deliberately implements neither PGN nor UCI, so eval/ cannot use it —
+see eval/README.md.
+
+装不装是使用者自己的决定，不给本项目带来任何义务。anima-chess 有意既不实现 PGN 也不实现
+UCI，所以 eval/ 用不了它——见 eval/README.md。
+
+===============================================================================
+5. Scenes, robot models and policies
+5. 场景、机器人模型与策略
+===============================================================================
+
+The navigation world loads its apartment, its robots and their walking policies from
+alice-house (https://github.com/jeffliulab/alice-house), MIT-licensed, which is a
+separate repository and not vendored here.
+
+导航世界的住宅、机器人及其步态策略来自 alice-house
+（https://github.com/jeffliulab/alice-house），MIT 许可证；那是一个独立仓库，未内置于此。
+
+The Unitree Go2 and G1 models inside alice-house carry Unitree Robotics' own BSD-3-Clause
+style licence; the full text ships next to each model as GO2_MODEL_LICENSE and
+G1_MODEL_LICENSE. They originate from MuJoCo Menagerie
+(https://github.com/google-deepmind/mujoco_menagerie).
+
+alice-house 里的宇树 Go2 与 G1 模型使用宇树科技自己的 BSD-3-Clause 风格许可证；完整文本随每个
+模型一起放在 GO2_MODEL_LICENSE 和 G1_MODEL_LICENSE 里。它们源自 MuJoCo Menagerie
+（https://github.com/google-deepmind/mujoco_menagerie）。
+
+Physics is MuJoCo (https://mujoco.org), Apache-2.0.
+物理引擎是 MuJoCo（https://mujoco.org），Apache-2.0。

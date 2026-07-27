@@ -2,6 +2,7 @@
 name = "sim-house-nav"
 version = "0.1.0"
 description = "ANIMA 世界：三室住宅里的四足机器狗导航（MuJoCo + 学习步态）"
+license = "MIT"        # 与主仓一致（本仓 LICENSE）;世界是仓的一部分,不单独授权
 requires-python = ">=3.10"
 dependencies = [
     "mujoco>=3.2",        # 物理与渲染
@@ -15,7 +16,7 @@ dependencies = [
 ]
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]   # >=77: PEP 639 的 SPDX license 写法
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]

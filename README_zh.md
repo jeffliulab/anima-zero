@@ -11,7 +11,7 @@
 [![MCP](https://img.shields.io/badge/protocol-MCP-6f42c1.svg)](https://modelcontextprotocol.io)
 [![MuJoCo](https://img.shields.io/badge/sim-MuJoCo-orange.svg)](https://mujoco.org)
 [![Version](https://img.shields.io/github/v/tag/jeffliulab/anima-zero?label=version&color=lightgrey)](CHANGELOG.md)
-[![License](https://img.shields.io/badge/license-AGPL--3.0-yellow.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ## 这是什么
 
@@ -26,6 +26,13 @@ ANIMA Zero 是一台具身机器人的脑。它只想、不动手：它决定做
 <br>
 <sub>左边是 ANIMA 唯一拿得到的输入，右边是实际发生的事，而它看不到右边。</sub>
 </div>
+
+### 为什么叫「Zero」
+
+它是系列名，不是版本号。**Zero 的含义是这条线永远开源**——脑叫 ANIMA Zero，身体叫 SOMA Zero；
+将来若有商业版，会另起名字，而不是把这条线关掉。整个项目是 MIT。
+
+有两个名字别搞混：仓库叫 `anima-zero`，Python 包叫 `anima`。
 
 ## 核心能力
 

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]   # >=77: PEP 639 的 SPDX license 写法
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,7 +9,13 @@ name = "anima"
 dynamic = ["version"]
 description = "ANIMA — the brain of an embodied robot: an object standard + registry + a generic agent loop. Connects to one object at a time and operates it through vision-capable LLMs."
 readme = "README.md"
-license = { file = "LICENSE" }
+# SPDX expression, not `{ file = "LICENSE" }` — the file form copies the entire licence
+# text into the package metadata, which is why `pip show` used to print all 661 lines of
+# the AGPL as the "License" field.
+# 用 SPDX 表达式而不是 `{ file = "LICENSE" }`——文件形式会把整篇协议正文抄进包元数据，
+# 这就是过去 `pip show` 会把 661 行 AGPL 全文当作 License 字段吐出来的原因。
+license = "MIT"
+license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.11"
 authors = [
     { name = "Jeff Liu Lab", email = "contact@jeffliulab.com" },
@@ -24,7 +30,6 @@ keywords = [
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",

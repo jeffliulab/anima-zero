@@ -1,6 +1,6 @@
 # 参与贡献 / Contributing
 
-> ANIMA Zero 是一个**开源研究原型**(求职展示 + 教学用,AGPL-3.0 + 商业双授权,见 [LICENSE](LICENSE))。它是一份个人作品集项目,主要由维护者推进;
+> ANIMA Zero 是一个**开源研究原型**(求职展示 + 教学用,MIT,见 [LICENSE](LICENSE))。它是一份个人作品集项目,主要由维护者推进;
 > 但欢迎你提 issue、给反馈、或提交小的修复 / 文档改进。参与前请先读 [`README.md`](README.md)(顶层架构)和
 > [行为准则](CODE_OF_CONDUCT.md)。
 
@@ -39,6 +39,6 @@ clone 时记得 `git clone --recursive` 或事后 `git submodule update --init`�
 开一个 issue 即可;安全 / 风险相关见 [`SECURITY.md`](SECURITY.md)。也可邮件联系维护者(邮箱见
 [`pyproject.toml`](pyproject.toml) 的 `authors`)。
 
-许可证:本项目以 [AGPL-3.0](LICENSE) 发布并提供商业双授权。提交贡献即表示:你同意你的贡献以
-AGPL-3.0 向公众提供,并授予维护者将其一并纳入商业授权版本发行的权利(否则维护者无法对含你
-贡献的整体授予商业许可——双授权项目的通行做法)。
+许可证:本项目以 [MIT](LICENSE) 发布。提交贡献即表示你同意你的贡献同样以 MIT 提供。
+MIT 本身就允许闭源商用,所以不需要额外的贡献者协议,也没有商业双授权那一套。
+许可证沿革(哪个版本受哪套条款约束)见 [NOTICE](NOTICE)。

@@ -11,7 +11,7 @@
 [![MCP](https://img.shields.io/badge/protocol-MCP-6f42c1.svg)](https://modelcontextprotocol.io)
 [![MuJoCo](https://img.shields.io/badge/sim-MuJoCo-orange.svg)](https://mujoco.org)
 [![Version](https://img.shields.io/github/v/tag/jeffliulab/anima-zero?label=version&color=lightgrey)](CHANGELOG.md)
-[![License](https://img.shields.io/badge/license-AGPL--3.0-yellow.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ## Overview
 
@@ -28,6 +28,14 @@ really step; nothing teleports.
 <br>
 <sub>Left: the only input ANIMA gets. Right: what actually happens, which ANIMA never sees.</sub>
 </div>
+
+### Why "Zero"?
+
+It is a series name, not a version number. **Zero means this line stays open source** —
+the brain is ANIMA Zero, the body is SOMA Zero, and any future commercial edition will
+carry a different name rather than closing this one. The whole project is MIT.
+
+Two names to keep straight: the repository is `anima-zero`, the Python package is `anima`.
 
 ## Key features
 
