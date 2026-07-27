@@ -12,7 +12,6 @@
 from __future__ import annotations
 
 import pathlib
-import re
 
 from anima import config
 
@@ -23,6 +22,11 @@ RUN_DOC = ROOT.parent / "anima-zero-个人用详细开发日志" / "运行命令
 # 不住在本仓的世界（各自独立仓/子模块），本文件只核"清单里有没有它"，不核目录。
 EXTERNAL_WORLDS = {"gazebo-chess"}   # 2026-07-08 迁去 soma-zero/sim/
 
+# 住在**包里**的世界（v1.1 起）：随 wheel 分发，好让 pip 装完有个去处。
+# 它不在 world/ 下，所以下面几条按目录核对的检查对它不适用；但"必须进 .env.example 的全集"
+# 这条对它照样成立——那一行是给人看的清单，缺了它就等于没告诉人这个世界存在。
+BUILTIN_WORLDS = {"desk"}            # src/worlds/desk/
+
 
 def _declared_worlds() -> list[str]:
     return [name for name, _url in config.worlds()]
@@ -31,11 +35,11 @@ def _declared_worlds() -> list[str]:
 def test_every_world_has_a_dir_or_is_external():
     """清单里的世界要么在 world/ 下有目录，要么明确登记为外部世界。"""
     for name in _declared_worlds():
-        if name in EXTERNAL_WORLDS:
+        if name in EXTERNAL_WORLDS or name in BUILTIN_WORLDS:
             continue
         assert (ROOT / "world" / name).is_dir(), (
             f"世界「{name}」在 config.worlds() 里，但 world/{name}/ 不存在。"
-            f"外部世界请登记进本文件的 EXTERNAL_WORLDS，别让它静默缺席。")
+            f"外部世界登记进 EXTERNAL_WORLDS、包内世界登记进 BUILTIN_WORLDS，别让它静默缺席。")
 
 
 def test_every_world_is_in_env_example():
@@ -55,10 +59,15 @@ def test_every_local_world_is_guarded_against_awi_drift():
     v0.9 加 sim-house-nav 时漏了这一处——当时五份副本其实没漂，
     但"守卫没覆盖到"正是守卫会失效的方式：它一直绿，而它守的东西根本没被看着。
     """
-    guard = (ROOT / "tests" / "test_awi_mcp_copies.py").read_text(encoding="utf-8")
-    listed = set(re.findall(r'"([\w-]+)"', guard.split("WORLDS = ")[1].split("]")[0]))
+    # Imported rather than text-scraped. The previous version split the guard's source on
+    # the literal string "WORLDS = ", so renaming that variable made this test fail for a
+    # reason that had nothing to do with what it guards.
+    # 改成 import 而不是抠文本。上一版是把守卫的源码按字面量 "WORLDS = " 切开的，
+    # 于是那个变量一改名，这条测试就会因为**和它守的东西毫无关系的原因**变红。
+    from test_awi_mcp_copies import COPIES
+    listed = {path.parent.name for path in COPIES.values()}
     for name in _declared_worlds():
-        if name in EXTERNAL_WORLDS:
+        if name in EXTERNAL_WORLDS or name in BUILTIN_WORLDS:
             continue
         if not (ROOT / "world" / name / "awi_mcp.py").exists():
             continue          # 没有这份副本的世界（如尚未实现的占位）不强求
@@ -70,7 +79,7 @@ def test_every_local_world_is_guarded_against_awi_drift():
 def test_every_world_serves_health():
     """每个本仓世界都得有 /health：网页的在线小圆点靠它，没有就永远显示离线。"""
     for name in _declared_worlds():
-        if name in EXTERNAL_WORLDS:
+        if name in EXTERNAL_WORLDS or name in BUILTIN_WORLDS:
             continue
         server = ROOT / "world" / name / "server.py"
         if not server.exists():
@@ -87,7 +96,7 @@ def test_multi_stream_worlds_mark_awi_visibility():
     （`awi` 不写按 true 处理，所以单路世界零改动；这里只查真的有多路的。）
     """
     for name in _declared_worlds():
-        if name in EXTERNAL_WORLDS:
+        if name in EXTERNAL_WORLDS or name in BUILTIN_WORLDS:
             continue
         server = ROOT / "world" / name / "server.py"
         if not server.exists():

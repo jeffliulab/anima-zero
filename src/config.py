@@ -264,17 +264,34 @@ def worlds() -> list[tuple[str, str]]:
     """可连的世界清单 [(name, url)]。env ANIMA_WORLDS="name=url,name2=url2" 覆盖；没设=全部已知世界。
     在【调用时】读 env（不在 import 时）——调用方通常先 load_dotenv，.env 里的地址才生效。"""
     raw = os.getenv("ANIMA_WORLDS", "").strip()
-    if not raw:
-        # 各世界默认地址(env 可覆盖)：sim-desk :8100、sim-chess :8102、camera :8104、
-        #                              gazebo-chess :8106、sim-house-nav :8112
-        return [
-            ("sim-desk", _s("SIM_DESK_URL", "http://localhost:8100")),
-            ("sim-chess", _s("SIM_CHESS_URL", "http://localhost:8102")),
-            ("camera", _s("CAMERA_URL", "http://localhost:8104")),
-            ("gazebo-chess", _s("GAZEBO_CHESS_URL", "http://localhost:8106")),
-            ("sim-house-nav", _s("SIM_HOUSE_NAV_URL", "http://localhost:8112")),
-        ]
-    return _pairs(raw)
+    if raw:
+        return _pairs(raw)
+
+    # 内置的演示世界永远在清单里：它随 wheel 分发，`anima demo` 起的就是它。
+    out = [("desk", _s("DESK_URL", "http://localhost:8114"))]
+
+    # 仓内那几个世界**只有在那个目录真的存在时**才列出来。
+    #
+    # ⚠️ 这不是"替换全集"（T0 红线）：一个 checkout 里 world/ 全在，所以列出来的和以前一模一样。
+    # 变的只是**用 pip 装的人**——他没有仓库，那五个地址对他而言是五个必然连不上的条目，
+    # 装完第一眼就像坏的。世界在不在，按"它的目录在不在"判断，比按"代码里写死了几个"判断更接近事实。
+    #
+    # ⚠️ Not a replacement of the whole set: in a checkout every world/ directory is there,
+    # so the list comes out exactly as before. What changes is the person who installed with
+    # pip — they have no repository, and those five addresses are five entries that can
+    # never connect. Whether a world exists is better answered by whether its directory
+    # exists than by how many were hardcoded here.
+    repo_worlds = [
+        ("sim-desk", "SIM_DESK_URL", "http://localhost:8100"),
+        ("sim-chess", "SIM_CHESS_URL", "http://localhost:8102"),
+        ("camera", "CAMERA_URL", "http://localhost:8104"),
+        ("gazebo-chess", "GAZEBO_CHESS_URL", "http://localhost:8106"),   # 代码在 soma-zero/sim/
+        ("sim-house-nav", "SIM_HOUSE_NAV_URL", "http://localhost:8112"),
+    ]
+    world_dir = os.path.join(paths.REPO_ROOT, "world")
+    if os.path.isdir(world_dir):
+        out += [(name, _s(env, default)) for name, env, default in repo_worlds]
+    return out
 
 
 # ---- 挂载服务清单（与 worlds() 完全对称；Host 组装 = 标准 MCP：连哪些 server 由大脑自己决定）----

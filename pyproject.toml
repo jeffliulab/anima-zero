@@ -79,7 +79,11 @@ version = { attr = "anima._version.__version__" }
 # 扁平 src/ 映射成 anima 包(不建 src/anima);llm/ 是子包
 [tool.setuptools]
 package-dir = { "anima" = "src" }
-packages = ["anima", "anima.core", "anima.clients", "anima.session", "anima.llm", "anima.presentation"]
+packages = ["anima", "anima.core", "anima.clients", "anima.session", "anima.llm",
+            "anima.presentation",
+            # 内置的演示世界随 wheel 分发——`pip install anima` 之后得有个去处，
+            # 否则第一条命令就因为"你还没起一个世界"而失败。见 src/worlds/desk/world.py。
+            "anima.worlds", "anima.worlds.desk"]
 
 [tool.pytest.ini_options]
 cache_dir = ".cache/pytest"       # 把 .pytest_cache 收进 .cache/

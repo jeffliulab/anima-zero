@@ -18,6 +18,7 @@ import urllib.request
 from .. import config
 from .base import LLM
 from .claude import ClaudeLLM
+from .mock import MockLLM
 from .openai_compat import OpenAICompatLLM
 
 # 默认大脑 / Ollama 探活超时 → 中央 config（env 可覆盖）。
@@ -78,6 +79,11 @@ def _registry() -> dict[str, dict]:
         "qwen3-vl": {"vendor": "Ollama·本地", "label": "Qwen3-VL 8B", "model": qwen_model, "hosting": "local",
                      "build": lambda: OpenAICompatLLM(qwen_model, ollama, "ollama"),
                      "ready": lambda: ollama_ready(qwen_model)},
+        # —— 不需要 key 的演示脑：它**不思考**，只把链路走一遍（见 llm/mock.py）——
+        # 列在最后、标签里直说它不思考：它是给"刚装完想看看能不能跑"用的，不是一个可选的大脑。
+        # ready 恒真是它唯一的意义所在——没有 key 的人也得有一个能跑的东西。
+        "mock": {"vendor": "内置·无需 key", "label": "Mock（不思考，只演示链路）", "model": "mock",
+                 "hosting": "local", "build": MockLLM, "ready": lambda: True},
     }
 
 
