@@ -1,5 +1,10 @@
 """开发自测 CLI：进程内跑完整一轮对话，stdout 打回复 + 该轮的 Session Logs 流水（逐行 JSON）。
 
+> 📌 v1.1 起这件事有了正式命令：**`anima run --say "…" --trace`**（见 `src/cli.py`）。
+>   本模块保留是为了不打断既有脚本和文档里的 `python -m anima.dev_turn` 调用——
+>   删掉它省不下什么，却会让别人手里正在跑的东西无声地坏掉。新写的东西请用 `anima run`。
+
+
 不依赖后端进程（只要目标世界/服务在跑），是 pytest（全假）与真网页（全真）之间的自测钩子：
     ./.venv/bin/python -m anima.dev_turn --world sim-chess --say "该你了，你执黑" --brain gpt-4.1-nano
     ./.venv/bin/python -m anima.dev_turn --say "你好"                    # 不连世界=纯聊天

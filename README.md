@@ -100,7 +100,28 @@ eval/             reproducible scoring from game logs
 
 ## Installation
 
-Three processes run together: a world, the backend, and the web app.
+```bash
+pip install anima
+anima demo
+```
+
+That starts a world, connects a brain, and drops you into a conversation. No API key, no
+node, nothing else to install. The brain it uses does not think — it calls one tool and
+reports back — because the point of the demo is to show you the loop, not to impress you.
+Add a key and `anima demo --brain gpt-5.4` to see the same loop with a brain that does.
+
+```
+anima demo                    one command, something happens
+anima chat --world W          a conversation in the terminal
+anima run --say "..."         one turn, scripted
+anima serve                   the backend API, for the web app
+anima world add NAME URL      register a world — and review it before approving
+anima doctor                  what is configured and what is reachable
+```
+
+### The full setup
+
+Three processes: a world, the backend, and the web app.
 
 ```bash
 # 1. a world — house navigation, pure MuJoCo, no ROS and no conda needed.
@@ -111,11 +132,26 @@ cd world/sim-house-nav && pip install -e . && uvicorn server:app --port 8112
 # 2. the backend
 pip install -e .
 cp .env.example .env          # add an API key, or point it at a local Ollama
-uvicorn anima.presentation.server:app --port 8000
+anima serve                   # or: uvicorn anima.presentation.server:app --port 8000
 
 # 3. the web app
 cd frontend && npm install && npm run dev
 ```
+
+### Connecting a world is a trust decision
+
+A world is a separate process reached over a URL, and its own description of itself lands
+in the brain's system prompt. So a world's tools and guidance do not reach the brain until
+you have looked at them and said yes:
+
+```bash
+anima world add myworld http://localhost:9000   # prints what it declares, then asks
+```
+
+Approval is bound to the content, not the name: if the world comes back different, you are
+asked again with a note on what changed. While developing your own world, where that
+happens on every edit, set `ANIMA_TRUST_ALL=1`. See [SECURITY.md](SECURITY.md) for what
+this does and does not protect against.
 
 ## Running the demo
 

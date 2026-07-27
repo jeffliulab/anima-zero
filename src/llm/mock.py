@@ -62,8 +62,10 @@ from .base import LLMReply, ToolCall
 # they are looking at, in the place they are actually looking.
 # 每条文字回复都带上。一个从截图里点进来的用户需要**在他真正在看的地方**被告知他看到的是什么。
 DISCLAIMER = (
+    # ⚠️ 措辞不能假设界面：同一段话会出现在网页里、也会出现在 `anima chat` 的终端里。
+    #    说"右边的流水""上面的下拉"在终端里就是错的。
     "（这是 mock 大脑：它不看画面、不读你说的话、也不做判断，只是把链路走一遍给你看。"
-    "想让它真的思考，在 .env 里配一个 API key，再到上面的下拉里换一个大脑。）"
+    "想让它真的思考，配一个 API key 再换一个大脑。）"
 )
 
 _ZERO = {"string": "", "number": 0, "integer": 0, "boolean": False,
@@ -112,4 +114,4 @@ class MockLLM:
                 f"这个世界的 {len(tools)} 个动作都会改变它，而我是瞎选的——所以我什么都不调。"
                 f"换一个真的大脑来，它才有资格决定动哪个。\n" + DISCLAIMER))
         return LLMReply(text=f"链路跑通了：我调了「{safe.name}」，世界回了结果，"
-                             f"你可以在右边的流水里看到每一步。\n" + DISCLAIMER)
+                             f"每一步都留在了这个会话的流水里。\n" + DISCLAIMER)

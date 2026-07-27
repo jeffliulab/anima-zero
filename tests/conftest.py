@@ -16,6 +16,36 @@ _SIM_CHESS = os.path.join(_HERE, "..", "world", "sim-chess")
 if _SIM_CHESS not in sys.path:
     sys.path.insert(0, os.path.abspath(_SIM_CHESS))
 
+# ---------------------------------------------------------------------------------------
+# Cut the developer's `.env` out of the test run — at module scope, because the leak
+# happens at import time, before any fixture can run.
+#
+# `presentation/server.py` calls `load_dotenv(paths.ENV_FILE)` when it is imported, which
+# copies the developer's local configuration into `os.environ` for the whole process. Any
+# test that imports the backend, directly or through something else, then runs against
+# whatever that person happens to have configured.
+#
+# That was invisible for as long as `.env` only held API keys and addresses. It stopped
+# being invisible the moment it held a variable that changes behaviour: adding
+# `ANIMA_TRUST_ALL=1` for local development made five security tests pass for the wrong
+# reason — they were asserting that an unapproved world is refused, and it was being
+# allowed. Tests that quietly agree with whatever is on the machine are worse than no
+# tests, so the file is taken out of reach entirely.
+#
+# 把开发者的 `.env` 从测试运行里切出去——放在模块层，因为泄漏发生在 **import 时**，
+# 早于任何夹具能运行的时刻。
+#
+# `presentation/server.py` 在被 import 时会 `load_dotenv(paths.ENV_FILE)`，把开发者的本地配置
+# 灌进整个进程的 `os.environ`。于是任何直接或间接 import 后端的测试，跑的都是**那个人碰巧配了什么**。
+#
+# 只要 `.env` 里放的还只是 API key 和地址，这件事就一直看不见。它不再看不见，是在 `.env` 里出现了
+# 一个**会改变行为**的变量那一刻：为本地开发加上 `ANIMA_TRUST_ALL=1` 之后，五条安全测试开始
+# **因为错误的原因通过**——它们断言的是"未批准的世界会被拒绝"，而实际发生的是它被放行了。
+# 一个会默默附和本机配置的测试套件，比没有测试更糟，所以干脆把这个文件拿到够不着的地方。
+from anima import paths  # noqa: E402
+
+paths.ENV_FILE = os.path.join(_HERE, "this-env-file-does-not-exist")
+
 
 @pytest.fixture(autouse=True)
 def _isolated_anima_home(tmp_path, monkeypatch):

@@ -49,6 +49,11 @@ dependencies = [
     "langgraph>=1.0",   # 主循环骨架(StateGraph);节点内脏仍是自有 LLM 层/MCP 桥,不用 LangChain 抽象
 ]
 
+[project.scripts]
+# Without this, `pip install anima` gives you a library and no way to start anything.
+# 没有这一段，`pip install anima` 装到的是一个库、以及"无从启动任何东西"。
+anima = "anima.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "ruff>=0.4",

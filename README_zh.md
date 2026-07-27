@@ -90,7 +90,27 @@ eval/             从对局日志出可复现的记分卡
 
 ## 安装
 
-三个进程一起跑：一个世界、后端、网页。
+```bash
+pip install anima
+anima demo
+```
+
+它会起一个世界、接上一个大脑，然后让你直接跟它对话。**不需要 API key，不需要 node，不用再装别的。**
+它用的那个大脑不思考——只调一个工具、把结果报回来——因为 demo 的意义是让你看见那个循环，不是让你惊艳。
+配好 key 之后 `anima demo --brain gpt-5.4`，同一个循环换一个真会想的大脑。
+
+```
+anima demo                    一条命令，看它跑起来
+anima chat --world W          在终端里对话
+anima run --say "..."         跑一轮就退出，可脚本化
+anima serve                   起后端 API（网页连它）
+anima world add 名字 地址      登记一个世界——先看清它声明了什么，再决定批不批
+anima doctor                  什么配好了、什么连得上
+```
+
+### 完整搭一套
+
+三个进程：一个世界、后端、网页。
 
 ```bash
 # 1. 起一个世界 —— 住宅导航，纯 MuJoCo，不需要 ROS 也不需要 conda。
@@ -101,11 +121,24 @@ cd world/sim-house-nav && pip install -e . && uvicorn server:app --port 8112
 # 2. 起后端
 pip install -e .
 cp .env.example .env          # 填一个 API key，或者指向本地 Ollama
-uvicorn anima.presentation.server:app --port 8000
+anima serve                   # 或者：uvicorn anima.presentation.server:app --port 8000
 
 # 3. 起网页
 cd frontend && npm install && npm run dev
 ```
+
+### 接一个世界，是一次信任决定
+
+世界是通过 URL 连上的独立进程，而**它对自己的说明会进入大脑的系统提示词**。所以在你亲眼看过并点头之前，
+一个世界的工具和说明书不会到达大脑：
+
+```bash
+anima world add myworld http://localhost:9000   # 先把它声明的东西摊开给你看，再问你批不批
+```
+
+审批绑定在**内容**上、不绑名字：世界回来时长得不一样了，会带着"变了什么"重新问你一遍。
+自己开发世界时每改一次都会触发，那时设 `ANIMA_TRUST_ALL=1`。
+这道防线**保护什么、不保护什么**，见 [SECURITY.md](SECURITY.md)。
 
 ## 跑一遍 demo
 
