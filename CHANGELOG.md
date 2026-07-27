@@ -1,133 +1,398 @@
+<div align="center">
+
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
+<a href="CHANGELOG_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
+
+</div>
+
 # Anima Zero Changelog
 
-ANIMA Zero 版本记录。**版本记录要点：保持简洁，每版只说重点，比如具体改了什么。**（格式参考 [Keep a Changelog](https://keepachangelog.com)）
+Release notes for ANIMA Zero. **Keep them short: per version, only what actually changed.**
+(Format after [Keep a Changelog](https://keepachangelog.com).)
+
+## [1.1.0] — 2026-07-27
+
+Main: from a portfolio repository into a project other people can install, connect to and
+write worlds against — the whole repository relicensed to **MIT** (by writing our own way out
+of the last non-permissive dependency), `pip install anima-zero` followed by a real `anima`
+command and a web app, **a world treated as an untrusted remote party**, and AWI turned into a
+written specification with a checker.
+
+Features:
+
+1. **Relicensed to MIT; the commercial dual-licensing offer is retired.** What stood in the
+   way was GPL-licensed python-chess, so we **wrote our own rules library**
+   (`packages/anima-chess` — bitboards and Zobrist hashing, MIT): perft matches the published
+   values on all six standard positions, and a midgame depth-3 search takes 1.27 s against the
+   advisory's 1.5 s cap. ⚠️ It is **two to four times slower** than python-chess — enough for
+   that one purpose and not for anything deeper; the cause and the fix are logged as ROADMAP
+   R5. The test suite passes with python-chess uninstalled. All 69 dependencies audited: none
+   non-permissive.
+2. **It installs and it runs**: `pip install anima-zero` gives you the `anima` command
+   (`demo` / `chat` / `run` / `serve` / `doctor` / `world` / `conformance`). The web app is
+   statically exported and **travels inside the wheel**, so `anima serve` hands you an
+   interface on a machine with no node. A **built-in desk world** and a **mock brain needing no
+   key** ship with it, so `anima demo` shows the whole loop in one command: frame, decision,
+   tool call, result. ⚠️ Releasing is now coupled to building the UI (`build_ui.py` before
+   `python -m build`), and `anima serve` prints the web app's build timestamp — because
+   **shipping a package with a stale interface is something nobody would ever notice.**
+3. **⭐ A world is treated as an untrusted remote party.** A world's guidance is joined into
+   the brain's **system prompt** and its tool descriptions become the **tool sheet** — all of it
+   text somebody else wrote. So: a world's content **does not reach the brain until you have
+   read it and approved it** (it still lists, and still shows whether it is online); approval
+   **binds to a manifest hash** (SHA-256 over the URL, every tool's name, kind, description and
+   schema, and the guidance in full), and **a changed manifest asks you again and tells you what
+   changed** — which is what defeats a rug pull; guidance is **fenced** before entering the
+   system prompt and labelled as material rather than instruction, with the fence markers
+   stripped from the world's own text, and length caps applied. ⛔ The **safety gate was also
+   taken back from the world**: the orchestrator used to consult it only for tools the world
+   had not marked read-only, so a world could **skip the gate entirely** by annotating a
+   destructive tool as `readOnlyHint: true`. Every action now goes to the gate, with `kind` as
+   one input to the decision. Harmless while the gate stood open in simulation, and a hole the
+   day it is closed for real hardware. `ANIMA_TRUST_ALL=1` is a development escape hatch. The
+   whole threat model is pinned by a malicious-world fixture (`tests/test_world_trust.py`).
+   ⚠️ **Prompt injection is mitigated, not solved** — see ROADMAP R3.
+4. **AWI became a specification**: `docs/awi-spec-v1.md` (English and Chinese) states every
+   channel, what is required against what is recommended, and what the host does with what a
+   world sends — including a section on **`kind` being a declaration rather than a guarantee**.
+   With it comes `anima conformance <url>`, which connects to a world, exercises every channel
+   and reports each check against the section it comes from — including the **multi-camera
+   ordering** check, which earns its place because image blobs carry no names, their order is
+   the only thing tying a picture to a camera, and a mismatch is silent everywhere else.
+   ⛔ It **states its own limits every time**: whether the state leaks a god's-eye view, whether
+   `kind` matches behaviour, whether guidance is honest — no automated check settles those. A
+   person does, at approval time.
+5. **Language, split by audience**: everything a model reads — system prompt, tool
+   descriptions, state blocks, every world's guidance — is now **English in a single version**,
+   collected in `src/prompts.py`, ending with one line asking it to reply in the user's
+   language. Documents people read come in both. The CLI and the web app default to English.
+   ⚠️ **That is a behaviour change and the benchmark that would settle it has not been re-run** —
+   the five-room navigation comparison, before and after, is an acknowledged debt recorded as
+   ROADMAP R2. Until it exists, "English is better here" is a hypothesis. If it turns out
+   worse, the rollback point is one file.
+6. **Machine guards, and debts on the record**: `scripts/selfcheck.py` turns four house rules
+   that lived only in a local notebook into CI guards (the orchestrator stays free of
+   task-specific logic / no dead config / no unregistered placeholders / the version agrees in
+   three places), and **every one was negative-tested** — the dead-config guard was broken in
+   its first version and would have stayed green forever untested. New `ROADMAP.md` (both
+   languages): **not a wish list, but the mirror of measured failures and deliberate debts**,
+   each numbered — R1 confirmation bias, R2 the unmeasured prompt language switch, R3 injection
+   not solved, R4 four high-severity CVEs in the frontend's npm tree, R5 the chess library's
+   speed.
+
+**Measured limits, recorded honestly**: cross-room navigation is **unchanged** from v1.0 — five
+targets, two right, two wrong, one unfinished. Nothing in this release aimed at it. This
+version was about whether anyone else can use the project, not about how clever it is.
+ROADMAP R1 is what aims at the rest.
 
 ## [1.0.1] — 2026-07-26
 
-Main: 修 v1.0 那个面板的两处毛病——它没限高，把侧栏的会话列表整个挤没了；而且摆错了地方。
+Main: fixes two faults in the v1.0 panel — it had no height limit and squeezed the session
+list out of the sidebar entirely, and it was in the wrong place.
 
-1. **限高 + 可折叠**：笔记条数上不封顶（默认容量 20 条），不限高实测 12 条就把会话列表挤成一条缝。
-2. **挪到对话区顶上**：它是**当前会话**的状态，原先却摆在侧栏底部那堆**全局**项里
-   （运行参数 / AWI 仪表盘 / 外观），看着像全局的东西、还离所属的会话行隔了半个屏幕。
-   钉在对话上方另有一个好处：**不随消息滚走**，长回合里始终看得见它在干什么；
-   折叠时只占一行并兼作状态条（有核心任务就直接显示「正在做 ⋯」）。
-3. **弃用「工作记忆」这个总称**：那个词代码里根本没有，反而让人以为核心任务和笔记本是同一样东西。
-   现在按真实的两样分开显示——**核心任务**（我在干什么，一句话，靠改写更新）与
-   **笔记本**（我发现了什么，一条条，靠增删更新）。
+1. **Height-capped and collapsible**: the number of notes is unbounded (default capacity 20),
+   and without a cap twelve notes measurably crushed the session list to a sliver.
+2. **Moved above the conversation**: it is the state of the **current session**, but it sat at
+   the bottom of the sidebar among the **global** items (runtime parameters, AWI dashboard,
+   appearance) — looking global, and half a screen away from the session it belonged to.
+   Pinning it above the conversation also means **it does not scroll away**, so through a long
+   turn you can always see what it is doing; collapsed it takes one line and doubles as a
+   status bar (with a core task it simply shows "working on ⋯").
+3. **Dropped "working memory" as an umbrella term**: the phrase appears nowhere in the code and
+   made people think the core task and the notebook were one thing. They are now shown as what
+   they are — the **core task** (what I am doing, one sentence, updated by rewriting) and the
+   **notebook** (what I have found, entry by entry, updated by adding and removing).
 
 ## [1.0.0] — 2026-07-26
 
-Main: 让机器人**换得了身体、记得住路、撞不上家具**——世界从"一只狗"变成"可以换身体"（新增宇树 G1 人形，为它专门训了一个会转弯的策略），大脑多了一个通用的工作记忆，AWI 多了一条正式通道。同时**把喂给大脑的答案清单整段删掉**：这个世界要考的就是"自己看画面认出这是哪间屋"，喂答案测出来的分数没有意义。
+Main: the robot can **change bodies, remember its way, and not walk into furniture** — the
+world went from "a dog" to "a body you can swap" (a Unitree G1 humanoid was added, with a
+turning policy trained specifically for it), the brain gained a general working memory, and AWI
+gained a formal channel. At the same time **the list of answers fed to the brain was deleted
+outright**: what this world tests is working out which room you are in by looking, and a score
+obtained by handing over the answers means nothing.
 
 Features:
 
-1. **一个世界，两副身体**：`sim-house-nav` 不再为四足狗写死任何东西——模型、策略、相机、出生高度、力矩怎么发，全从场景资产库的机器人清单读（⛔ 两台的力矩发法**相反**：四足显式 PD、人形隐式 PD，搞反当场倒）。人形 29 自由度、眼高 1.25 m，同一间屋子和四足看到的完全不是一回事。为它**专门训了一个会转弯的策略**（把偏航命令范围从 ±0.2 放到 ±0.8，10000 迭代）——⚠️ 它仍**不能原地转**（站着不动策略选择省力），转弯要带 0.3 m/s 前进速度、转 90° 会往前挪 0.6~0.8 米，世界把这个位移**如实报给大脑**。
-2. **AWI 新增「世界配置」通道**：世界**声明**自己有哪些可配置项（新 MCP 资源 `anima://config`），用户经**带外 HTTP** 改它——改配置是人的动作，大脑只被告知"你现在是什么身体"，就像真机器人知道自己是什么身体。⛔ 提示词明说"你改不了"：大脑没有对应工具，暗示它能改只会让它去调不存在的东西。顺带修掉 v0.9 那个坑（能力清单在首次握手时缓存，世界加了新工具而后端没重启就永远上不了工具单）——网页加了「重新握手」按钮。
-3. **笔记本寄存器 + 拿掉答案清单**：核心任务管"我在干什么"（一句话），新增的笔记本管"我发现了什么"（一条条增删），两个都常驻注入、不随对话变长滑走；三种拒绝（空/超长/记满）都明说原因，**绝不静默截断或丢弃**。同时世界说明书删掉十二个房间的家具清单与标志物对照表（1180→844 字）。⚠️ **实测：拿掉答案后分数没变**（五个目标 2 对）——说明那份清单本来就没起作用；而笔记本第一次让病因看得见了：同一扇门后面的东西，它会说成自己正在找的那个房间（确认偏误）。
-4. **激光测距 + 撞前刹车 + 第三视角**：八向测距进感知（真机 Go2 头上就有 L1 激光雷达），往前走时太近会主动刹车站住并如实报还剩多远——⛔ 只停不拐，往哪走永远是大脑的决定。第三视角跟拍**只给人看**：`/streams` 每一路标 `awi`，网页据此把传感区分成两块，把跟拍摆在「ANIMA 看到的画面」标题下就是撒谎。红线由测试钉着。
-5. **世界接入契约模板化**（`world/README.md`）：讲清 AWI 与带外两条线，判据一句话「给大脑还是给人」；配 6 条机器守卫查注册完整性（世界有没有进 `.env.example`、有没有进防漂移名单、多路直播有没有标 `awi`…）。
+1. **One world, two bodies**: `sim-house-nav` hard-codes nothing for the quadruped any more —
+   model, policy, camera, spawn height and how torque is sent all come from the asset library's
+   robot manifest (⛔ the two are **opposite**: explicit PD for the quadruped, implicit PD for
+   the humanoid; get it backwards and it falls immediately). The humanoid has 29 degrees of
+   freedom and an eye height of 1.25 m, and sees a completely different room from the same
+   place. A **turning policy was trained specifically for it** (yaw command range widened from
+   ±0.2 to ±0.8, 10,000 iterations) — ⚠️ it still **cannot pivot on the spot** (standing still,
+   the policy takes the cheaper option), so turning carries 0.3 m/s of forward speed and a 90°
+   turn moves it 0.6–0.8 m along. The world **reports that displacement honestly**.
+2. **A new AWI channel for world configuration**: a world **declares** what it can be configured
+   with (the new MCP resource `anima://config`), and a person changes it over **out-of-band
+   HTTP** — changing configuration is a human action, and the brain is only told what body it
+   now has, the way a real robot knows what body it is. ⛔ The prompt says plainly that it
+   cannot change this: the brain has no tool for it, and implying otherwise only makes it reach
+   for something that does not exist. This also fixed the v0.9 trap where capabilities are
+   cached at the first handshake, so a world that gained a tool without a backend restart never
+   got it onto the tool sheet — the web app now has a re-handshake button.
+3. **A notebook register, and the answer key removed**: the core task holds "what I am doing"
+   (one sentence) and the new notebook holds "what I have found" (entries added and removed).
+   Both are injected permanently and do not slide out as the conversation grows. All three
+   refusals — empty, too long, full — say why, and **never truncate or discard silently**. At
+   the same time the world's guidance lost its furniture inventory and landmark table for
+   twelve rooms (1180 → 844 characters). ⚠️ **Measured: removing the answers changed nothing**
+   (two of five targets, as before) — so that list had never been doing any work. And the
+   notebook made the actual cause visible for the first time: it describes whatever is behind a
+   door as the room it is currently looking for. Confirmation bias.
+4. **Laser ranging, braking, and a chase camera**: eight-way ranging enters perception (a real
+   Go2 carries an L1 lidar on its head), and walking forward it brakes and stands when it gets
+   too close, reporting honestly how much room is left — ⛔ it stops, it does not steer; where to
+   go next is always the brain's decision. The third-person chase view is **for humans only**:
+   `/streams` marks each view with `awi`, the web page splits the sensor panel accordingly, and
+   filing the chase view under "what ANIMA sees" would be a lie. Tests pin the line.
+5. **The world contract became a template** (`world/README.md`): the two lines, AWI and
+   out-of-band, and one question to tell them apart — is this for the brain or for a person?
+   Plus six machine guards checking registration completeness (is the world in `.env.example`,
+   is it in the drift-guard list, do multi-view worlds mark `awi`, …).
 
-**能力边界（实测，如实登记）**：短距离导航稳（四足「去厨房」10 步 41 秒、「去客厅」9 步 32 秒，人形同样两处也都对）。但**跨房间导航仍不可靠**：五个目标 2 对 2 错 1 未收尾，两种身体一样。⭐ 这一版**证伪了 v0.9 的病因假设**——原以为是"低视角下厨房和卫生间长得像"，而人形在 1.25 m 能清楚看见灶台和抽油烟机，**照样说这是洗手间**。所以不是看不见，是确认偏误：它会对着同一扇门编出符合当前目标的说辞。下一版的靶子在判据侧（先描述后分类 / 收紧「看见就算到」），不在感知细节。走通的案例见 `world/sim-house-nav/实测记录.md`。
+**Measured limits, recorded honestly**: short-range navigation is solid (quadruped "go to the
+kitchen" in 10 steps / 41 s, "go to the living room" in 9 steps / 32 s; the humanoid got both
+too). But **cross-room navigation is still unreliable**: of five targets, two right, two wrong,
+one unfinished — the same for both bodies. ⭐ This release **disproved v0.9's hypothesis about
+the cause**: the suspicion was that a kitchen and a bathroom look alike from a low viewpoint,
+but the humanoid at 1.25 m sees the hob and the range hood clearly and **still calls it a
+bathroom**. So it is not that it cannot see. It is confirmation bias: facing the same doorway,
+it composes whatever story fits the room it is hunting for. The next release aims at the
+acceptance criterion (describe first and classify second; tighten what "I can see it, so I have
+arrived" may mean), not at perception. Runs that did work are in
+`world/sim-house-nav/实测记录.md`.
 
 ## [0.9.0] — 2026-07-25
 
-Main: 新世界 **sim-house-nav**——一只宇树 Go2 四足机器狗在住宅里，ANIMA 只能看它头上的前视相机，靠认家具判断身在何处、指挥它走过去；配套把「一个回合」的口径从**一手一停**放宽到**一件事做完**，并给长回合配上刹车。
+Main: a new world, **sim-house-nav** — a Unitree Go2 quadruped in a house, where ANIMA sees only
+the forward camera on its head and must judge where it is from the furniture and direct it
+there. Along with it, "a turn" was widened from **one move and stop** to **one thing, finished**,
+and long turns got a brake.
 
 Features:
 
-1. **新世界 sim-house-nav（:8112）**：MuJoCo 里跑真实四足步态——三个导航原语（前进/左转/右转）被翻译成速度指令 `(vx,vy,wz)` 喂给训练出来的策略，狗真的迈腿走，不是瞬移。原语**闭环执行**（学出来的步态跟踪速度只有约 83%/62%，边走边量、达标才停），撞墙如实报「被挡住了」。观测只给**画面 + IMU 朝向 + 有没有摔**，⛔ 不给坐标、不给房间名——房间必须靠看画面认出来。场景与机器人模型外置到独立资产库 **Domus**（`HOUSENAV_DOMUS_ROOT/SCENE` 挂载）。
-2. **一个回合 = 一件事**（修订 0.8 第 1 条的口径，不是推翻纪律）：一轮什么时候收尾**由 ANIMA 自己出文字决定**；步数上限 8 → 60、新增单轮墙钟上限 900 秒，两者退化为**安全带而非节拍器**。下棋的「一件事」仍是一手棋（2-6 步自然收尾，行为不变），导航的「一件事」是找到目标房间（几十步，一路跑到收敛）。⛔ v0.7 那个「一句话下完整盘」的废案仍是废案——那是把**多件事**塞进一个回合，与步数上限无关。
-3. **长回合的刹车与观察窗**：新增会话级叫停（`POST /api/sessions/{sid}/interrupt`），网页「发送」在生成期间就地变「停止」；叫停接进动作等待期，点了不用干等机器狗把这步走完。撞闸=礼貌停顿（核心任务留在册、说「继续」可续），三种原因各说各的话。网页思考区限高滚动 + 步号 + 一键展开/折叠，左下角常驻核心运行参数（值与说明现读自后端配置，前端不写死）。
-4. **让它记得自己在干什么**：系统提示与世界说明书补上「一件事一口气做完」「多步任务第一件事就是登记核心任务」「边做边把进度写回寄存器」——长回合里早先看到的画面会滑出上下文，只有这个寄存器不会丢。
+1. **The new sim-house-nav world (:8112)**: a real quadruped gait in MuJoCo — three navigation
+   primitives (forward, left, right) are translated into velocity commands `(vx, vy, wz)` fed to
+   a trained policy, so the dog genuinely steps rather than teleporting. The primitives execute
+   **closed loop** (a learned gait tracks a velocity command at only about 83% and 62%, so it
+   measures as it goes and stops when it has arrived) and report honestly when a wall blocks it.
+   The observation carries **the picture, IMU heading and whether it has fallen** — ⛔ no
+   coordinates and no room names; rooms have to be recognised by looking. Scenes and robot
+   models moved out into a separate asset library, mounted by configuration.
+2. **A turn is one thing** (a revision of 0.8's item 1, not a repeal of the discipline): when a
+   turn ends is **decided by ANIMA producing prose**. The step limit went from 8 to 60 and a
+   900-second wall-clock limit was added, both demoted to **seatbelts rather than metronomes**.
+   In chess, "one thing" is still one move (2–6 steps, ending naturally, behaviour unchanged);
+   in navigation it is finding the target room (tens of steps, run to convergence). ⛔ v0.7's
+   rejected "play a whole game from one sentence" is still rejected — that was **several things**
+   crammed into one turn, which has nothing to do with the step limit.
+3. **A brake and a window for long turns**: session-level interruption
+   (`POST /api/sessions/{sid}/interrupt`), with the web app's Send turning into Stop while
+   generating. Interruption reaches into the wait for an action, so pressing it does not mean
+   waiting for the dog to finish the step. Hitting a limit is a polite pause (the core task
+   stays on the register and "continue" resumes), and each of the three reasons says its own
+   piece. The thinking panel got a scrolling height cap, step numbers and expand/collapse, and
+   the core runtime parameters sit permanently at the bottom left, read from the backend rather
+   than written into the frontend.
+4. **Making it remember what it is doing**: the system prompt and the world guidance gained
+   "finish one thing in one go", "for a multi-step task, register the core task first" and
+   "write progress back to the register as you go" — in a long turn, frames seen earlier slide
+   out of context, and this register is the only thing that does not.
 
-**能力边界（实测，如实登记）**：短距离导航能成——「去厨房」7 步 45 秒找到并认出。但**跨房间导航尚不可靠**：换四个目标房间各跑一次，1 对 3 错（认错房间 2 次、半路停下 1 次），长距离找路会打转。低视角下厨房与卫生间难以区分（都是「台面 + 柜门 + 白色面板」）。第四个原语 `look_around`（环视）已实现但**零实测**——大脑侧能力清单在首次握手时缓存，实验期间它一直没上工具单。详见开发日志。
+**Measured limits, recorded honestly**: short-range navigation works — "go to the kitchen",
+found and identified in 7 steps / 45 s. But **cross-room navigation is not yet reliable**: four
+target rooms, one run each, one right and three wrong (two misidentified rooms, one stopped
+halfway), and it goes in circles over longer distances. From a low viewpoint the kitchen and
+the bathroom are hard to tell apart (both are "worktop, cupboard doors, white panel"). The
+fourth primitive `look_around` was implemented but has **never been measured** — the brain
+caches capabilities at the first handshake, and it never reached the tool sheet during the
+experiments.
 
 ## [0.8.0] — 2026-07-25
 
-1. 明确每回合最大步数默认为 8，现阶段只采用回合制，暂时不考虑长循环。
-2. 中央配置迁移 pydantic-settings：类型校验 fail-fast、每个参数带说明与下限约束；env 变量名与 `config.*` 消费接口零变化，`.env` 现对全部参数生效（旧版仅对世界/服务清单生效）。
+1. The maximum steps per turn is stated as 8 by default. For now the system is strictly
+   turn-based; long loops are out of scope.
+2. Central configuration moved to pydantic-settings: type validation that fails fast, every
+   parameter with a description and a lower bound. Environment variable names and the
+   `config.*` consumer interface are unchanged, and `.env` now affects **every** parameter (it
+   previously reached only the world and service lists).
 
 ## [0.7.0] — 2026-07-06
 
-Main: gazebo-chess 世界长出「整盘棋」能力——ANIMA 一句话自主下完一整盘（物理抓放几十手，吃子/易位/升变全走真原语），世界内置裁判与瞬移电脑对手，终局棋谱落档可被 eval 评分。大脑侧零代码改动（只调大 `ANIMA_MAX_STEPS`）——这本身就是对「换世界只换地址、大脑一行不改」承诺的实战检验。
+Main: the gazebo-chess world grew the ability to **play a whole game** — from one sentence
+ANIMA plays a complete game on its own (tens of moves of physical pick-and-place, with
+captures, castling and promotion all going through real primitives), while the world holds a
+referee and a teleporting computer opponent, and the final game record is filed for scoring.
+**Not a line of the brain changed** — only `ANIMA_MAX_STEPS` went up — which is itself the field
+test of the claim that swapping worlds costs a URL.
 
 Features:
 
-1. **整盘棋**：gazebo-chess 世界内置**裁判**（三原语动臂前过合法闸、一手棋逐原语物理核实后真值才推进、终局判定 + 棋谱落档）+ **瞬移电脑对手**（大脑每凑完一手它瞬移应手、不播报走哪步，大脑看画面自认；第三份独立引擎副本，禁与另两份合并）+ 吃子落袋 + **备用子恢复**（子永久掉出棋盘时允许 place 同款子补回原格，盘面与记录重新对齐）+ 网页「开新局」。大脑侧零改动，实测两盘完整对局（38 / 44 步）；终局棋谱进 eval，分世界统计原语成功率与延迟（物理失败与非法走子绝不合并）。无 FEN 的单演示子模式旧行为原样保留。
-2. **全格可达 + 真实外观**：抓取改**径向倾斜** + 方案 A 几何（轴心量 10cm、格宽 4.5cm，均实测默认、env 可覆盖）→ **64 格全可达**（修复 v0.5「h 列整列不可达」遗留，`scripts/reach_map.py` 一条命令复现）；**重试多样性**把确定性失手的「诅咒格」变成换姿态一次即过；棋子换**真实斯汤顿网格**（CC-BY 4.0，来源/许可入仓；碰撞体零改动）。
-3. **会话核心任务寄存器**（大脑侧唯一改动、通用机制）：耐力跑实测出「任务滑出上下文窗口 → 大脑中途停下」——「当前在执行什么任务」是**状态**不是聊天记录。LLM 经内建元工具 `set_core_task`/`clear_core_task` **亲自**登记/改写/清除（无任何关键词/钉死/启发式），常驻注入系统提示（状态通道，不占历史窗口）。回合制不变：每完成一手停下等用户。
-4. **协议变更**：全仓由 Apache-2.0 改为 **AGPL-3.0 + 商业双授权**。AGPL-3.0 的关键在于**通过网络提供服务**给他人使用时也须按 AGPL 开放对应源码；不愿承担此义务的闭源商业集成可联系维护者（jeff.pang.liu@gmail.com）另购商业许可。与 GPL-3 的 python-chess 兼容；≤v0.6.0 的历史版本仍按原 Apache-2.0 可用。
-   > ⚠️ **本条已被 v1.1 取代**：全仓自 v1.1 起改为 **MIT**，商业双授权随之取消（MIT 本身就允许闭源商用）。
-   > 促成这次改动的是把 python-chess 换成了自带的 MIT 规则库。v0.7.0–v1.0.1 这些版本仍按发布时的
-   > AGPL-3.0 条款。完整的许可证沿革见 [NOTICE](NOTICE)。
+1. **A whole game**: the gazebo-chess world holds a **referee** (a legality gate before the arm
+   moves, ground truth advanced only after each primitive is physically verified, game-over
+   detection and a filed game record) and a **teleporting computer opponent** (it answers the
+   moment the brain completes a move, without announcing what it played, so the brain has to see
+   it — a third independent engine copy, which must not be merged with the other two), plus
+   captured pieces going into a bin and **recovery from a spare** (when a piece leaves the board
+   permanently, placing an identical piece back on its square realigns the position with the
+   record) and a "new game" button. Zero changes on the brain side; two complete games measured
+   (38 and 44 moves). Final records feed the scorer, which reports primitive success rate and
+   latency per world — physical failures and illegal moves are never merged. The old
+   single-demo-piece mode without a FEN behaves exactly as before.
+2. **Every square reachable, and real pieces**: grasping moved to **radial tilt** plus geometry
+   measured directly (10 cm from the axis, 4.5 cm squares — both measured defaults, both
+   env-overridable) → **all 64 squares reachable**, fixing v0.5's "the whole h-file is
+   unreachable" (`scripts/reach_map.py` reproduces it in one command). **Retry diversity** turns
+   a deterministically cursed square into one that succeeds on the first change of posture.
+   Pieces became **real Staunton meshes** (CC-BY 4.0, source and licence in the repository;
+   collision bodies unchanged).
+3. **A session core-task register** (the only brain-side change, and a general mechanism): an
+   endurance run measured the failure — the task slides out of the context window and the brain
+   stops halfway. "What task am I on" is **state**, not chat history. The LLM registers,
+   rewrites and clears it **itself** through the built-in meta-tools `set_core_task` and
+   `clear_core_task` (no keywords, no pinning, no heuristics), and it is injected permanently
+   into the system prompt as a state channel rather than occupying the history window.
+   Turn-based behaviour is unchanged: it stops after each move and waits.
+4. **Licence change**: the whole repository went from Apache-2.0 to **AGPL-3.0 plus commercial
+   dual licensing.** What matters about AGPL-3.0 is that **providing a service over a network**
+   also requires opening the corresponding source. Closed-source commercial integrations
+   unwilling to take that on could contact the maintainer for a commercial licence. Compatible
+   with GPL-3 python-chess; releases up to v0.6.0 remain available under the original
+   Apache-2.0.
+   > ⚠️ **Superseded by v1.1**: the whole repository is **MIT** from v1.1, and the commercial
+   > dual licensing is retired with it (MIT already permits closed-source commercial use).
+   > What made that possible was replacing python-chess with our own MIT rules library.
+   > Releases v0.7.0–v1.0.1 remain under the AGPL-3.0 terms they shipped with. The full licence
+   > history is in [NOTICE](NOTICE).
 
 ## [0.6.0] — 2026-07-03
 
-Main: 引擎内聚 + world/service 彻底解耦，服务挂载回归标准 MCP「Host 组装」——面向真机前先把边界理干净。简单来说，Host, Service相互之间都变得独立，Engine Server和Anima Host交流，World Server和Anima Host交流，World Server和Engine Server不再交流。
+Main: the engines were brought in-tree and world and service fully decoupled, with service
+mounting returning to standard MCP "host assembly" — cleaning the boundaries before aiming at
+real hardware. In short: host and services are now independent of one another. The engine
+server talks to the ANIMA host, the world server talks to the ANIMA host, and the world server
+and the engine server no longer talk at all.
 
 Features:
 
-1. 三个棋类引擎内核（chess/gomoku/go）搬进 services/boardgame_engine/（原跨仓 importlib 读外部文件，clone 下来起不了）；服务更名 boardgame-engine，chess 三工具就活，go/gomoku 就位待接；外部 3-anima-chess-engine 文件夹删除，仓库自足。
-2. 大脑的引擎顾问与 sim-chess 世界的内置电脑对手拆成两份有意独立的副本（chess_engine.py / chess_bot.py，零共享代码、禁去重合并）：关掉引擎服务世界电脑照走，顾问跟着大脑跨身体走。
-3. 废除 v0.5 的「world 声明服务（anima://services）」机制，改为大脑按 config.services() 自行挂载（与 worlds() 对称）——对齐 MCP 规范「连哪些 server 是 Host 的职责、server 之间互不相识」；配对靠模型看画面自选工具，不靠结构绑定。
-4. 统一 MCP 三层称呼与「专线」模型：server 只有两类——World Server（现实，三原语齐全）和 Engine Server（引擎顾问，只有 Tools）；Host（ANIMA 大脑）给每个 server 各开一条专线即 Client 层（代码里的 RemoteWorld / RemoteService，一条专线只连一个 server），专线负责记地址、握手缓存能力、翻译协议、按角色管超时（world 走生命迹象监督、engine 走短超时问答）并记账，专线之间互不相通=server 隔离的落实。README §四与 /awi 页已按此更新。
+1. The three board-game engine cores (chess, gomoku, go) moved into
+   `services/boardgame_engine/` — they previously read files in another repository through
+   importlib, so a fresh clone could not start. The service was renamed boardgame-engine, the
+   three chess tools are live, and go and gomoku are in place awaiting a consumer. The external
+   `3-anima-chess-engine` folder was deleted; the repository stands on its own.
+2. The brain's engine adviser and the sim-chess world's built-in computer opponent were split
+   into two deliberately independent copies (`chess_engine.py` and `chess_bot.py`, sharing no
+   code, and not to be merged): with the engine service switched off the world's computer plays
+   on, and the adviser travels with the brain across bodies.
+3. v0.5's "a world declares its services" (`anima://services`) was abolished in favour of the
+   brain mounting them itself through `config.services()`, symmetrically with `worlds()` — in
+   line with the MCP principle that which servers to connect is the host's business and servers
+   do not know one another. Pairing is done by the model looking at the picture and choosing a
+   tool, not by structural binding.
+4. Unified naming for the three MCP layers and the "dedicated line" model: there are exactly two
+   kinds of server — the **World Server** (reality, all three primitives) and the **Engine
+   Server** (an adviser, tools only). The host (the ANIMA brain) opens one dedicated line to
+   each, which is the client layer (`RemoteWorld` / `RemoteService` in the code, one line to one
+   server). A line remembers the address, caches capabilities at the handshake, translates the
+   protocol, manages timeouts by role (liveness supervision for a world, a short question timeout
+   for an engine) and keeps the books. Lines do not talk to each other, which is how server
+   isolation is realised. README §4 and the `/awi` page were updated to match.
 
 ## [0.5.0] — 2026-07-03
 
-Main: 大重构——删除 game mode 等人为编排，最小化框架来考察智能：LLM 亲自看画面、亲自决定每一步、亲自调用工具。
+Main: a large refactor — human-designed orchestration such as game mode was deleted, minimising
+the framework in order to examine the intelligence: the LLM looks at the picture itself, decides
+each step itself, and calls the tools itself.
 
 Features:
 
-1. **长动作的「生命迹象」语义**（框架修正）：物理动作要几十秒，v0.4 的固定超时会把它误杀，且世界把活儿跑在事件循环上、一次 move 冻住整个世界服务器。改为采标 **MCP progress notifications**：世界把工具执行放到工作线程、分阶段报人话进度；大脑**有进度就续命、失联才判死、另设总上限**。对任何"慢原子动作"的世界通用。
-2. 改用LangGraph作为ReAct架构编排的底层框架，不再使用自研naive版ReAct框架。
-3. Chess engine改为service；service和world的区别在于：service为anima提供问答帮助（顾问），world接受anima的命令输出（现实）。service由world自己声明（anima://services），anima握手时自动挂载。
-4. 删除game mode/行为树/skill整套任务编排：下棋回归普通对话（说"该你了"即可），认盘、算棋、拆步全由LLM当场决策；观察-思考-行动成为唯一主循环。
-5. 统一Session Logs：LLM调用、world流量、service调用三类留痕按会话合并为一条流水，前端可按会话查看/一键复制。
-6. 多相机一等公民：一次感知可含多张命名画面，前端多路直播并列展示；gazebo-chess升级双相机+可读棋盘（格纹+四边坐标），"拿下去/放上来/放到那儿"语言→动作全链实测通过。
+1. **Liveness semantics for long actions** (a framework correction): a physical action takes tens
+   of seconds, v0.4's fixed timeout killed it, and worlds ran the work on the event loop so a
+   single move froze the entire world server. Adopted **MCP progress notifications** instead:
+   the world runs tool execution on a worker thread and reports human-readable progress in
+   stages, and the brain **extends the deadline on progress, declares death only on silence, and
+   caps the total**. This generalises to any world with slow atomic actions.
+2. LangGraph became the substrate for the ReAct orchestration, replacing the naive in-house
+   version.
+3. The chess engine became a service. A service differs from a world in that a service answers
+   questions for ANIMA (an adviser) while a world receives ANIMA's commands (reality). Services
+   were declared by the world itself (`anima://services`) and mounted automatically at the
+   handshake.
+4. Game mode, behaviour trees and the whole skill layer were deleted: chess is ordinary
+   conversation again (say "your move"), and reading the board, calculating and decomposing are
+   all decided by the LLM on the spot. Observe–think–act became the only main loop.
+5. Unified session logs: LLM calls, world traffic and service calls are merged per session into
+   one stream, viewable and copyable by session in the frontend.
+6. Multiple cameras became first class: one perception may carry several named pictures, and the
+   frontend shows the live views side by side. gazebo-chess gained two cameras and a legible
+   board (squares and edge coordinates), and "take that off / put this on / put it there" was
+   measured end to end from language to action.
 
 ## [0.4.0] — 2026-07-02
 
-Main: 接入gazebo仿真下棋界面，配置遥操teleop并实现末端夹爪的笛卡尔移动。
+Main: a Gazebo chess interface, teleoperation, and Cartesian motion of the gripper.
 
 Features:
 
-1. 不再使用自研HTTP作为AWI，改用MCP server标准。旧的perceive, invoke, guidance体系改为Tools/Resources/Prompts.
-2. 下棋引擎不再属于下棋skill，独立为一个MCP server.
-3. 新增world: gazebo-chess. 该世界使用Soma Zero的替代机Episode1的模型，构建了Gazebo仿真，并模拟出夹爪和棋子。
-4. 实现笛卡尔移动，teleop测试抓取棋子成功。
+1. The in-house HTTP AWI was dropped in favour of the standard MCP server. The old perceive,
+   invoke and guidance scheme became Tools, Resources and Prompts.
+2. The chess engine stopped being part of a chess skill and became an MCP server of its own.
+3. A new world, gazebo-chess: a Gazebo simulation built on the Episode1 model — the stand-in for
+   SOMA Zero — with a simulated gripper and pieces.
+4. Cartesian motion implemented, and teleoperated grasping of a piece succeeded.
 
 ## [0.3.0] — 2026-06-30
 
-Main: 接入真实摄像头世界camera，让 ANIMA 第一次看到真实的物理世界。这一版是一个轻量级版本，主要测试真实camera的stream。
+Main: a real camera world, letting ANIMA see the real physical world for the first time. A light
+release, mostly testing the stream from a real camera.
 
 Features:
 
-1. 添加新的world：camera。可以设置分辨率。
-2. 修改下棋skill的一些细节。
-3. 调试与界面：anima-logs 调试页修了「按会话查永远空」的会话归属 bug，加一键复制整会话全字段 + 完整展示；前端加亮色主题与切换、把 AWI / anima-logs 改成主页内嵌面板。
+1. A new world, camera, with settable resolution.
+2. Details of the chess skill adjusted.
+3. Debugging and interface: the anima-logs page had a session-attribution bug that made
+   "view by session" permanently empty; fixed, and gained one-click copying of a whole session
+   with all fields shown. The frontend gained a light theme and a switch, and AWI and anima-logs
+   became panels embedded in the home page.
 
 ## [0.2.0] — 2026-06-30
 
-Main: 新建模拟下棋软件sim-chess，新建下棋skill。梳理agent编排框架。
+Main: a new simulated board program, sim-chess, and a chess skill. The agent orchestration
+framework was worked out.
 
 Features:
 
-1. 添加新的world sim-chess，可以模拟五子棋、国际象棋、围棋等不同棋盘。anima只能看到sim-chess的画面，看不到内部程序信息。
-2. 在anima的ux界面添加chess mode，进入chess mode后会进入一个循环的行为树模式。chess mode下用户无需反复对话，anima会持续对弈。
-3. 设计human in the loop和eval，做了简单的概念实现。
-4. 确认「Orchestrator → Skill →（Skill）Adapter → Behavior Tree → Tools」这条自上而下的抽象层级。
-5. 确认 AWI 的三个核心请求——perceive（感知）、invoke（操作）、capabilities（问能力）。
+1. A new world, sim-chess, able to simulate gomoku, chess, go and other boards. ANIMA sees only
+   sim-chess's picture, never its internal state.
+2. A chess mode in ANIMA's interface: entering it starts a looping behaviour-tree mode in which
+   ANIMA plays on continuously without the user having to speak each time.
+3. Human-in-the-loop and evaluation designed, with a simple proof of concept.
+4. The top-down abstraction "Orchestrator → Skill → (Skill) Adapter → Behaviour Tree → Tools"
+   settled.
+5. AWI's three core requests settled: perceive, invoke and capabilities.
 
 ## [0.1.0] — 2026-06-27
 
-Main: ANIMA Zero 首个版本。完全重写框架, 取代更早的 ANIMA O1 原型, 不复用其代码。
+Main: the first release of ANIMA Zero. The framework was rewritten completely, replacing the
+earlier ANIMA O1 prototype and reusing none of its code.
+
 Features:
 
-1. 确立「认知与世界分离」的核心架构——ANIMA 作为认知系统只负责思考与决策,World(世界)作为独立实体负责感知与执行,两者通过标准协议 AWI 对接。
-2. 定义“World”(世界)概念: world可以是任何独立的实体，比如程序、机器人、环境等。anima通过AWI与world通信并实现操作等。
-3. 设计初步的anima聊天ux界面，设立session机制，记忆保存在本地；可以在对话中切换大脑。
-4. 实现首个示例world sim-desk，包含一个虚拟桌面、笔、画布等，提供移动笔、绘制、擦除三种能力，用于验证整套协议；通过流式传输将画面传递给anima查看。
+1. The core architecture of separating cognition from world: ANIMA as a cognitive system does
+   the thinking and deciding, a world as an independent entity does the sensing and executing,
+   and the two meet across the standard AWI protocol.
+2. The concept of a "world" defined: a world can be any independent entity — a program, a robot,
+   an environment — and ANIMA communicates with it and operates it over AWI.
+3. A first chat interface for ANIMA, with sessions, memory kept locally, and the ability to
+   switch brains mid-conversation.
+4. The first example world, sim-desk: a virtual desk, a pen and a canvas, offering three
+   capabilities — move the pen, draw, erase — to validate the whole protocol, with the picture
+   streamed to ANIMA.
 
 ## [Anima O1] — Before 2026-06-27
 
-Anima O1是早期的设计版本，在Anima Zero开发中被全部推倒，完全重建，因此不再记录Anima O1的相关内容。Anima O1和早期Soma实践基本确定了System1/System2的路线，为Anima Zero和Soma Zero奠定了思想理论基础。
+ANIMA O1 was an early design. It was torn down entirely during ANIMA Zero's development and
+rebuilt from nothing, so its details are not recorded here. ANIMA O1 and the early SOMA work
+settled the System 1 / System 2 direction, and laid the conceptual groundwork for ANIMA Zero and
+SOMA Zero.

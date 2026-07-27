@@ -97,7 +97,8 @@ English body — what changed and why.
 ```
 
 Explain the reasoning, not just the diff. A commit that says *why* is worth more later than
-one that restates *what*.
+one that restates *what*. `.gitmessage` in the repository root holds this as a template —
+`git config commit.template .gitmessage` once per clone and it fills in for you.
 
 ## Checklist
 
@@ -105,10 +106,10 @@ one that restates *what*.
 - [ ] `ruff check .` passes
 - [ ] `python scripts/selfcheck.py` passes
 - [ ] `python docs/check_readme.py` passes if you touched a README
-- [ ] Behaviour changed → `CHANGELOG.md` and the relevant README updated
+- [ ] Behaviour changed → **both** `CHANGELOG.md` and `CHANGELOG_zh.md`, plus the relevant README
 - [ ] **A guard you added actually fires.** Break the thing on purpose, watch the test go
       red, put it back. A guard nobody has seen fail is a guard nobody knows works — this
-      project has caught three that had silently stopped guarding.
+      project has caught four that had silently stopped guarding.
 
 ## Real hardware
 

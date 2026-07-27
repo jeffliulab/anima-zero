@@ -5,7 +5,7 @@ statically, without importing ``anima`` (which would pull in anthropic/openai/fa
 at build time). ``pyproject.toml`` reads it via ``attr: anima._version.__version__``.
 
 Three things must agree, and CI enforces it on every tag push:
-``git tag`` == ``__version__`` == the top entry of ``CHANGELOG.md``.
+``git tag`` == ``__version__`` == the top entry of **every** ``CHANGELOG``.
 
 版本号的单一来源。
 
@@ -13,7 +13,7 @@ Three things must agree, and CI enforces it on every tag push:
 （那会在构建期把 anthropic/openai/fastapi 全拖进来）。``pyproject.toml`` 经
 ``attr: anima._version.__version__`` 读这里。
 
-三处必须一致，CI 在每次推 tag 时强制校验：``git tag`` == ``__version__`` == ``CHANGELOG.md`` 顶栏。
+三处必须一致，CI 在每次推 tag 时强制校验：``git tag`` == ``__version__`` == **每一份** ``CHANGELOG`` 顶栏。
 """
 
-__version__ = "1.0.1"
+__version__ = "1.1.0"

@@ -1,0 +1,18 @@
+# type: English summary, imperative, no full stop, ≤72 chars
+#
+# English body. Explain WHY, not just what — the diff already says what.
+# What was it like before, what broke, what does this change let someone do?
+# If you found a real problem while doing something else, say so here; that is
+# often the most valuable line in the commit.
+#
+# ---
+# 中文说明：同样的内容，中文再写一遍。
+# 英文在前、中文在后，这样历史整体看上去以英文为主，适合面向全世界的开源社区。
+#
+# ------------------------------------------------------------------------------
+# type: feat | fix | docs | refactor | test | ci | chore | security | release
+#
+# ⛔ No Co-Authored-By trailer in this repository. / 本仓提交不带 Co-Authored-By。
+#
+# Enable this template once per clone:
+#   git config commit.template .gitmessage

@@ -52,7 +52,12 @@ PLACEHOLDER_ROOTS = ["src", "services"]
 
 # --- check 4: one version, three places -------------------------------------------------
 VERSION_FILE = Path("src/_version.py")
-CHANGELOG = Path("CHANGELOG.md")
+# ⛔ A whole set: every CHANGELOG, not just the English one. The moment a second file was
+# added, a guard reading only the first would have let the other drift silently — which is
+# how a guard stops guarding while staying green.
+# ⛔ 这是一个「全集」：**每一份** CHANGELOG，不是只有英文那份。加出第二份文件的那一刻，
+# 一个只读第一份的守卫就会让另一份静默漂移——守卫正是这样一边失效一边保持绿色的。
+CHANGELOGS = [Path("CHANGELOG.md"), Path("CHANGELOG_zh.md")]
 
 
 def _fail(check: str, detail: str) -> str:
@@ -126,21 +131,23 @@ def check_version_is_consistent(tag: str | None) -> str | None:
         return _fail(name, f"      {VERSION_FILE} 里找不到 __version__")
     version = m.group(1)
 
-    log_text = (REPO / CHANGELOG).read_text(encoding="utf-8")
-    m2 = re.search(r"^##\s*\[([^\]]+)\]", log_text, re.M)
-    if not m2:
-        return _fail(name, f"      {CHANGELOG} 顶栏解析不出版本号")
-    changelog_version = m2.group(1)
-
     problems = []
-    if changelog_version != version:
-        problems.append(f"      __version__={version}  但 CHANGELOG 顶栏={changelog_version}")
+    for changelog in CHANGELOGS:
+        path = REPO / changelog
+        if not path.exists():
+            problems.append(f"      {changelog} 不存在（清单里有它，文件却没了）")
+            continue
+        m2 = re.search(r"^##\s*\[([^\]]+)\]", path.read_text(encoding="utf-8"), re.M)
+        if not m2:
+            problems.append(f"      {changelog} 顶栏解析不出版本号")
+        elif m2.group(1) != version:
+            problems.append(f"      __version__={version}  但 {changelog} 顶栏={m2.group(1)}")
     if tag:
         if tag.lstrip("v") != version:
             problems.append(f"      git tag={tag}  但 __version__={version}")
     if problems:
         return _fail(name, "\n".join(problems)
-                     + "\n    → 封版时三处一起改：src/_version.py、CHANGELOG.md、git tag。")
+                     + "\n    → 封版时三处一起改：src/_version.py、每一份 CHANGELOG、git tag。")
     _ok(name + f" ({version})")
     return None
 
