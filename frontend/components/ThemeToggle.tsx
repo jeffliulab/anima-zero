@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { useI18n } from "@/lib/i18n";
+
 type Theme = "dark" | "light";
 
 const STORAGE_KEY = "anima-theme";
@@ -9,6 +11,7 @@ const STORAGE_KEY = "anima-theme";
 /** 左下角的深/浅主题切换：当前深色显月亮、浅色显太阳，点一下在两者间切并记住偏好。
  *  主题挂在 <html data-theme> 上（首屏由 layout 的内联脚本设好），这里只负责切换 + 持久化。 */
 export default function ThemeToggle() {
+  const { t } = useI18n();
   const [theme, setTheme] = useState<Theme>("dark");
 
   // 挂载后从真实 DOM 读主题（内联脚本已按 localStorage 设好），避免和 SSR 默认值不一致
@@ -32,8 +35,8 @@ export default function ThemeToggle() {
   return (
     <button
       onClick={toggle}
-      title={isDark ? "切换到浅色主题" : "切换到深色主题"}
-      aria-label="切换深色 / 浅色主题"
+      title={isDark ? t("切换到浅色主题") : t("切换到深色主题")}
+      aria-label={t("切换深色 / 浅色主题")}
       className="flex h-7 w-7 items-center justify-center rounded-md border border-neutral-700 text-neutral-400 transition-colors hover:border-neutral-500 hover:text-neutral-100"
     >
       <span className="transition-transform duration-200">

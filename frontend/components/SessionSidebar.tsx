@@ -9,6 +9,8 @@ import {
   type SessionSummary,
   type World,
 } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
+import LangToggle from "./LangToggle";
 import ThemeToggle from "./ThemeToggle";
 
 export default function SessionSidebar({
@@ -31,6 +33,7 @@ export default function SessionSidebar({
   onOpenPanel: (p: "awi" | "logs") => void;    // 点底栏导航 → 在主界面中间内嵌该子页
 }) {
   const [creating, setCreating] = useState(false);
+  const { t } = useI18n();
   const [world, setWorld] = useState(""); // "" = 纯聊天
   const [brain, setBrain] = useState("");
 
@@ -47,7 +50,7 @@ export default function SessionSidebar({
     onChanged(created.id);
   }
   async function doDelete(id: string) {
-    if (!confirm("删除这个会话?(不可恢复)")) return;
+    if (!confirm(t("删除这个会话?(不可恢复)"))) return;
     await deleteSession(id);
     onChanged(); // 不指定 id:父组件刷新后若当前会话已被删则自动重选(见 page.tsx)
   }
@@ -63,37 +66,37 @@ export default function SessionSidebar({
     <aside className="flex h-screen flex-col border-r border-neutral-800 bg-neutral-900">
       <button
         onClick={onHome}
-        title="回到主页（留白）"
+        title={t("回到主页（留白）")}
         className="flex items-center gap-2 border-b border-neutral-800 px-3 py-2.5 text-sm font-semibold text-neutral-200 transition-colors hover:bg-neutral-800"
       >
         <HomeIcon />
         <span>ANIMA</span>
-        <span className="ml-auto text-[11px] font-normal text-neutral-500">主页</span>
+        <span className="ml-auto text-[11px] font-normal text-neutral-500">{t("主页")}</span>
       </button>
       <div className="border-b border-neutral-800 p-3">
         <button onClick={openForm} className="w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium">
-          + 新建会话
+          + {t("新建会话")}
         </button>
       </div>
 
       {creating && (
         <div className="space-y-3 border-b border-neutral-800 p-3 text-xs">
           <div>
-            <div className="mb-1.5 text-neutral-400">连接哪个世界</div>
+            <div className="mb-1.5 text-neutral-400">{t("连接哪个世界")}</div>
             <div className="flex flex-wrap gap-1.5">
               <button className={pill(world === "")} onClick={() => setWorld("")}>
-                纯聊天
+                {t("纯聊天")}
               </button>
               {worlds.map((w) => (
                 <button key={w.name} className={pill(world === w.name, !w.online)} onClick={() => setWorld(w.name)}>
                   {w.name}
-                  {w.online ? "" : "(离线)"}
+                  {w.online ? "" : `(${t("离线")})`}
                 </button>
               ))}
             </div>
           </div>
           <div>
-            <div className="mb-1.5 text-neutral-400">用哪个大脑</div>
+            <div className="mb-1.5 text-neutral-400">{t("用哪个大脑")}</div>
             <div className="flex flex-wrap gap-1.5">
               {brains.map((b) => (
                 <button
@@ -102,17 +105,17 @@ export default function SessionSidebar({
                   onClick={() => setBrain(b.name)}
                 >
                   {b.label}
-                  {b.available ? "" : "(未配置)"}
+                  {b.available ? "" : `(${t("未配置")})`}
                 </button>
               ))}
             </div>
           </div>
           <div className="flex gap-2 pt-1">
             <button onClick={doCreate} className="rounded-lg bg-blue-600 px-3 py-1.5">
-              创建会话
+              {t("创建会话")}
             </button>
             <button onClick={() => setCreating(false)} className="rounded-lg bg-neutral-700 px-3 py-1.5">
-              取消
+              {t("取消")}
             </button>
           </div>
         </div>
@@ -120,7 +123,7 @@ export default function SessionSidebar({
 
       <div className="min-h-24 flex-1 overflow-y-auto p-2">
         {sessions.length === 0 && (
-          <div className="p-3 text-xs text-neutral-500">还没有会话,点上面新建。</div>
+          <div className="p-3 text-xs text-neutral-500">{t("还没有会话,点上面新建。")}</div>
         )}
         {sessions.map((s) => (
           <div
@@ -136,16 +139,16 @@ export default function SessionSidebar({
               <div className="flex items-center justify-between">
                 <span className="truncate font-medium">{s.title}</span>
                 {s.status === "frozen" && (
-                  <span className="ml-1 shrink-0 text-[10px] text-amber-500">🔒只读</span>
+                  <span className="ml-1 shrink-0 text-[10px] text-amber-500">{t("🔒只读")}</span>
                 )}
               </div>
               <div className="mt-0.5 text-[10px] text-neutral-500">
-                {s.world ?? "纯聊天"} · {s.brain}
+                {s.world ?? t("纯聊天")} · {s.brain}
               </div>
             </button>
             <button
               onClick={() => doDelete(s.id)}
-              title="删除会话"
+              title={t("删除会话")}
               className="mr-1 mt-1 shrink-0 rounded px-1.5 py-1 text-[11px] text-neutral-600 opacity-0 hover:bg-neutral-700 hover:text-red-400 group-hover:opacity-100"
             >
               ✕
@@ -161,7 +164,7 @@ export default function SessionSidebar({
           className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-neutral-300 transition-colors hover:bg-neutral-800 hover:text-neutral-100"
         >
           <DashboardIcon />
-          <span>AWI 仪表盘</span>
+          <span>{t("AWI 仪表盘")}</span>
           <span className="ml-auto text-neutral-600">›</span>
         </button>
         <button
@@ -172,11 +175,10 @@ export default function SessionSidebar({
           <span>Session Logs</span>
           <span className="ml-auto text-neutral-600">›</span>
         </button>
-        <div className="mt-1 flex items-center gap-2 border-t border-neutral-800 px-2 pt-2 text-xs text-neutral-500">
-          <span>外观</span>
-          <span className="ml-auto">
-            <ThemeToggle />
-          </span>
+        {/* 底栏只放两个开关,不加标签——图标本身已经说明白了,「外观」两个字是多余的 */}
+        <div className="mt-1 flex items-center justify-end gap-1.5 border-t border-neutral-800 px-2 pt-2">
+          <LangToggle />
+          <ThemeToggle />
         </div>
       </div>
     </aside>
@@ -188,6 +190,7 @@ export default function SessionSidebar({
 //    前端一个数字都不写死——写两份必然出现"网页显示 60、.env 里是 8"的对不上账。
 // 只读：改参数走 .env + 重启，config.py 保持单一来源。
 function RuntimeParams() {
+  const { t } = useI18n();
   const [params, setParams] = useState<RuntimeParam[]>([]);
   useEffect(() => {
     getRuntimeConfig().then(setParams).catch(() => {});
@@ -195,10 +198,13 @@ function RuntimeParams() {
   if (!params.length) return null;
   return (
     <div className="mb-1 border-b border-neutral-800 px-2 pb-2 text-[10px] text-neutral-500">
-      <div className="mb-1 text-neutral-600">运行参数</div>
+      <div className="mb-1 text-neutral-600">{t("运行参数")}</div>
       {params.map((p) => (
         <div key={p.key} className="flex items-baseline gap-1" title={`${p.env}\n\n${p.description}`}>
-          <span className="truncate">{p.label}</span>
+          {/* 标签来自后端(config.py 的字段说明),但它是界面文案——
+              用同一套词典翻,词条查不到就照原样显示中文。⛔ 描述与 env 名不翻:
+              那是给开发者看的、而且 env 名翻译了就没法照着设了。 */}
+          <span className="truncate">{t(p.label)}</span>
           <span className="ml-auto shrink-0 tabular-nums text-neutral-400">{p.value}</span>
         </div>
       ))}

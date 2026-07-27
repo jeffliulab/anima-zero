@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+
+import { useI18n } from "@/lib/i18n";
 import {
   getSessionLogs,
   listSessions,
@@ -60,6 +62,7 @@ export default function SessionLogsView({
   embedded?: boolean;
   sessionId?: string;
 }) {
+  const { t } = useI18n();
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [logged, setLogged] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<string>(sessionId || ALL);
@@ -121,7 +124,7 @@ export default function SessionLogsView({
       {/* 顶部：会话下拉 + 标题/计数（固定，不随日志滚动） */}
       <div className="shrink-0 border-b border-neutral-800 p-3">
         <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-neutral-500">Session Logs · 会话：</span>
+          <span className="text-neutral-500">Session Logs · {t("会话：")}</span>
           <select
             value={selected}
             onChange={(e) => {
@@ -137,36 +140,36 @@ export default function SessionLogsView({
             ))}
             {orphanLogged.map((id) => (
               <option key={id} value={id}>
-                已删除 {id.slice(0, 12)}…
+                {t("已删除")} {id.slice(0, 12)}…
               </option>
             ))}
-            <option value={ALL}>全部（合并所有会话）</option>
+            <option value={ALL}>{t("全部（合并所有会话）")}</option>
           </select>
           <span className="text-[11px] text-neutral-500">
             {selected === ALL
-              ? `${entries.length} 条`
-              : (cur ? (cur.world ?? "纯聊天") + " · " + cur.brain + " · " : "") + `${entries.length} 条`}
+              ? `${entries.length} ${t("条")}`
+              : (cur ? (cur.world ?? t("纯聊天")) + " · " + cur.brain + " · " : "") + `${entries.length} ${t("条")}`}
           </span>
           <button
             onClick={copyAll}
             disabled={entries.length === 0}
-            title="把当前所列的全部日志（含每个信息要素）复制到剪贴板"
+            title={t("把当前所列的全部日志（含每个信息要素）复制到剪贴板")}
             className="ml-auto rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-[11px] text-neutral-200 hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {copied ? "已复制 ✓" : "复制全部日志"}
+            {copied ? t("已复制 ✓") : t("复制全部日志")}
           </button>
         </div>
         <div className="flex items-baseline gap-2">
           <h1 className="truncate text-sm font-semibold">
-            {selected === ALL ? "全部行为流水（合并所有会话）" : cur ? cur.title : selected ? `会话 ${selected.slice(0, 12)}…` : "（未选会话）"}
+            {selected === ALL ? t("全部行为流水（合并所有会话）") : cur ? cur.title : selected ? `${t("会话：")}${selected.slice(0, 12)}…` : t("（未选会话）")}
           </h1>
         </div>
         <p className="mt-1 text-[11px] leading-relaxed text-neutral-500">
-          本会话的全部行为流水，按时间合并：
-          <span className="mx-1 inline-block h-2 w-2 rounded-full bg-purple-400" />LLM 调用（想）·
-          <span className="mx-1 inline-block h-2 w-2 rounded-full bg-sky-400" />世界往返（看/动，MCP）·
-          <span className="mx-1 inline-block h-2 w-2 rounded-full bg-emerald-400" />服务调用（问顾问，如引擎）
-          ——「ANIMA 看到什么、想了什么、调了什么」一条链看全。
+          {t("本会话的全部行为流水，按时间合并：")}
+          <span className="mx-1 inline-block h-2 w-2 rounded-full bg-purple-400" />{t("LLM 调用（想）")}·
+          <span className="mx-1 inline-block h-2 w-2 rounded-full bg-sky-400" />{t("世界往返（看/动，MCP）")}·
+          <span className="mx-1 inline-block h-2 w-2 rounded-full bg-emerald-400" />{t("服务调用（问顾问，如引擎）")}
+          {t("——「ANIMA 看到什么、想了什么、调了什么」一条链看全。")}
         </p>
       </div>
 
