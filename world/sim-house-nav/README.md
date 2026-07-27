@@ -1,259 +1,333 @@
-# sim-house-nav —— 机器人在住宅里靠视觉导航
+<div align="center">
 
-一套住宅里站着一台机器人（**四足机器狗 Go2** 或**人形 G1**，可切换），头上一只前视相机。
-ANIMA 通过这只相机看世界，自己判断身处哪个房间、往哪走，用三个原语指挥它。
+<a href="README.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
+<a href="README_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
 
-**这个世界要考的能力**：不给地图、不给坐标、不告诉它房间名，**说明书里也不写屋里有什么**——
-房间必须靠看画面认出来。
+</div>
+
+# sim-house-nav — a robot finding its way around a house by sight
+
+A robot stands in a house — a **Go2 quadruped** or a **G1 humanoid**, switchable — with one
+forward-facing camera on its head. ANIMA sees the world through that camera, works out for
+itself which room it is in and where to go, and directs the robot with three primitives.
+
+**What this world tests**: no map, no coordinates, nobody tells it the room names, and **the
+guidance does not say what is in the house**. Rooms have to be recognised by looking.
 
 ```
-ANIMA(脑) ──看画面 + 八向测距──▶ 想「这像客厅，得换个方向」──发原语──▶ 世界
-                                                                    │
-                                                          翻成速度指令 (vx,vy,wz)
-                                                                    ▼
-                                                          学出来的步态策略
-                                                            真的迈腿走出去
-                                                                    │
-                                                相机拍下新画面 ◀────┘  （回到最上面）
+ANIMA (brain) ──image + eight-way ranging──▶ "this looks like the living room,
+                                              I should turn" ──primitive──▶ world
+                                                                              │
+                                                       translated to a velocity
+                                                       command (vx, vy, wz)
+                                                                              ▼
+                                                       a learned gait policy
+                                                       actually walks the legs
+                                                                              │
+                                       camera takes a new frame ◀────────────┘   (loop)
 ```
 
-## 动作清单（大脑能调的全部）
+## The action list (everything the brain can call)
 
-| 动作 | 作用 | 参数 | 位置会变吗 |
+| Action | What it does | Parameter | Does position change? |
 |---|---|---|---|
-| `move_forward` | 朝当前正前方走一段 | `meters` 0 ~ `MAX_MOVE_M`(3.0) | 会 |
-| `turn_left` | 原地逆时针转 | `degrees` 0 ~ `MAX_TURN_DEG`(180) | 不会，只改朝向 |
-| `turn_right` | 原地顺时针转 | 同上 | 不会，只改朝向 |
-| ~~`look_around`~~ | 转一圈拍一组 | — | **v1.0 起默认关闭**，见下 |
+| `move_forward` | Walk forward a distance | `meters`, 0 – `MAX_MOVE_M` (3.0) | Yes |
+| `turn_left` | Turn anticlockwise on the spot | `degrees`, 0 – `MAX_TURN_DEG` (180) | No — heading only |
+| `turn_right` | Turn clockwise on the spot | As above | No — heading only |
+| ~~`look_around`~~ | Turn full circle taking frames | — | **Off by default since v1.0** — see below |
 
-⛔ **三个动作都不含任何导航智能**——往哪走、这是哪间屋、找到没有，全部由大脑判断。
+⛔ **None of the three contains any navigation intelligence.** Where to go, which room this
+is, whether it has been found — all of that is the brain's judgement.
 
-**关于 `look_around`（环视）**：代码还在（`HOUSENAV_LOOK_AROUND=1` 可开），但 v1.0 起
-**默认关掉，两种身体都关**（Jeff 2026-07-26 拍板）。两个理由：① 它从建好到现在**一次实测都没有**
-——v0.9 期间被大脑侧的能力缓存藏了七次实验，从来没上过工具单，留在清单里等于"声称有而没验过"；
-② 人形**根本不会原地转身**（实测转向命令 0.2 rad/s 转 8 秒只转 2.8°），"原地转一圈拍一组"
-对它语义不成立。先都不给，看模型只靠转弯 + 激光测距能不能找到房间。
+**About `look_around`.** The code is still there (`HOUSENAV_LOOK_AROUND=1` enables it) but
+since v1.0 it is **off by default for both bodies**. Two reasons. First, it has **never once
+been measured** — through v0.9 it was hidden behind the brain's capability cache for seven
+experiments and never reached the tool sheet, so leaving it listed would be claiming
+something that was never verified. Second, **the humanoid cannot turn on the spot** (measured:
+a turn command at 0.2 rad/s for 8 seconds produced 2.8°), so "turn full circle and take
+frames" does not mean anything for it. Neither body gets it for now — the question is whether
+a model can find rooms on turning and ranging alone.
 
-⚠️ 改动作时，这张表、`world.py` 的 `capabilities()`、世界说明书 `guidance.py` **三处要同步**。
-说明书里那句"几个动作"是**按实际注册的工具生成的**，大脑仓有测试钉着"说几个就得真有几个"。
+⚠️ Changing the actions means changing **three places together**: this table, `capabilities()`
+in `world.py`, and the guidance in `guidance.py`. The phrase in the guidance saying how many
+actions there are is **generated from the tools actually registered**, and the brain repo has
+a test pinning "as many as it says there are".
 
-> ⛔ **改完动作清单必须重启大脑后端（:8000），否则等于没改。**
-> 大脑侧的 `RemoteWorld` 在**首次握手时缓存**世界的能力清单，之后不再重问。世界这边重启了、
-> 新工具也在了，但后端手里还是旧的那份——新动作根本不会出现在 LLM 的工具单上。
-> 排查口诀：`curl -s localhost:8000/api/awi` 看大脑**实际**拿到的工具名，别只看世界那边有没有。
-> （2026-07-25 踩过：新增 `look_around` 后连跑 7 次实验它一次没用，一度以为是模型不想用，
-> 实际是它压根没看见这个工具。）
+> ⛔ **After changing the action list, restart the brain backend (:8000) or nothing has
+> changed.** `RemoteWorld` **caches a world's capabilities at the first handshake** and does
+> not ask again. Restart the world, add the tool — the backend still holds the old list, and
+> the new action never appears on the model's tool sheet. To diagnose:
+> `curl -s localhost:8000/api/awi` and look at the tool names the brain **actually** has, not
+> at what the world offers. (This cost seven experiments on 2026-07-25 after `look_around` was
+> added: it was never used, which looked like the model not wanting it, when in fact it had
+> never seen it.)
 
-## 它是怎么真的走路和拐弯的
+## How it really walks and turns
 
-**不是瞬移、不是"模拟箭头"式的假位移。** 机器人身上跑的是一个**速度条件式**的运动策略
-（Isaac Lab 里训的，导出成 ONNX）：它的观测里带一个指令 `(vx, vy, wz)` =
-（前进速度、侧移速度、**转向角速度**），训练时这个指令被随机化、奖励逼策略去跟踪它。
-部署时每个控制步（50 Hz）把想要的速度喂给策略，策略吐出 12 个关节的目标角度，
-腿就按真实步态走出那个速度。所以：
+**Nothing teleports and no arrow is faked.** The robot runs a **velocity-conditioned** motion
+policy trained in Isaac Lab and exported to ONNX. Its observation carries a command
+`(vx, vy, wz)` — forward speed, lateral speed and **yaw rate**. During training that command
+is randomised and the reward pushes the policy to track it. At deployment each control step
+(50 Hz) feeds in the desired velocity and the policy emits twelve joint targets, so the legs
+walk out that velocity with a real gait.
 
-| 原语 | 世界下发的速度指令 |
+| Primitive | Velocity command the world sends |
 |---|---|
-| 往前走 | `vx = +WALK_SPEED`，`wz = 0` |
-| 左转 | `wz = +TURN_RATE`，`vx ≈ 0`（原地转） |
-| 右转 | `wz = −TURN_RATE` |
-| 停 | `(0,0,0)`，站住 |
+| Forward | `vx = +WALK_SPEED`, `wz = 0` |
+| Turn left | `wz = +TURN_RATE`, `vx ≈ 0` (in place) |
+| Turn right | `wz = −TURN_RATE` |
+| Stop | `(0, 0, 0)` — stand |
 
-真机 Go2 部署也是同一个接口（板上策略从手柄或高层规划器收 `(vx,vy,wz)`）。
+A real Go2 deployment uses the same interface: the on-board policy takes `(vx, vy, wz)` from a
+gamepad or a high-level planner.
 
-**原语是闭环执行的**：学出来的步态跟踪速度指令并不是 1:1（实测直线约 83%、转向约 62%），
-纯按时间开环下发会系统性走不够、导航一路偏。所以世界一边走一边量，**实测位移/转角达标才停**，
-并如实告诉大脑实际走了多远、转了多少度。撞墙走不动会判"卡住"并明说被挡住了。
+**The primitives execute closed loop.** A learned gait does not track a velocity command 1:1
+(measured: about 83% in a straight line, about 62% turning), so dispatching open loop by time
+systematically falls short and the navigation drifts. Instead the world measures as it goes,
+**stops when the measured distance or angle is reached**, and reports honestly how far it
+actually went and how many degrees it actually turned. Walking into a wall is reported as
+stuck, and says so.
 
-## 「到了」的判定标准（Jeff 2026-07-25 定）
+## What counts as "arrived" (decided 2026-07-25)
 
-**看见就算到**——ANIMA 能清楚看见目标房间、说得出看到了哪几件标志物，就算完成，
-不要求身子整个跨进房间。站在门口望进厨房、认出灶台和烤箱，这就算找到厨房了。
+**Seeing it counts.** If ANIMA can clearly see the target room and name the landmarks it sees,
+that is done — the body does not have to be all the way inside. Standing in the doorway,
+looking into the kitchen and recognising the hob and the oven counts as finding the kitchen.
 
-所以拿 `/status` 验收时**别机械地比对 `room_label`**：狗站在门洞里、身体中心还在门外
-（`room_label` 显示的是上一个房间），只要它当时确实看见并认出了厨房，就算过。
-反过来，如果它只看到一片说不清的柜门就宣布到了，那不算——判据是**认出标志物**。
+So when checking against `/status`, **do not compare `room_label` mechanically**: the dog can
+be in the doorway with its body centre still outside (`room_label` shows the previous room),
+and if it genuinely saw and recognised the kitchen it passes. The other way round too — if it
+declares arrival on the strength of some indistinct cupboard doors, that fails. The criterion
+is **recognising landmarks**.
 
-> 背景：早期这里定的是「必须真的走进去、看脚下地面材质」，实测卡在 13 cm 的门槛上
-> 反复纠结。Jeff 拍板改成看见即到——对导航这个任务来说，"找到了在哪儿"才是目的，
-> 差半个身位没有意义。
+> Background: this used to be "must actually walk in and look at the floor material", and in
+> practice it got stuck agonising over a 13 cm threshold. The rule changed because for a
+> navigation task the point is *knowing where the thing is*, and half a body length does not
+> bear on that.
 
-## 大脑能看到什么（AWI 观测）
+## What the brain can see (the AWI observation)
 
-只有真实机器人身上本来就有的东西：
+Only what a real robot would actually carry:
 
-- **相机画面**（头部前视，640×480）
-- `heading_deg`：IMU 罗盘朝向
-- `clearance_m`：**激光测距**，八个方向各能直着走多远（见下节）
-- `front_cone_m`：正前方那一片里最近的东西有多远（刹车照它判）
-- `fallen`：自己有没有摔倒
-- `last_action`：上一个动作的结果
+- **the camera image** (head, forward-facing, 640×480)
+- `heading_deg` — IMU compass heading
+- `clearance_m` — **laser ranging**: how far it could walk in each of eight directions (below)
+- `front_cone_m` — how far away the nearest thing straight ahead is (what braking looks at)
+- `fallen` — whether it has fallen over
+- `last_action` — the result of the previous action
 
-⛔ **绝不包含** x/y 坐标、房间名、屋子地图。那些是世界的上帝视角真值，走 `/status`
-（只给人看、用于验收），永远不进 AWI 通道。`test_lidar.py` 的第 4 项就是钉这条红线的。
+⛔ It contains **no** x/y coordinates, no room name, no map of the house. Those are the
+world's god's-eye ground truth; they go out of band on `/status` for humans checking results,
+and never onto AWI. Item 4 of `test_lidar.py` pins that line.
 
-## 激光测距怎么做的（v1.0）
+## How the ranging works (v1.0)
 
-机身上一圈水平射线，量八个方向（正前/左前/正左/左后/正后/右后/正右/右前）各能走多远。
-⚠️ 不是外挂：真机 Go2（Pro/Edu）头上就装着一颗 L1 激光雷达。
+A ring of horizontal rays from the body measures how far it could travel in eight directions
+(ahead, ahead-left, left, behind-left, behind, behind-right, right, ahead-right). ⚠️ This is
+not an add-on: a real Go2 (Pro/Edu) carries an L1 lidar on its head.
 
-**为什么加它**：相机只看得见正前方，背后有没有出路全靠猜。测距是四周都有的——
-某个方向读数很大，就说明那边一路空着。⛔ 但它**只给距离**，那边是什么、要不要过去，
-仍然全由大脑看画面判断。
+**Why add it.** The camera only sees forward, so whether there is a way out behind is pure
+guesswork. Ranging covers every direction — a large reading means that way is clear. ⛔ But it
+gives **distance only**. What is over there and whether to go remains entirely the brain's
+judgement from the picture.
 
-**实现要点（改之前先看）**：
+**Implementation notes — read before changing it:**
 
-1. **必须把机器人自己过滤掉**。射线从机身原点往外打，第一个撞上的必然是自己的躯干——
-   实测正前方 0.127 m 就打在自己身上。
-2. **过滤靠 geom 分组掩码，不是"打到自己就跳过去接着打"**。试过后者：正前方连着穿过
-   6 个自身 geom（躯干盒＋头部圆柱＋球＋前腿＋视觉网格…）还没出来，靠固定重试次数不可靠。
-   分组掩码一次到位。⛔ 机器人和房子的分组撞上时**世界拒绝启动**——分不开就没法判断
-   "这条射线打到的是墙还是自己的胳膊"，带病跑出来的读数比没有雷达更糟。
-   （menagerie 惯例本来就分得开：视觉 group 2 / 碰撞 group 3；房子用 0 和 1。）
-3. **`mj_ray` 的 `flg_static` 必须传 1**。墙和家具都是静态几何体，传 0 的话什么都打不到
-   （实测全返回 −1，会得到"四面八方都空着"这种灾难性错读数）。
-4. **报给大脑的和刹车用的是两套**，故意不共用：
-   - `clearance_m` 每个方向**一条**射线 → 含义精确："朝这个方位直着走能走多远"。
-   - `front_cone_m` 是正前方一**片**（默认 ±20°、5 条射线取最近）→ 含义是"我这么宽的身子
-     往前走会不会碰到"。一条中心线会从门缝里穿过去报"前面 8 米空着"，而肩膀其实要撞上——
-     实测出生点旁边就有这么一处（正前 8.00 m vs 锥内 0.46 m）。两个数都给大脑，各自说清含义。
+1. **The robot must be filtered out of its own rays.** They start at the body origin, so the
+   first thing any ray hits is the robot's own torso — measured at 0.127 m straight ahead.
+2. **Filtering is done with geom group masks, not by "skip the hit and cast again".** That was
+   tried: straight ahead the ray passed through six of the robot's own geoms (torso box, head
+   cylinder, sphere, front legs, visual meshes) and still had not left, and a fixed retry count
+   is not reliable. A group mask settles it in one pass. ⛔ **If the robot's groups collide
+   with the house's, the world refuses to start** — without separation there is no way to tell
+   whether a ray hit a wall or the robot's own arm, and readings from a broken setup are worse
+   than no lidar at all. (The menagerie convention already separates them: visual group 2,
+   collision group 3; the house uses 0 and 1.)
+3. **`mj_ray` must be passed `flg_static = 1`.** Walls and furniture are static geometry; with
+   0 the rays hit nothing (measured: all −1, producing the catastrophic reading that every
+   direction is clear).
+4. **What is reported to the brain and what braking uses are two different things**,
+   deliberately not shared:
+   - `clearance_m` is **one** ray per direction, so it means exactly "how far I could walk
+     straight that way".
+   - `front_cone_m` is a **fan** straight ahead (±20° by default, nearest of five rays), so it
+     means "will a body this wide hit something going forward". A single centre line slips
+     through a door gap and reports 8 m clear while the shoulders are about to hit — there is
+     such a spot right beside the spawn point (8.00 m straight ahead against 0.46 m in the
+     cone). Both numbers go to the brain, each with its meaning stated.
 
-**撞前刹车**：往前走的过程中盯着那个锥，近于刹车线（车头长度＋余量，见下表）就停下站住，
-如实报"走了多少、前面还剩多远"。⛔ **只停不拐**——绝不自己侧移或绕行，
-停下来之后往哪走永远是大脑的决定。原地转身不受此限（贴着东西也能转）。
+**Braking before a collision**: while walking forward it watches that cone, and closer than
+the braking distance (the body's front length plus a margin, below) it stops and stands, and
+reports honestly how far it went and how much room is left. ⛔ **It stops; it does not steer.**
+It never sidesteps or goes around on its own — where to go after stopping is always the
+brain's decision. Turning on the spot is exempt (it can turn while close to something).
 
-## 场景与机器人从哪来
+## Where the scene and robots come from
 
-场景和机器人模型都住在独立的开源资产库 **alice-house**（MIT，`github.com/jeffliulab/alice-house`），
-这边只管把它挂进来——路径走配置、env 可覆盖：
+Both live in a separate open-source asset library, **alice-house** (MIT,
+`github.com/jeffliulab/alice-house`). This world only mounts it, and the path is configured
+rather than assumed:
 
 ```
-HOUSENAV_ASSETS_ROOT   资产库的位置（默认：项目根的 alice-house/）
+HOUSENAV_ASSETS_ROOT   where the asset library is (default: alice-house/ at the project root)
 
-HOUSENAV_ROBOT         装哪台机器人（默认：清单里的 DEFAULT_ROBOT）
+HOUSENAV_ROBOT         which robot to fit (default: DEFAULT_ROBOT from the manifest)
 ```
 
-**alice-house** = 大平层三室两厅双卫，12 个空间，各房间靠家具和地面材质区分——
-这是能不能认出房间的关键，也是为什么场景要做得细。
-⚠️ 具体有哪些房间、摆着什么，**这里可以写**（这是给人看的文档），
-但**世界说明书里绝对不能写**——那是发给大脑的，写了就等于把答案先给了它。
+**alice-house** is a large flat: three bedrooms, two receptions, two bathrooms, twelve spaces,
+with rooms distinguished by their furniture and floor materials — which is the whole point,
+and why the scene is built in detail.
 
-## 起服务
+⚠️ Which rooms exist and what is in them **may be written here** — this document is for people
+— but **must never appear in the world's guidance**, which goes to the brain. Writing it there
+hands over the answer.
+
+## Running it
 
 ```bash
 cd anima-zero/world/sim-house-nav
 ./.venv/bin/uvicorn server:app --port 8112
 ```
 
-起来后：
-
-| 地址 | 是什么 |
+| Address | What it is |
 |---|---|
-| `http://localhost:8112/` | 人类页：实时看机器人眼前的画面 |
-| `/mcp` | **AWI**：大脑走这条线（tools / 感知 / 说明书 / 配置声明） |
-| `/stream` `/streams` | MJPEG 直播（ANIMA 网页的传感区用）|
-| `/stream/third` | ⛔ 第三视角跟拍：**只给人看**，大脑绝对看不到这一路 |
-| `/status` | ⚠️ 上帝视角真值（机器人在哪间屋），**只给人验收** |
-| `/config` | 读/改世界配置（换身体）。⚠️ 带外：这是**人**的动作，大脑调不到 |
-| `/reset` | 把机器人放回出生点 |
-| `/health` | 探活 |
+| `http://localhost:8112/` | Human page: watch what the robot sees, live |
+| `/mcp` | **AWI** — the brain's line (tools / perception / guidance / config declaration) |
+| `/stream` `/streams` | MJPEG live views (used by the sensor panel in ANIMA's web UI) |
+| `/stream/third` | ⛔ Third-person chase camera: **humans only**, the brain never sees this |
+| `/status` | ⚠️ God's-eye ground truth (which room the robot is in), **for checking results** |
+| `/config` | Read/change the world's setup (swap bodies). ⚠️ Out of band: a **human** action, unreachable from the brain |
+| `/reset` | Put the robot back at the spawn point |
+| `/health` | Liveness |
 
-⚠️ `/streams` 每一路带一个 `awi` 字段：`true`（或没写）= 大脑真正看到的画面，
-`false` = 只给人看的旁观视角。网页据此把传感区分成两块——
-把跟拍摆在「ANIMA 看到的画面」标题底下就是**撒谎**。
+⚠️ Every entry in `/streams` carries an `awi` field: `true` (or absent) means the brain really
+sees this view, `false` means a spectator view for people. The web page splits the sensor
+panel accordingly — putting the chase camera under the "what ANIMA sees" heading would be a
+lie.
 
-大脑侧要连它，世界清单里得有（`config.worlds()` 默认已含，或 `.env` 的 `ANIMA_WORLDS`
-里**追加**——⛔ 追加不替换，别把别的世界挤没了）。
+To connect from the brain, the world must be in the world list (`config.worlds()` already
+includes it by default, or **append** to `ANIMA_WORLDS` in `.env` — ⛔ append, never replace,
+or you drop the other worlds).
 
-## 可调项
+## Settings
 
-全在 `config.py`，每个都能用 `HOUSENAV_*` 环境变量覆盖，代码里不留裸数字。常用的几个：
+All in `config.py`, each overridable by a `HOUSENAV_*` environment variable, with no bare
+numbers left in the code. The ones you are likely to touch:
 
-| 变量 | 默认 | 是什么 |
+| Variable | Default | What it is |
 |---|---|---|
-| `HOUSENAV_WALK_SPEED` | 0.6 | 前进时下发的 vx（m/s） |
-| `HOUSENAV_TURN_RATE` | 0.8 | 转向时下发的 wz（rad/s，约 46°/s） |
-| `HOUSENAV_MAX_MOVE_M` | 3.0 | 一次最多走几米（防大脑一次要走 50 米） |
-| `HOUSENAV_MAX_TURN_DEG` | 180 | 一次最多转多少度 |
-| `HOUSENAV_LIDAR_RANGE_M` | 8.0 | 激光测距量程（m）；超出一律报这个数 |
-| `HOUSENAV_LIDAR_Z_OFFSET` | 0.05 | 射线高度＝机身原点往上多少（m），跟着机身走 |
-| `HOUSENAV_BRAKE_MARGIN_M` | 0.20 | 刹车留多少余量（m），见下 |
-| `HOUSENAV_BRAKE_CONE_DEG` | 40 | 刹车盯的锥有多宽（度）|
-| `HOUSENAV_ROBOT` | 空 | 装哪台机器人（`go2`/`g1`）；空=清单里的默认那台 |
-| `HOUSENAV_LOOK_AROUND` | 0 | 开不开环视（v1.0 默认关）|
-| `HOUSENAV_THIRD_PERSON` | 1 | 开不开第三视角跟拍（只给人看）|
+| `HOUSENAV_WALK_SPEED` | 0.6 | The vx sent while walking (m/s) |
+| `HOUSENAV_TURN_RATE` | 0.8 | The wz sent while turning (rad/s, about 46°/s) |
+| `HOUSENAV_MAX_MOVE_M` | 3.0 | Furthest one call may walk (so the brain cannot ask for 50 m) |
+| `HOUSENAV_MAX_TURN_DEG` | 180 | Furthest one call may turn |
+| `HOUSENAV_LIDAR_RANGE_M` | 8.0 | Ranging limit (m); beyond it everything reports this number |
+| `HOUSENAV_LIDAR_Z_OFFSET` | 0.05 | Ray height above the body origin (m), moving with the body |
+| `HOUSENAV_BRAKE_MARGIN_M` | 0.20 | Braking margin (m) — see below |
+| `HOUSENAV_BRAKE_CONE_DEG` | 40 | Width of the cone braking watches (degrees) |
+| `HOUSENAV_ROBOT` | empty | Which robot to fit (`go2` / `g1`); empty = the manifest's default |
+| `HOUSENAV_LOOK_AROUND` | 0 | Enable look-around (off by default since v1.0) |
+| `HOUSENAV_THIRD_PERSON` | 1 | Enable the third-person chase view (humans only) |
 
-⚠️ **刹车距离是算出来的，不是填的**：`车头长度（从模型量出来）+ BRAKE_MARGIN_M`。
-车头有多长是机器人的客观事实（Go2 实测 0.39 m），能算就不该让人填——填的数会在换模型时
-悄悄过期。余量才是"我想留多少安全距离"这个人为选择。
+⚠️ **The braking distance is computed, not filled in**: the body's front length (measured from
+the model) plus `BRAKE_MARGIN_M`. How long the front of the robot is, is an objective fact
+about the robot — something that can be computed should not be typed in, because a typed
+number goes quietly stale when the model changes. The margin is the part that is a human
+choice: how much room I want to leave.
 
-## 换身体（v1.0）
+## Swapping bodies (v1.0)
 
-这个世界能装两台机器人：**四足机器狗 Go2** 和**人形 G1**。装哪台在网页的 AWI 页上切
-（世界卡的 Config 区），或者起服务前设 `HOUSENAV_ROBOT=g1`。
+This world fits two robots: the **Go2 quadruped** and the **G1 humanoid**. Which one is chosen
+on the AWI page in the web UI (the Config section of the world card), or by setting
+`HOUSENAV_ROBOT=g1` before starting.
 
-「这台机器人是什么」的全部事实住在**资产库的 `robots/manifest.py`**——模型在哪、出生多高、
-相机叫什么、力矩怎么发。世界侧只是照着它干活，代码里不为任何一台机器人写死东西。
+Every fact about *what this robot is* lives in the asset library's **`robots/manifest.py`** —
+where the model is, how high it spawns, what the camera is called, how torque is sent. This
+world just follows it, and hard-codes nothing for any particular robot.
 
-⛔ **两台的力矩发法是相反的**（清单里的 `pd_mode`，搞反当场倒）：
-Go2 训练侧是显式 PD（部署器自己算 −kd·qd、模型阻尼清零）；
-G1 是隐式 PD（kd 写进 `dof_damping` 交给 MuJoCo，力矩只发 kp 那一项）。
+⛔ **The two send torque in opposite ways** (`pd_mode` in the manifest; get it backwards and
+the robot falls immediately). Go2 was trained with explicit PD — the deployer computes −kd·qd
+itself and the model's damping is zeroed. G1 is implicit PD — kd goes into `dof_damping` for
+MuJoCo to handle, and only the kp term is sent as torque.
 
-⛔ 换身体**要重建整个仿真**（换模型、换策略、回出生点），所以它是**开跑前**的配置，
-不是对话中途能切的东西——大脑没有对应的工具，只是被告知"你现在是什么身体"。
+⛔ Swapping bodies **rebuilds the entire simulation** (different model, different policy, back
+to the spawn point), so it is configuration set **before a run**, not something to switch
+mid-conversation. The brain has no tool for it — it is simply told what body it now has.
 
-## 第三视角跟拍（v1.0，⛔ 只给人看）
+## The third-person chase view (v1.0, ⛔ humans only)
 
-从斜后上方跟着机器人的一路画面，让你像看转播一样看着它在屋里走。
+A view from above and behind that follows the robot, so you can watch it move through the
+house as though it were televised.
 
-- **红线**：这一路**绝不进 `observe()`**。给大脑上帝视角＝把这个世界要考的能力直接送掉，
-  而且不报错不崩、只让结果虚高。红线在三处落实（`observe()` 不碰它、`/streams` 标
-  `awi=false`、网页分两块显示），大脑仓 `tests/test_third_person.py` 逐条钉着。
-- 渲染时关掉天花板那一组几何体（资产库早把天花板单独归了组，就是为了这种俯视需求）。
-- ⚠️ **方位角就是机身朝向，不要 +180**。MuJoCo 自由相机的 `azimuth` 描述的是「相机往哪个方向看」，不是「相机在哪个方位」——加了 180 镜头会跑到正前方去拍脸，而且**画面看着挺像回事**（一样能看到机器人、一样有背景），不盯着看根本发现不了。
-  判据别靠推理，看画面：**跟拍的背景应该和第一视角看到的是同一片东西**。
-  2026-07-26 就是这么抓到的——加 180 时背景是它身后的柜子，不加时背景是它正对着的两个门洞。
-- **被家具挡住会自动把镜头拉近**（游戏里第三人称相机的标准做法）——屋里空间窄，
-  机位常常正好落在一件柜子后面。这里复用了激光测距那套射线：从机器人往机位方向打一条，
-  撞上了就退到撞点前面一点。
+- **The line**: this view **never enters `observe()`**. Handing the brain a god's-eye view
+  gives away the ability this world exists to test, and it does so without any error or crash
+  — it just inflates the result. The line is held in three places (`observe()` does not touch
+  it, `/streams` marks `awi=false`, the web page shows two separate sections) and the brain
+  repo's `tests/test_third_person.py` pins each one.
+- Rendering switches off the ceiling geom group (the asset library groups the ceiling
+  separately for exactly this kind of overhead view).
+- ⚠️ **The azimuth is the body heading — do not add 180.** MuJoCo's free-camera `azimuth`
+  describes *which way the camera looks*, not *where the camera is*. Add 180 and the camera
+  swings round to shoot the robot in the face — and **the picture still looks perfectly
+  plausible**: the robot is there, a background is there, and nothing about it looks wrong
+  unless you stare. Do not reason about it, look at it: **the chase view's background should
+  be the same scenery as the first-person view's**. That is how it was caught on 2026-07-26 —
+  with the 180 the background was the cupboard behind the robot, without it, the two doorways
+  the robot was facing.
+- **It pulls in when furniture blocks it** — standard third-person camera behaviour in games.
+  The house is tight and the camera position often lands right behind a cupboard. This reuses
+  the lidar's rays: cast one from the robot towards the camera position, and if it hits, pull
+  back to just in front of the hit.
 
-## 踩过的坑（改这个世界前先看一眼）
+## Traps already fallen into (read before changing this world)
 
-1. **MuJoCo free joint 的 `qvel[3:6]` 已经是机体系角速度**，不能再乘一次 `R.T`。
-   犯了这个错的症状很隐蔽：yaw=0 时 `R=I`，狗站得好好的；一转到朝西（150°–210°）就翻。
-   排查口诀：**只在特定朝向出问题 = 先怀疑坐标系转换**。
-2. **MuJoCo 的执行器名字和关节名不一样**（关节 `FL_hip_joint` vs 执行器 `FL_hip`），
-   按名字查会全部返回 −1，而 `data.ctrl[-1]` 不会报错、把所有力矩写进最后一个执行器 →
-   狗当场瘫掉。正确做法是按**传动目标**（`actuator_trnid`）反查。
-3. **策略的观测顺序/缩放必须和训练时逐位对上**。所以 `dump_contract.py` 从活的 Isaac
-   环境里导出 `contract.json`（关节顺序、默认姿态、增益、观测项顺序与缩放），
-   推理侧照它拼观测，不靠手抄。
-4. **两台机器人的力矩发法是相反的**，由机器人清单的 `pd_mode` 决定，搞反当场倒：
-   Go2 是显式 PD（`dof_damping`/`dof_frictionloss` 清零、力矩自己算 `kp*(q*−q) − kd*qd`）；
-   G1 是隐式 PD（kd 写进 `dof_damping` 交给 MuJoCo 半隐式积分，力矩只发 `kp*(q*−q)`）。
-   把 G1 当显式跑会让关节速度从第一步就高频振铃 → 策略收到垃圾观测 → 约 1 秒倒。
-5. **观测要不要拼历史帧看契约的 `history_length`**，不是看机器人。Go2 是 1，G1 是 5，
-   而且 G1 的拼法是**逐项历史块**（每项各存 5 帧再首尾相接）不是逐帧全量块——
-   两者维度一样、值完全不同，拼错了不报错、走两步就倒。
-6. **激光测距靠 geom 分组把机器人和房子分开**，分组撞上时世界拒绝启动（见「激光测距」一节）。
+1. **A MuJoCo free joint's `qvel[3:6]` is already body-frame angular velocity** — do not
+   multiply by `R.T` again. The symptom is well hidden: at yaw = 0, `R = I` and the dog stands
+   perfectly; turn it west (150°–210°) and it flips. Rule of thumb: **a fault that appears
+   only at certain headings — suspect a frame conversion first.**
+2. **MuJoCo actuator names differ from joint names** (joint `FL_hip_joint` versus actuator
+   `FL_hip`). Looking up by name returns −1 for everything, and `data.ctrl[-1]` raises no
+   error — it writes every torque into the last actuator, and the dog collapses on the spot.
+   Look them up by **transmission target** (`actuator_trnid`) instead.
+3. **The policy's observation order and scaling must match training term by term.** So
+   `dump_contract.py` exports `contract.json` from a live Isaac environment (joint order,
+   default pose, gains, observation order and scales) and the inference side assembles the
+   observation from that rather than from a hand copy.
+4. **The two robots send torque in opposite ways**, decided by `pd_mode` in the robot manifest;
+   get it backwards and it falls immediately. Go2 is explicit PD (`dof_damping` and
+   `dof_frictionloss` zeroed, torque computed as `kp*(q*−q) − kd*qd`); G1 is implicit PD (kd
+   goes into `dof_damping` for MuJoCo's semi-implicit integrator, and only `kp*(q*−q)` is
+   sent). Running G1 as explicit makes joint velocity ring at high frequency from the first
+   step, the policy receives rubbish observations, and it falls in about a second.
+5. **Whether the observation stacks history frames comes from the contract's
+   `history_length`**, not from the robot. Go2 is 1, G1 is 5 — and G1 stacks **per-term
+   blocks** (five frames of each term, concatenated), not whole-frame blocks. The two have
+   identical dimensions and completely different values; get it wrong and there is no error,
+   it just falls over after two steps.
+6. **The lidar separates robot from house by geom group**, and the world refuses to start when
+   the groups collide (see the ranging section).
 
-## 文件
+## Files
 
 ```
-server.py          世界服务（AWI + 人类页）
-world.py           AWI 世界对象：capabilities / observe / invoke + 世界说明书
-sim.py             物理与策略线程；闭环导航原语 drive_distance / drive_turn；激光测距
-config.py          全部可调项（env 可覆盖）
-scene_assets.py    按配置加载场景资产库（布局/机器人清单/场景 MJCF）——收口，别再各处抄
-export_policy.py   训练 checkpoint → ONNX（自带 torch/onnx 一致性自检，对不上就拒绝交付）
-dump_contract.py   从活的 Isaac 环境导出观测契约
-test_walk.py       无头自测：给速度指令，机器人能不能真走真转不摔
-test_lidar.py      无头自测：射线没打到自己 / 跟着朝向转 / 撞前刹车 / 观测不含上帝视角
-awi_mcp.py         AWI-over-MCP 适配层（各世界字节一致的副本，有测试守着）
-web/index.html     人类页
+server.py          The world service (AWI + human page)
+world.py           The AWI world object: capabilities / observe / invoke, plus the guidance
+sim.py             Physics and policy threads; the closed-loop primitives drive_distance /
+                   drive_turn; laser ranging
+config.py          Every setting (env-overridable)
+scene_assets.py    Loads the asset library per configuration (layout / robot manifest / scene
+                   MJCF) — one place, do not copy this around
+export_policy.py   Training checkpoint → ONNX (with a torch/onnx consistency check that
+                   refuses to deliver on a mismatch)
+dump_contract.py   Exports the observation contract from a live Isaac environment
+test_walk.py       Headless self-test: given a velocity command, does it really walk and turn
+                   without falling
+test_lidar.py      Headless self-test: rays miss the robot / follow its heading / brake before
+                   a collision / the observation carries no god's-eye data
+awi_mcp.py         The AWI-over-MCP adapter (byte-identical copy in each world, held by a test)
+web/index.html     The human page
 ```
 
-两个自测直接跑（都要几十秒，会真起 MuJoCo）：
+Both self-tests run directly, and each takes tens of seconds because it really starts MuJoCo:
 
 ```bash
 ./.venv/bin/python test_walk.py

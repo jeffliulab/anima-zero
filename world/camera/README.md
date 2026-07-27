@@ -1,40 +1,67 @@
+<div align="center">
+
+<a href="README.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
+<a href="README_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
+
+</div>
+
 # camera
 
-ANIMA 的一个独立「世界」(AWI)：把**真实摄像头**的实时画面交给 ANIMA 看。
+A standalone **world** (AWI) for ANIMA: it hands the live picture from a **real camera** to
+the brain.
 
-这是 ANIMA 第一次看真实物理世界（不再是程序画出来的合成图）。本版定位很轻：**只能看、能聊、不能操作**。
+This is the first time ANIMA looks at the real physical world rather than at an image a
+program drew. The scope is deliberately small: **it can look and it can talk. It cannot act.**
 
-**对大脑只给【看】**：`/perceive`(画面 + 极简 state) 和 `/stream`(MJPEG)。`capabilities` 的 **tools 是空的** —— ANIMA 在这个世界里**没有任何可执行动作**（"只能看、不能操作"是结构上保证的，不是靠提示词约束）。
+**Looking is all the brain gets.** Perception returns a frame and a minimal state, and the
+`tools` list in `capabilities` is **empty** — in this world ANIMA has no executable action at
+all. "It can only look" is guaranteed structurally, not asked for in a prompt.
 
-**摄像头由人来选、来开**：服务启动**不主动打开任何摄像头**，只枚举出电脑上有哪些。打开哪个，由人在世界页下拉框里选——插了多个可随时切换。选中了，画面才出现并传给 ANIMA。
+**A person chooses and opens the camera.** Starting the service opens nothing; it only
+enumerates what the machine has. Which one to open is picked from a dropdown on the world's
+page, and with several plugged in you can switch at any time. Only once one is selected does
+a picture appear and reach ANIMA.
 
-**分辨率可在线调**：选中某摄像头后，世界会用 Linux V4L2 接口问内核这台设备**真支持哪些分辨率**（不写死分辨率表），世界页只给真支持的档供选择。切换分辨率时按该档自动选最优采集格式（同帧率下 YUYV 无损优先，高分辨率下 MJPG 帧率更高会被自动选中）。世界页实时显示摄像头核心参数（**真正生效的**分辨率 / 帧率 / 像素格式，由设备回读），这些也写进 `/perceive` 的 state 交给 ANIMA。
+**Resolution is changed live.** With a camera selected, the world asks the kernel through
+Linux V4L2 **which resolutions the device actually supports** — no hard-coded table — and the
+page offers only those. Switching picks the best capture format for that mode (at equal frame
+rates lossless YUYV wins; at high resolutions MJPG gives more frames and is chosen
+automatically). The page shows the camera's real parameters — the resolution, frame rate and
+pixel format **actually in effect**, read back from the device — and those go into the
+perception state that reaches ANIMA too.
 
 ```
 cd world/camera && pip install -e . && uvicorn server:app --port 8104
 ```
-打开 `localhost:8104`：在下拉框里选一个摄像头 → 画面出现 → ANIMA（在主界面选 camera 世界）就能看到、能聊。
 
-## 接口
+Open `localhost:8104`, pick a camera from the dropdown, and a picture appears. Select the
+`camera` world in the main UI and ANIMA can see it and talk about it.
 
-AWI（脑↔世界）：`GET /capabilities`、`GET /perceive`、`POST /invoke`（本世界无动作，一律拒绝）、`GET /health`
-人类页/控制（世界本地，不进 AWI）：`GET /stream`、`GET /cameras`、`GET /modes`（当前摄像头真支持的分辨率档）、`POST /select`、`POST /resolution`（切到某支持的分辨率）、`POST /release`、`GET /status`、`GET /`
+## Interfaces
 
-## 可调项（env，都有默认值）
+**AWI (brain ↔ world)** goes entirely through **`/mcp`** (MCP): `tools/list` (empty here),
+`resources/read anima://observation` (perception), `prompts/get` (guidance), `tools/call`
+(refused here — there are no actions). Plus out-of-band `GET /health` for liveness.
 
-| env | 默认 | 含义 |
+**Human page and controls** (world-local, never on AWI): `GET /stream`, `GET /cameras`,
+`GET /modes` (the resolutions this camera really supports), `POST /select`,
+`POST /resolution`, `POST /release`, `GET /status`, `GET /`.
+
+## Settings (env, all with defaults)
+
+| env | Default | Meaning |
 |---|---|---|
-| `CAMERA_DEVICE_GLOB` | `/dev/video*` | 枚举摄像头节点的路径模式（平台相关，走发现式） |
-| `CAMERA_WIDTH` / `CAMERA_HEIGHT` | `640` / `480` | 默认抓帧分辨率（选中后可在世界页改到设备真支持的任一档） |
-| `CAMERA_USABLE_FOURCCS` | `YUYV,MJPG` | 本世界能解码的采集格式（按偏好排序）；设备报的其它格式（如 H264）不放进可选项 |
-| `CAMERA_JPEG_QUALITY` | `80` | `/stream` 的 JPEG 画质（1–100） |
-| `CAMERA_WARMUP_READS` | `3` | 打开后先丢几帧（等自动曝光收敛） |
-| `CAMERA_STREAM_FPS` | `15` | 实时流帧率 |
-| `CAMERA_WORLD_VERSION` | `0.3` | 世界版本号 |
+| `CAMERA_DEVICE_GLOB` | `/dev/video*` | Glob for enumerating camera nodes (platform specific — discovered, not assumed) |
+| `CAMERA_WIDTH` / `CAMERA_HEIGHT` | `640` / `480` | Default capture resolution (changeable on the page to any mode the device supports) |
+| `CAMERA_USABLE_FOURCCS` | `YUYV,MJPG` | Capture formats this world can decode, in order of preference. Anything else the device reports (H264, say) is not offered |
+| `CAMERA_JPEG_QUALITY` | `80` | JPEG quality for `/stream` (1–100) |
+| `CAMERA_WARMUP_READS` | `3` | Frames discarded after opening, while auto-exposure settles |
+| `CAMERA_STREAM_FPS` | `15` | Live stream frame rate |
+| `CAMERA_WORLD_VERSION` | `0.3` | World version |
 
-## 自测
+## Self-test
 
 ```
-python capture.py            # 仅枚举摄像头，不打开任何设备
-python capture.py 0 out.png  # 打开 0 号摄像头抓一帧存 out.png（会真正开硬件）
+python capture.py            # enumerate cameras only; opens no device
+python capture.py 0 out.png  # open camera 0 and save one frame (this really opens hardware)
 ```
