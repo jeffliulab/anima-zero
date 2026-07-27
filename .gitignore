@@ -198,3 +198,8 @@ world/*/scripts/_*.py
 
 # v0.5 大重构删除缓冲区(本地保险箱,终局清扫后物理删除;见 CLAUDE.md 开发记录)
 archive/
+
+# 随 wheel 分发的网页构建产物（`python scripts/build_ui.py` 生成）。
+# 不入库：它是发版时从 frontend/ 构建出来的，入库只会带来巨大的 diff 噪音，
+# 而且必然出现"仓里这份和 frontend/ 源码对不上"的时刻。CI 在打包前构建它。
+src/presentation/web/

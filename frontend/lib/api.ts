@@ -1,4 +1,11 @@
-// 后端地址。部署到非本机时设环境变量 NEXT_PUBLIC_API(见 presentation/web/.env.example);默认连本机 :8000。
+// 后端地址。部署到非本机时设环境变量 NEXT_PUBLIC_API;默认连本机 :8000。
+//
+// ⭐ 空串是有意义的一档，不是"没设"：`npm run build:static` 会用 NEXT_PUBLIC_API="" 构建，
+//    于是下面每一处 `${BASE}/api/...` 都变成 `/api/...`——**相对于当前页面的源**。
+//    这正是把网页打进 wheel、由后端自己端出来时需要的：用户拿 `anima serve --port 9000`
+//    换个端口，页面照样连得上，因为它连的就是"端出它的那个服务"。
+//    注意用的是 `??` 不是 `||`：空串必须能穿过去，`||` 会把它当成假值退回 :8000，
+//    那样打进 wheel 的页面就会去连一个也许根本没起的 :8000。
 const BASE = process.env.NEXT_PUBLIC_API ?? "http://localhost:8000";
 
 // /awi terminal 最多显示多少条 AWI 流量。必须 ≤ 后端缓冲(脑端 awi_log 的 AWI_LOG_MAXLEN=400),否则永远凑不满。

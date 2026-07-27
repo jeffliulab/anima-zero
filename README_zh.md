@@ -76,16 +76,13 @@ ANIMA Zero 是一台具身机器人的脑。它只想、不动手：它决定做
 世界的汇报是如实的，不是好听的。人形没法原地转身，所以它的转弯要带一点前进速度，
 转完人就往前挪了 0.64 米；世界会照实说，大脑据此修正自己对位置的估计。
 
-```
-src/core/         编排器、AWI 契约、安全闸、叫停
-src/clients/      MCP 客户端层与世界注册表
-src/session/      会话、上下文窗口、统一日志
-src/llm/          各家大模型适配
-src/presentation/ HTTP 后端
-world/            各个世界，每个是独立进程
-services/         棋类引擎顾问
-frontend/         网页，中英双语
-eval/             从对局日志出可复现的记分卡
+```text
+src/core/      编排器、AWI 契约、信任存储、安全闸
+src/clients/   MCP 客户端层与世界注册表
+src/session/   会话、上下文窗口、统一日志
+src/llm/       各家大模型适配     src/presentation/  HTTP 后端
+world/         各个世界，每个是独立进程
+services/      棋类引擎顾问       frontend/  网页    eval/  记分卡
 ```
 
 ## 安装
@@ -99,7 +96,7 @@ anima demo
 它用的那个大脑不思考——只调一个工具、把结果报回来——因为 demo 的意义是让你看见那个循环，不是让你惊艳。
 配好 key 之后 `anima demo --brain gpt-5.4`，同一个循环换一个真会想的大脑。
 
-```
+```text
 anima demo                    一条命令，看它跑起来
 anima chat --world W          在终端里对话
 anima run --say "..."         跑一轮就退出，可脚本化

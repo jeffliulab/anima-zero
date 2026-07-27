@@ -92,3 +92,14 @@ jobs:
 
       - name: Build / 构建
         run: npm run build
+
+      # The static export is what the Python wheel carries, so a break here would only
+      # surface at release time — when the wheel silently ships whatever copy was lying
+      # around. Checking it on every push is what stops that from being a release-day
+      # discovery. / 静态导出是 Python wheel 会带走的那份，所以它坏了只会在**发版时**才暴露
+      # ——那时 wheel 会静默地把碰巧留着的旧副本发出去。每次推送都验一遍，才不会变成发版当天的发现。
+      - name: Static export (what ships in the wheel) / 静态导出（随 wheel 分发的那份）
+        run: npm run build:static
+
+      - name: The export must actually contain a page / 导出产物里必须真有页面
+        run: test -f out/index.html && test -f out/awi.html

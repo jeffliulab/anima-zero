@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import time
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -481,3 +482,44 @@ def dev_turn(inp: DevTurnIn) -> dict:
     return {"session_id": session.id, "reply": out["reply"], "log": log}
 
 
+
+
+# ================================ the web app, when it travels with us / 随包同行的网页 ===
+# The wheel can carry a pre-built copy of the web app, so `pip install anima` gives you a
+# usable interface on a machine with no node. It is mounted **last**, on purpose: every
+# /api/... route above is registered first, so a catch-all here can never shadow one.
+#
+# Absent in a source checkout until `python scripts/build_ui.py` has been run — which is why
+# this is a quiet no-op rather than an error. Missing UI is a normal state during backend
+# development, not a fault.
+#
+# wheel 里可以带一份预先构建好的网页，好让 `pip install anima` 在一台没有 node 的机器上也有可用界面。
+# 它**有意挂在最后**：上面每一条 /api/... 路由都先注册了，所以这里的兜底路由不可能盖住它们。
+#
+# 在源码检出里，`python scripts/build_ui.py` 跑过之前它是不存在的——所以这里是**安静地不挂载**
+# 而不是报错。后端开发时没有网页是正常状态，不是故障。
+_UI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
+
+
+def ui_build_time() -> str | None:
+    """When the bundled web app was built, or None if there is none.
+
+    ⚠️ Printed on startup for one reason: a wheel built without running the UI build
+    silently ships whatever copy happened to be lying around, and a stale interface looks
+    exactly like a working one. A visible timestamp is the cheapest way to notice.
+
+    随包的网页是什么时候构建的；没有网页则为 None。
+
+    ⚠️ 启动时打印它只为一件事：构建 wheel 时忘了先构建网页，就会**静默**地把碰巧留在那儿的旧版本
+    发出去，而一个过时的界面看起来和正常的一模一样。打一个看得见的时间戳，是最便宜的发现办法。
+    """
+    index = os.path.join(_UI_DIR, "index.html")
+    if not os.path.exists(index):
+        return None
+    return time.strftime("%Y-%m-%d %H:%M", time.localtime(os.path.getmtime(index)))
+
+
+if os.path.isdir(_UI_DIR):
+    from fastapi.staticfiles import StaticFiles
+
+    app.mount("/", StaticFiles(directory=_UI_DIR, html=True), name="web")

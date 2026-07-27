@@ -28,6 +28,7 @@ same system reached a different way.
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import subprocess
 import sys
@@ -282,8 +283,31 @@ def cmd_chat(args) -> int:
 
 def cmd_serve(args) -> int:
     import uvicorn
-    print(f"后端 http://{args.host}:{args.port}")
-    print("网页要单独起：cd frontend && npm run dev")
+
+    from .presentation.server import ui_build_time
+
+    # flush=True on every line below. Python block-buffers stdout when it is not a terminal,
+    # so `anima serve > log` would show nothing until the buffer filled — and a server that
+    # looks silent on startup looks broken.
+    # 下面每一行都 flush=True。stdout 不是终端时 Python 会块缓冲，于是 `anima serve > log`
+    # 在缓冲区填满之前什么都不显示——而一个"启动时一声不响"的服务，看起来就是坏的。
+    say = functools.partial(print, flush=True)
+
+    url = f"http://{args.host}:{args.port}"
+    built = ui_build_time()
+    if built:
+        # The build time is printed rather than just "web app: yes". A wheel packaged
+        # without rebuilding the UI ships a stale copy silently, and a stale interface is
+        # indistinguishable from a working one — a date is the cheapest way to catch it.
+        # 打印的是构建时间而不是"网页：有"。打包时忘了重建网页会**静默**发出一份旧的，
+        # 而过时的界面和正常的界面看起来一模一样——一个日期是最便宜的发现办法。
+        say(f"网页 + API   {url}   （网页构建于 {built}）")
+    else:
+        say(f"API   {url}")
+        say("这个装法里没有带网页。开发时另起：cd frontend && npm run dev")
+        say("要把网页装进来：python scripts/build_ui.py")
+    if args.host not in ("127.0.0.1", "localhost"):
+        say(f"⚠ 绑在 {args.host} 上——同网段的人都能建会话、驱动你连着的世界。")
     uvicorn.run("anima.presentation.server:app", host=args.host, port=args.port,
                 log_level="warning")
     return 0

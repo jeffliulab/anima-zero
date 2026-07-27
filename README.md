@@ -39,10 +39,10 @@ Two names to keep straight: the repository is `anima-zero`, the Python package i
 
 ## Key features
 
-- **One brain, different bodies**: the same brain code drives a Unitree Go2 quadruped and a Unitree
-  G1 humanoid without a single line changing. Only the eye height differs, 0.38 m against 1.25 m.
-- **One interface for any world**: a world is a separate process that speaks AWI over MCP. Swapping
-  worlds means swapping a URL.
+- **One brain, different bodies**: the same brain code drives a Unitree Go2 quadruped and a
+  Unitree G1 humanoid without a line changing — only the eye height differs, 0.38 m against 1.25 m.
+- **One interface for any world**: a world is a separate process speaking AWI over MCP. Swapping
+  worlds means swapping a URL — and a world is untrusted until you have reviewed and approved it.
 - **From a sentence to joint torques**: an instruction crosses five layers before it becomes leg
   motion, and those layers run three and a half orders of magnitude apart in frequency.
 - **It remembers what it is doing**: two state registers ride along in the system prompt, so a
@@ -86,16 +86,13 @@ The world reports back truthfully rather than conveniently. A humanoid cannot pi
 its turn carries a little forward speed and ends up 0.64 m further along; the world says so, and the
 brain corrects its own sense of position from that.
 
-```
-src/core/         orchestrator, AWI contract, safety gate, interrupt
-src/clients/      MCP client layer and the world registry
-src/session/      sessions, context window, unified log
-src/llm/          model adapters
-src/presentation/ HTTP backend
-world/            the worlds, each its own process
-services/         the board-game engine advisor
-frontend/         web app, bilingual
-eval/             reproducible scoring from game logs
+```text
+src/core/      orchestrator, AWI contract, trust store, safety gate
+src/clients/   MCP client layer and the world registry
+src/session/   sessions, context window, unified log
+src/llm/       model adapters      src/presentation/  HTTP backend
+world/         the worlds, each its own process
+services/      board-game engine   frontend/  web app   eval/  scoring
 ```
 
 ## Installation
@@ -110,7 +107,7 @@ node, nothing else to install. The brain it uses does not think — it calls one
 reports back — because the point of the demo is to show you the loop, not to impress you.
 Add a key and `anima demo --brain gpt-5.4` to see the same loop with a brain that does.
 
-```
+```text
 anima demo                    one command, something happens
 anima chat --world W          a conversation in the terminal
 anima run --say "..."         one turn, scripted
@@ -121,59 +118,40 @@ anima doctor                  what is configured and what is reachable
 
 ### The full setup
 
-Three processes: a world, the backend, and the web app.
+Three processes: a world, the backend, and the web app. Scenes and robots come from
+alice-house, looked up next to this repository; set `HOUSENAV_ASSETS_ROOT` if it is elsewhere.
 
 ```bash
-# 1. a world — house navigation, pure MuJoCo, no ROS and no conda needed.
-#    Scenes and robots come from alice-house, looked up next to this repository;
-#    set HOUSENAV_ASSETS_ROOT if it lives elsewhere.
 cd world/sim-house-nav && pip install -e . && uvicorn server:app --port 8112
-
-# 2. the backend
-pip install -e .
-cp .env.example .env          # add an API key, or point it at a local Ollama
-anima serve                   # or: uvicorn anima.presentation.server:app --port 8000
-
-# 3. the web app
+pip install -e . && cp .env.example .env      # add an API key, or point at a local Ollama
+anima serve
 cd frontend && npm install && npm run dev
 ```
 
 ### Connecting a world is a trust decision
 
-A world is a separate process reached over a URL, and its own description of itself lands
-in the brain's system prompt. So a world's tools and guidance do not reach the brain until
-you have looked at them and said yes:
-
-```bash
-anima world add myworld http://localhost:9000   # prints what it declares, then asks
-```
-
-Approval is bound to the content, not the name: if the world comes back different, you are
-asked again with a note on what changed. While developing your own world, where that
-happens on every edit, set `ANIMA_TRUST_ALL=1`. See [SECURITY.md](SECURITY.md) for what
-this does and does not protect against.
+A world is a remote process, and its own description of itself lands in the brain's system
+prompt — so its tools and guidance do not reach the brain until you have looked and said
+yes. `anima world add NAME URL` prints what it declares, then asks. Approval binds to the
+content, not the name: if the world comes back different you are asked again, with a note
+on what changed. While developing your own world, set `ANIMA_TRUST_ALL=1`.
+[SECURITY.md](SECURITY.md) says what this does and does not protect against.
 
 ## Running the demo
 
-Open `localhost:3000`, create a session against `sim-house-nav`, and type "go to the living room".
-The middle column shows what the robot sees and, separately, a chase camera that only you can see.
-The right column shows every step: the frame, the reasoning, the tool call, and what the world
-answered.
+Open the web app, create a session against `sim-house-nav`, and type "go to the living room".
+The middle column shows what the robot sees and, separately, a chase camera that only you can
+see. The right column shows every step: frame, reasoning, tool call, and the world's answer.
 
 <div align="center">
 <img src="docs/images/ui-chat-en.png" alt="The ANIMA web app" width="880">
 </div>
 
-To check whether a claim is true rather than plausible, ask the world directly. This endpoint is for
-human verification only and never enters perception:
-
-```bash
-curl -s localhost:8112/status
-```
-
-Swapping things around costs one line each. The body has a dropdown on the AWI dashboard, or set
-`HOUSENAV_ROBOT=g1` before starting the world. The brain has a dropdown in the web app. The world is
-chosen when you create a session, and the list lives in `ANIMA_WORLDS`.
+To check whether a claim is true rather than plausible, ask the world directly —
+`curl -s localhost:8112/status`, an endpoint for human verification that never enters perception.
+Swapping things costs one line each: the body has a dropdown on the AWI dashboard (or set
+`HOUSENAV_ROBOT=g1` before starting the world), the brain has one in the web app, and the world is
+chosen when you create a session.
 
 These worlds ship with the repository:
 
@@ -199,8 +177,8 @@ Five target rooms, one run each, every final frame checked by hand against what 
 The interesting result is the negative one. The suspected cause used to be that a kitchen and a
 bathroom look alike from 0.38 m, which is part of why the humanoid was added. But the humanoid, at
 1.25 m, sees the hob and the range hood clearly and still calls it a bathroom. So this is not a
-perception problem; facing the same doorway the model composes whatever story matches the room it is
-currently hunting for. The next release aims at the acceptance criterion instead.
+perception problem: facing the same doorway, the model composes whatever story matches the room it
+is hunting for. The next release aims at the acceptance criterion instead.
 
 Runs that did work, with per-frame verification, are written up in
 [world/sim-house-nav/实测记录.md](world/sim-house-nav/实测记录.md).
