@@ -69,7 +69,12 @@ Features:
    ⚠️ **That is a behaviour change and the benchmark that would settle it has not been re-run** —
    the five-room navigation comparison, before and after, is an acknowledged debt recorded as
    ROADMAP R2. Until it exists, "English is better here" is a hypothesis. If it turns out
-   worse, the rollback point is one file.
+   worse, the rollback point is one file. ⚠️ The first pass missed a great deal — the
+   orchestrator's world blocks, the image framing sent with every frame, the safety gate's
+   reasons, the truncation notices, every backend error the web app displays, and the mock
+   brain's own replies were all still Chinese while this claim was already written down.
+   They were found by installing the wheel and running it, not by reading the source. What
+   is left, and why, is ROADMAP R6.
 6. **Machine guards, and debts on the record**: `scripts/selfcheck.py` turns four house rules
    that lived only in a local notebook into CI guards (the orchestrator stays free of
    task-specific logic / no dead config / no unregistered placeholders / the version agrees in

@@ -190,12 +190,12 @@ def test_world_cannot_close_the_fence_it_is_wrapped_in():
 def test_oversized_guidance_is_truncated_and_says_so():
     out = trust.fence("x" * 50_000, 100)
     assert len(out) < 1_000
-    assert "截断" in out, "截断必须写在围栏里面——静默丢会让模型以为读到的是全文"
+    assert "truncated" in out, "截断必须写在围栏里面——静默丢会让模型以为读到的是全文"
 
 
 def test_clip_caps_tool_descriptions():
     assert trust.clip("y" * 5_000, 50).startswith("y" * 50)
-    assert "截断" in trust.clip("y" * 5_000, 50)
+    assert "truncated" in trust.clip("y" * 5_000, 50)
     assert trust.clip("short", 50) == "short", "正常长度不该被动"
 
 
@@ -279,7 +279,7 @@ def test_oversized_tool_description_is_clipped_before_the_model_sees_it(tmp_path
     orch.handle(session, "在吗", llm)
     desc = llm.tools_seen[0].description
     assert len(desc) < len(huge)
-    assert "截断" in desc
+    assert "truncated" in desc
 
 
 # ============================================== the gate on the real client / 真客户端 ===

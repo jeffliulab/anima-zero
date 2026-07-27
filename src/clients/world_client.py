@@ -140,7 +140,7 @@ class RemoteWorld:  # 实现 World 协议(AWI 客户端)
             self._caps = Capabilities(name=self.name, version="", tools=[], state_schema={},
                                       guidance="", config=cfg)
 
-        awi_log.record(self.name, "capabilities", "capabilities() 握手[mcp]",
+        awi_log.record(self.name, "capabilities", "capabilities() handshake [mcp]",
                        (time.perf_counter() - t0) * 1000,
                        resp={"transport": "mcp", "n_tools": len(tools),
                              "tools": [t.name for t in tools], "has_guidance": bool(guidance),
@@ -169,7 +169,7 @@ class RemoteWorld:  # 实现 World 协议(AWI 客户端)
                                   timeout=config.WORLD_STATUS_TIMEOUT)
             return r.json()
         except Exception as e:
-            return {"ok": False, "message": f"世界「{self.name}」没应答（它起来了吗）：{e}"}
+            return {"ok": False, "message": f"The world `{self.name}` did not answer — is it running? {e}"}
 
     # ---------- 感知（快速读，固定死线）----------
     def perceive(self) -> Observation:
@@ -249,13 +249,15 @@ class RemoteWorld:  # 实现 World 协议(AWI 客户端)
                 hard_cap_s=config.WORLD_INVOKE_HARD_CAP, should_abort=_should_abort)
             res = ActionResult(ok=ok, message=text, data=data)
         except mcp_bridge.LivenessTimeout:
-            res = ActionResult(False, f"世界失联：{config.WORLD_LIVENESS_TIMEOUT:g}s 无生命迹象")
+            res = ActionResult(False, f"Lost contact with the world: no sign of life for "
+                                          f"{config.WORLD_LIVENESS_TIMEOUT:g}s")
         except mcp_bridge.HardCapTimeout:
-            res = ActionResult(False, f"动作超总上限（{config.WORLD_INVOKE_HARD_CAP:g}s），放弃等待")
+            res = ActionResult(False, f"The action exceeded its overall cap of "
+                                          f"{config.WORLD_INVOKE_HARD_CAP:g}s; gave up waiting")
         except mcp_bridge.CallAborted:
-            res = ActionResult(False, "已放弃等待（任务取消）")
+            res = ActionResult(False, "Gave up waiting (the task was cancelled)")
         except Exception as e:
-            res = ActionResult(False, f"（世界调用失败：{type(e).__name__}）")
+            res = ActionResult(False, f"(The call to the world failed: {type(e).__name__})")
         awi_log.record(self.name, "invoke", f"{name}({kwargs})", (time.perf_counter() - t0) * 1000,
                        resp={"ok": res.ok, "message": res.message, "has_data": bool(res.data)})
         return res

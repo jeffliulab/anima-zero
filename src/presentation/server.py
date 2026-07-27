@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
-from anima import awi_log, config, paths, session_log
+from anima import awi_log, config, messages, paths, session_log
 from anima.llm import LLM, DEFAULT_BRAIN, list_brains, make_llm
 from anima.session.session_log import LoggingLLM, bound_stream, session_scope
 from anima.core import interrupt
@@ -106,12 +106,12 @@ def worlds() -> list:
 def world_manifest(name: str) -> dict:
     w = registry.get(name)
     if w is None:
-        return {"ok": False, "message": f"没有名叫「{name}」的世界。"}
+        return {"ok": False, "message": f"No world named {name!r}."}
     try:
         d = w.trust_decision()
         raw = w.raw_capabilities()
     except Exception as e:
-        return {"ok": False, "message": f"连不上这个世界，没法取它的清单：{e}"}
+        return {"ok": False, "message": f"Cannot reach this world, so its manifest is unavailable: {e}"}
     return {
         "ok": True,
         "state": d.state,
@@ -130,13 +130,14 @@ def world_manifest(name: str) -> dict:
 def approve_world(name: str) -> dict:
     w = registry.get(name)
     if w is None:
-        return {"ok": False, "message": f"没有名叫「{name}」的世界。"}
+        return {"ok": False, "message": f"No world named {name!r}."}
     try:
         h = w.approve()
     except Exception as e:
-        return {"ok": False, "message": f"批准失败：{e}"}
+        return {"ok": False, "message": f"Approval failed: {e}"}
     return {"ok": True, "hash": h,
-            "message": f"已批准世界「{name}」当前的能力清单。它以后再变会重新来问你。"}
+            "message": f"Approved the current manifest of the world {name!r}. "
+                       f"If it changes again you will be asked afresh."}
 
 
 # ---- 世界配置（v1.0 的 AWI 新通道）----
@@ -148,22 +149,22 @@ def approve_world(name: str) -> dict:
 def world_config(name: str) -> dict:
     w = registry.get(name)
     if w is None:
-        return {"ok": False, "message": f"没有名叫「{name}」的世界。", "options": []}
+        return {"ok": False, "message": f"No world named {name!r}.", "options": []}
     try:
         return {"ok": True, **(w.capabilities().config or {"options": []})}
     except Exception as e:
-        return {"ok": False, "message": f"读不到这个世界的配置：{e}", "options": []}
+        return {"ok": False, "message": f"Cannot read this world's configuration: {e}", "options": []}
 
 
 @app.post("/api/worlds/{name}/config")  # 改配置（如换身体）
 def set_world_config(name: str, body: dict) -> dict:
     w = registry.get(name)
     if w is None:
-        return {"ok": False, "message": f"没有名叫「{name}」的世界。"}
+        return {"ok": False, "message": f"No world named {name!r}."}
     try:
         r = w.set_config(str(body.get("key", "")), str(body.get("value", "")))
     except Exception as e:
-        return {"ok": False, "message": f"改配置失败：{e}"}
+        return {"ok": False, "message": f"Changing the configuration failed: {e}"}
     # 改完必须重新握手：换了配置，世界的工具单/说明书都可能变了。
     # ⛔ 不重新握手就是 v0.9 那个坑——大脑握着旧的能力清单，新工具永远上不了工具单。
     if r.get("ok"):
@@ -181,14 +182,14 @@ def refresh_world(name: str) -> dict:
     """
     w = registry.get(name)
     if w is None:
-        return {"ok": False, "message": f"没有名叫「{name}」的世界。"}
+        return {"ok": False, "message": f"No world named {name!r}."}
     w.refresh()
     try:
         caps = w.capabilities()
-        return {"ok": True, "message": f"已重新握手，现在有 {len(caps.tools)} 个工具。",
+        return {"ok": True, "message": f"Handshake redone; it now offers {len(caps.tools)} tool(s).",
                 "tools": [t.name for t in caps.tools]}
     except Exception as e:
-        return {"ok": False, "message": f"重新握手失败（世界可能没起来）：{e}"}
+        return {"ok": False, "message": f"Handshake failed — the world may not be running: {e}"}
 
 
 @app.get("/api/perceive")  # 左边传感区:显示当前会话所连世界的图
@@ -216,16 +217,17 @@ def check(brain: str) -> dict:
     info = {b["name"]: b for b in list_brains()}.get(brain)
     if info is None:
         return {"ok": False, "reason": "unknown", "model": "", "label": brain,
-                "message": f"未知大脑:{brain}"}
+                "message": f"Unknown brain: {brain}"}
     if not info["available"]:  # 没配好 → 不发请求,直接说清楚
-        msg = "未设置 API key" if info["hosting"] == "api" else "Ollama 未就绪或模型未拉取"
+        msg = ("No API key configured" if info["hosting"] == "api"
+               else "Ollama is not ready, or the model has not been pulled")
         return {"ok": False, "reason": "no_key", "model": info["model"],
                 "label": info["label"], "message": msg}
     try:
         # 真发一条最小消息(不带图、不进对话历史、绕过编排器),确认 网络 + key + 版本 都通
-        get_llm(brain).chat("连通自检,只需回一个字 ok。", [{"role": "user", "text": "ping"}], [], None)
+        get_llm(brain).chat("Connectivity check. Reply with the single word ok.", [{"role": "user", "text": "ping"}], [], None)
         return {"ok": True, "reason": "", "model": info["model"],
-                "label": info["label"], "message": "网络正常"}
+                "label": info["label"], "message": "Reachable"}
     except Exception as e:
         return {"ok": False, "reason": "error", "model": info["model"],
                 "label": info["label"], "message": f"{type(e).__name__}: {e}"}
@@ -282,7 +284,7 @@ def interrupt_session(sid: str) -> dict:
     前端据此显示「停止中…」。停下来是**可续的停顿**：核心任务留在册，说「继续」就接着来。
     """
     if not store.exists(sid):
-        return {"ok": False, "message": "(会话不存在)"}
+        return {"ok": False, "message": "(no such session)"}
     interrupt.request(sid)
     return {"ok": True}
 
@@ -290,7 +292,7 @@ def interrupt_session(sid: str) -> dict:
 @app.post("/api/sessions/{sid}/brain")  # 中途换脑
 def set_session_brain(sid: str, inp: BrainIn) -> dict:
     if not store.exists(sid):
-        return {"ok": False, "message": "会话不存在"}
+        return {"ok": False, "message": "No such session"}
     store.set_brain(sid, inp.brain)
     return {"ok": True}
 
@@ -303,22 +305,22 @@ class ChatIn(BaseModel):
 @app.post("/api/chat")  # 右边聊天(按会话)
 def chat(inp: ChatIn) -> dict:
     if not store.exists(inp.session_id):
-        return {"reply": "(会话不存在)", "trace": None}
+        return {"reply": "(No such session.)", "trace": None}
     session = store.get(inp.session_id)
     if session.status != "active":  # 冻结会话只读
-        return {"reply": "(这个会话已冻结、只读;请新建一个会话继续。)", "trace": None}
+        return {"reply": "(This session is frozen and read-only. Start a new session to carry on.)", "trace": None}
     # 进入/退出/暂停对弈的判断都已收口到 orchestrator（元控制器），这里不再拦截。
     info = {b["name"]: b for b in list_brains()}.get(session.brain)
     if info is None:
-        return {"reply": f"(未知大脑:{session.brain})", "trace": None}
+        return {"reply": messages.UNKNOWN_BRAIN_REPLY.format(brain=session.brain), "trace": None}
     if not info["available"]:  # 没配置好就别调,直接说清楚
-        return {"reply": f"(大脑「{info['label']}」还没配置好,请在 anima-zero/.env 配置后重启后端再用。)",
+        return {"reply": messages.BRAIN_NOT_CONFIGURED_REPLY.format(brain=info["label"]),
                 "trace": None}
     try:
         with session_scope(inp.session_id):   # 这次请求的全部留痕（LLM/世界/服务）都标上 session（Session Logs 可筛）
             return orchestrator.handle(session, inp.message, get_llm(session.brain))
     except Exception as e:  # 大脑调用出错 → 在聊天里如实显示,不让 demo 崩
-        return {"reply": f"(大脑调用出错:{type(e).__name__}: {e})", "trace": None}
+        return {"reply": messages.BRAIN_CALL_FAILED_REPLY.format(error=f"{type(e).__name__}: {e}"), "trace": None}
 
 
 def _sse(ev: dict) -> str:
@@ -329,25 +331,25 @@ def _sse(ev: dict) -> str:
 def chat_stream(inp: ChatIn) -> StreamingResponse:
     def gen():
         if not store.exists(inp.session_id):
-            yield _sse({"type": "reply", "text": "(会话不存在)"})
+            yield _sse({"type": "reply", "text": "(No such session.)"})
             yield _sse({"type": "done"})
             return
         session = store.get(inp.session_id)
         if session.status != "active":
-            yield _sse({"type": "reply", "text": "(这个会话已冻结、只读;请新建一个会话继续。)"})
+            yield _sse({"type": "reply", "text": "(This session is frozen and read-only. Start a new session to carry on.)"})
             yield _sse({"type": "done"})
             return
         info = {b["name"]: b for b in list_brains()}.get(session.brain)
         if info is None or not info["available"]:
             label = info["label"] if info else session.brain
-            yield _sse({"type": "reply", "text": f"(大脑「{label}」还没配置好,请在 anima-zero/.env 配置后重启后端再用。)"})
+            yield _sse({"type": "reply", "text": messages.BRAIN_NOT_CONFIGURED_REPLY.format(brain=label)})
             yield _sse({"type": "done"})
             return
         try:
             for ev in orchestrator.handle_stream(session, inp.message, get_llm(session.brain)):
                 yield _sse(ev)
         except Exception as e:
-            yield _sse({"type": "reply", "text": f"(大脑调用出错:{type(e).__name__}: {e})"})
+            yield _sse({"type": "reply", "text": messages.BRAIN_CALL_FAILED_REPLY.format(error=f"{type(e).__name__}: {e}")})
             yield _sse({"type": "done"})
 
     # bound_stream 给整条生成器套上一个带 session 的固定上下文逐步迭代——保证流式期间每次 LLM 调用
@@ -471,7 +473,8 @@ def dev_turn(inp: DevTurnIn) -> dict:
     """开发者/agent 自测钩子：一次调用拿到「回复 + llm_call/world_call/service_call 完整链」，
     可直接断言行为（如 best_move→move 两连跳）。要求目标世界/服务已在跑。"""
     if not config.DEV_API:
-        return {"error": "dev api 未开启（设 ANIMA_DEV_API=1 后重启后端；仅开发用）"}
+        return {"error": "The dev API is off. Set ANIMA_DEV_API=1 and restart the backend "
+                        "(development only)."}
     if inp.session_id and store.exists(inp.session_id):
         session = store.get(inp.session_id)
     else:

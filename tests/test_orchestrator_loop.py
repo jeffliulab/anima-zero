@@ -6,6 +6,7 @@ v0.5 重构起大脑无技能/行为树：主循环 = 看→想→(过安全闸)
 """
 from __future__ import annotations
 
+from anima import messages
 from anima.core.awi import ActionResult, Capabilities, Observation, ToolSpec
 from anima.llm import LLMReply, ToolCall
 from anima.core.orchestrator import Orchestrator
@@ -107,7 +108,7 @@ def test_handle_max_steps_stops(tmp_path):
     orch, session = _orch(tmp_path, world)
     llm = _SeqLLM([LLMReply(tool_calls=[ToolCall("1", "ping", {})])])  # 永远调工具，不收尾
     out = orch.handle(session, "loop", llm, max_steps=2)
-    assert "先停一下" in out["reply"]
+    assert messages.MAX_STEPS_REPLY in out["reply"]
     assert world.n_perceive == 2 and len(world.invoked) == 2, "正好转 max_steps 轮"
 
 

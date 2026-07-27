@@ -292,3 +292,51 @@ NOTE_DROP_BAD_REPLY = ("There is no entry {n}. There are {total} entries, number
 # ⛔ 诚实说明结果丢失，绝不假装成功。
 ORPHAN_TOOL_RESULT = ("(The result of that action was lost to an interruption — go by what "
                       "you can see now, and do not assume it succeeded.)")
+
+
+# ---- What the model is told about the world it is attached to ----------------------------
+# These sit here rather than inline in the orchestrator for the reason the whole file exists:
+# text a model reads is a functional input, and it has to be findable in one place. They were
+# missed in the v1.1 English pass and stayed Chinese while the CHANGELOG claimed otherwise —
+# found by reading the shipped package rather than the source.
+# ⛔ 它们放在这里而不是散在 orchestrator 里，理由就是这个文件存在的理由：模型读的文本是**功能输入**，
+#    必须能在一个地方找齐。v1.1 那次英文化漏了它们，于是 CHANGELOG 说着"全英文"而它们还是中文——
+#    是靠读**发出去的那个包**、而不是读源码，才发现的。
+NO_WORLD_BLOCK = "\n\nRight now: no world is attached. This is conversation only."
+WORLD_ATTACHED_BLOCK = ("\n\nRight now you are attached to the world `{name}`, and you can "
+                        "call its tools when you need to.")
+WORLD_ATTACHED_NO_TOOLS_BLOCK = ("\n\nRight now you are attached to the world `{name}`, and it "
+                                 "offers no callable actions — you can look at the picture and "
+                                 "talk to the user, but you cannot operate it.")
+
+# ---- Results the model reads back from an action -----------------------------------------
+# ⛔ Each says what actually happened. Never dress a failure up as anything else — the whole
+#    recovery strategy rests on being told the truth.
+# ⛔ 每一条都说实际发生了什么。绝不把失败包装成别的样子——整套补救策略都建立在被如实告知之上。
+SAFETY_BLOCKED_RESULT = "Blocked by the safety gate: {reason}"
+TOOL_THREAD_DIED_RESULT = "(The thread running that tool exited unexpectedly.)"
+NO_WORLD_RESULT = "No world is attached, so there is nothing to operate."
+
+# ---- Framing for the frames themselves ---------------------------------------------------
+# ⚠️ The picture is environmental background, not a request. Without saying so, a model that
+# sees a picture and a tool sheet treats their mere presence as an instruction to act — this
+# was measured: gpt-4.1-nano went from 8/8 spurious tool calls on "hello" to 0/16.
+# ⚠️ 画面是**环境背景**，不是请求。不这么声明的话，模型会把"有画面 + 有工具"本身当成动手的指令
+#    ——这是实测出来的：gpt-4.1-nano 对一句"你好"的乱调工具从 8/8 降到 0/16。
+IMAGE_FRAMING = ("(What follows is the world's live picture. It is environmental background "
+                 "so you know the current situation; it is not itself an instruction or a "
+                 "request.)")
+IMAGE_CAMERA_LABEL = "(camera {name})"
+IMAGE_NO_ACTION_REMINDER = ("(Reminder: do not call a tool merely because you can see a "
+                            "picture or because tools are available. Act when the user has "
+                            "asked for something in words.)")
+
+# The safety gate's reasons. The model reads these back as the result of a refused action,
+# so they say why in terms it can act on rather than in terms of our internal policy names.
+# 安全闸的三条理由。模型会把它们当作被拒动作的结果读回去，所以它们要用**模型能据以行动**的说法，
+# 而不是我们内部策略的名字。
+SAFETY_NEEDS_APPROVAL = ("This is a high-risk or irreversible action and needs a person to "
+                         "approve it before it can run.")
+SAFETY_RULE_MATCHED = "A deterministic safety rule matched this action, so it was blocked."
+SAFETY_NO_RULES = ("No deterministic safety rules are configured, so this action is refused "
+                   "by default. Real hardware requires those checks to be implemented first.")

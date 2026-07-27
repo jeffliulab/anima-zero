@@ -179,4 +179,6 @@ def test_remote_service_down_returns_readable_error(monkeypatch, tmp_path):
     monkeypatch.setattr("anima.clients.service_client.run_sync", boom)
     monkeypatch.setattr("anima.clients.service_client.with_session", lambda url, op, t: None)
     res = RemoteService("advisor", "http://localhost:9").invoke("best_move", fen="x")
-    assert not res.ok and "没有启动" in res.message, "服务没起 → 可读失败（如实反馈不兜底）"
+    assert not res.ok, "服务没起 → 必须如实报失败，不许兜底"
+    # 断言的是**实质**：错误必须指向"它可能没起来"这个可行动的原因，而不是某一句措辞。
+    assert "not be running" in res.message, "失败原因要说到点子上，人才知道该去起服务"

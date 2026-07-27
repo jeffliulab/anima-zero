@@ -83,6 +83,22 @@ The known cost is that the Zobrist hash is rebuilt from scratch on every push ra
 updated incrementally. That is documented in `push()` as a deliberate choice, and it is the
 first thing to change when a transposition table arrives.
 
+### R6 · Chinese still reaches a few surfaces
+
+The v1.1 language pass moved everything a model reads, and everything the CLI and web app
+show, into English. Four places were left, each for a reason:
+
+- `src/worlds/desk/awi_mcp.py` — MCP resource and prompt descriptions. This file exists as a
+  **byte-identical copy in six places**, one of them a submodule, held by a test. Changing
+  four strings means changing all six in lockstep, which is not a thing to do on release day.
+- `src/dev_turn.py` — a development harness, not a shipped command.
+- `src/config.py` field descriptions and two orchestrator log lines — internal only. The
+  panel hints they used to feed are now separate and English.
+
+Found by installing the wheel and running it, not by reading the source. The scan that found
+them is worth keeping: walk the AST, collect string constants that are not docstrings, and
+look for CJK.
+
 ## Not planned
 
 Saying no is part of a roadmap.

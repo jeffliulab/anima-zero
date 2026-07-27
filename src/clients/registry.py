@@ -23,7 +23,7 @@ class WorldRegistry:
 
     def bind(self, name: str) -> None:
         if name not in self._worlds:
-            raise KeyError(f"world 未注册:{name}")
+            raise KeyError(f"world not registered: {name}")
         self._bound = name  # 只绑一个;这里不发 HTTP
 
     def unbind(self) -> None:

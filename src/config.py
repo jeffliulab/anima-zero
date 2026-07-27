@@ -214,12 +214,39 @@ MODEL_QWEN = _settings.model_qwen
 # ⛔ 名字/值/env 名/说明四样全部从下面 Settings 的字段定义现读，前端一个都不许自己写死。
 _RUNTIME_PARAMS_SHOWN = ("max_steps", "turn_time_budget_s", "context_token_budget",
                          "notes_max")
-# 显示用的中文短名（Settings 的 description 是整段说明，界面上放不下，这里给个一行的标签）。
+# One-line labels for display. The Settings `description` is a whole paragraph and does not
+# fit in the panel, so these are the short forms. English, matching the rest of the interface
+# — the frontend renders them as sent.
+# 显示用的一行短名（Settings 的 description 是整段说明，界面上放不下）。用英文，与界面其余部分一致
+# ——前端是原样渲染它们的。
 _RUNTIME_PARAM_LABELS = {
-    "max_steps": "单轮步数上限",
-    "turn_time_budget_s": "单轮时长上限(秒)",
-    "context_token_budget": "上下文预算(token)",
-    "notes_max": "笔记本容量(条)",
+    "max_steps": "Steps per turn",
+    "turn_time_budget_s": "Time per turn (s)",
+    "context_token_budget": "Context budget (tokens)",
+    "notes_max": "Notebook capacity",
+}
+
+# What the panel shows as the hint for each parameter.
+#
+# ⛔ Deliberately NOT the field's `description`. Those descriptions are long, and they are the
+# maintainer's reasoning about why a value is what it is — internal documentation, in Chinese
+# by the project's own language rule. Sending them to the interface put a paragraph of
+# internal Chinese rationale into an English UI. One sentence of English here, the reasoning
+# left where it belongs.
+#
+# ⛔ 这里**有意不用**字段的 `description`。那些描述很长，写的是维护者"为什么定这个值"的思考
+#    ——按本项目自己的语言规则，那是内部文档、保持中文。把它们送到界面上，等于把一整段中文的
+#    内部理由塞进一个英文界面。这里给一句英文，理由留在它该在的地方。
+_RUNTIME_PARAM_HINTS = {
+    "max_steps": ("A seatbelt, not a metronome. The model decides when a turn ends by "
+                  "producing prose; this only catches it going in circles."),
+    "turn_time_budget_s": ("Wall clock per turn. A step count cannot restrain a world where "
+                           "each step is slow, so this is the real cost gate. Reaching it is "
+                           "a pause you can continue from, not an error."),
+    "context_token_budget": ("Sliding-window budget for history, packed from the most recent "
+                             "backwards and truncated at the limit."),
+    "notes_max": ("How many notes the notebook holds. When it is full the model is told so "
+                  "and can strike an entry — nothing is discarded silently."),
 }
 
 
@@ -234,7 +261,7 @@ def runtime_params() -> list[dict]:
             "label": _RUNTIME_PARAM_LABELS.get(name, name),
             "value": getattr(_settings, name),
             "env": alias if isinstance(alias, str) else name.upper(),
-            "description": field.description or "",
+            "description": _RUNTIME_PARAM_HINTS.get(name, ""),
         })
     return out
 

@@ -5,6 +5,7 @@ Wave 6 安全网：钉住「会改世界的动作要过闸、只读动作不过�
 """
 from __future__ import annotations
 
+from anima import prompts
 from anima.core.awi import ActionResult, Capabilities, Observation, ToolSpec
 
 from anima.llm import LLMReply, ToolCall
@@ -78,12 +79,14 @@ def test_gate_tiers_decide():
 
 def test_gate_approve_tier_blocks_in_sync_loop():
     ok, reason = SafetyGate(needs_approval=("place_piece",)).check(None, "place_piece", {})
-    assert not ok and "人工批准" in reason, "approve 档在同步主循环里先拦下并说明"
+    assert not ok, "approve 档在同步主循环里先拦下"
+    assert reason == prompts.SAFETY_NEEDS_APPROVAL, "并且要说明它是在等人批准"
 
 
 def test_gate_blocked_tier_hard_denies():
     ok, reason = SafetyGate(blocked=("x",)).check(None, "x", {})
-    assert not ok and "拦截" in reason
+    assert not ok
+    assert reason == prompts.SAFETY_RULE_MATCHED
 
 
 # ---------- 在主循环里的集成（正反） ----------
@@ -93,7 +96,9 @@ def test_mutating_tool_blocked_when_gate_denies(tmp_path):
     out = orch.handle(session, "走一步", _OneShotLLM("move"))
     assert world.invoked == [], "被安全门拦下 → 绝不下发世界"
     res = out["trace"]["thinking"][0]["tool_results"][0]
-    assert res["ok"] is False and "安全闸拦截" in res["message"]
+    assert res["ok"] is False
+    assert prompts.SAFETY_BLOCKED_RESULT.split("{")[0] in res["message"], (
+        "被拒的原因必须说明是安全闸拦的——断言常量本身，不断言某一句措辞")
 
 
 def test_mutating_tool_allowed_when_gate_allows(tmp_path):
@@ -117,7 +122,8 @@ def test_approval_tier_blocks_in_main_loop(tmp_path):
     out = orch.handle(session, "放一个", _OneShotLLM("place"))
     assert world.invoked == [], "需人批的动作在同步主循环里先被拦下、不下发世界"
     res = out["trace"]["thinking"][0]["tool_results"][0]
-    assert res["ok"] is False and "人工批准" in res["message"]
+    assert res["ok"] is False
+    assert prompts.SAFETY_NEEDS_APPROVAL in res["message"]
 
 
 def test_stream_path_also_blocks(tmp_path):
@@ -126,4 +132,5 @@ def test_stream_path_also_blocks(tmp_path):
     events = list(orch.handle_stream(session, "走一步", _OneShotLLM("move")))
     assert world.invoked == [], "stream 版同样要拦"
     blocked = [e for e in events if e["type"] == "tool_result" and e["ok"] is False]
-    assert blocked and "安全闸拦截" in blocked[0]["message"]
+    assert blocked
+    assert prompts.SAFETY_BLOCKED_RESULT.split("{")[0] in blocked[0]["message"]

@@ -53,7 +53,7 @@ class RemoteService:
         tools = run_sync(with_session(self.mcp_url, op, self.timeout),
                          self.timeout + config.BRIDGE_GRACE_S)
         self._caps = Capabilities(name=self.name, version="", tools=tools)
-        awi_log.record(self.name, "capabilities", "capabilities() 握手[mcp·service]",
+        awi_log.record(self.name, "capabilities", "capabilities() handshake [mcp · service]",
                        (time.perf_counter() - t0) * 1000,
                        resp={"transport": "mcp", "n_tools": len(tools),
                              "tools": [t.name for t in tools]},
@@ -80,7 +80,8 @@ class RemoteService:
             res = ActionResult(ok=ok, message=text, data=data)
         except Exception as e:
             # 服务没起/超时 → 可读失败原话给大脑（如实反馈，不兜底）。
-            res = ActionResult(False, f"服务「{self.name}」调用失败（{type(e).__name__}）——它可能没有启动。")
+            res = ActionResult(False, f"The service `{self.name}` could not be called ({type(e).__name__}). "
+                f"It may not be running.")
         awi_log.record(self.name, "invoke", f"{name}({kwargs})", (time.perf_counter() - t0) * 1000,
                        resp={"ok": res.ok, "message": res.message, "has_data": bool(res.data)},
                        kind="service_call")

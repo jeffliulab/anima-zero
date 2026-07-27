@@ -8,6 +8,10 @@ dynamic = ["version"]
 description = "Chess rules for ANIMA — legal moves, check, checkmate and draws. Rules only, no engine."
 readme = "README.md"
 license = "MIT"
+# MIT requires the licence and copyright notice to travel with every copy, so the text
+# ships inside the distribution rather than only being named in the metadata.
+# MIT 要求许可与版权声明随每一份副本一起走，所以正文要**装进包里**，不能只在元数据里报个名字。
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 authors = [{ name = "Jeff Liu Lab", email = "contact@jeffliulab.com" }]
 keywords = ["chess", "move-generation", "bitboard", "perft"]

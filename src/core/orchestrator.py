@@ -251,7 +251,7 @@ class Orchestrator:
             ok, reason = self.safety.check(world, tc.name, tc.arguments,
                                            declared_kind=kinds.get(tc.name, "tool"))
             if not ok:
-                result = ActionResult(False, f"安全闸拦截:{reason}")
+                result = ActionResult(False, prompts.SAFETY_BLOCKED_RESULT.format(reason=reason))
                 self.store.append(session.id, {"role": "tool", "id": tc.id, "name": tc.name,
                                                "content": result.message})
                 emit({"type": "tool_result", "name": tc.name, "ok": False, "message": result.message})
@@ -286,7 +286,8 @@ class Orchestrator:
         th.join()
         while not q.empty():                          # 清掉收尾前最后一批进度
             emit(q.get())
-        result: ActionResult = holder.get("res") or ActionResult(False, "（工具执行线程异常退出）")
+        result: ActionResult = holder.get("res") or ActionResult(
+            False, prompts.TOOL_THREAD_DIED_RESULT)
         self.store.append(session.id, {"role": "tool", "id": tc.id, "name": tc.name,
                                        "content": result.message, "data": result.data})
         emit({"type": "tool_result", "name": tc.name, "ok": result.ok, "message": result.message})
@@ -361,7 +362,7 @@ class Orchestrator:
     def _dispatch(self, world, name: str, args: dict, _on_progress=None,
                   _should_abort=None) -> ActionResult:
         if world is None:
-            return ActionResult(False, "没连接世界,无法操作。")
+            return ActionResult(False, prompts.NO_WORLD_RESULT)
         if _on_progress is not None:
             return world.invoke(name, _on_progress=_on_progress, _should_abort=_should_abort, **args)
         return world.invoke(name, **args)
@@ -408,7 +409,7 @@ class Orchestrator:
                 notes: list | None = None) -> str:
         base = prompts.system_prompt()
         if world is None:
-            s = base + "\n\n当前:未连接任何世界(纯聊天)。"
+            s = base + prompts.NO_WORLD_BLOCK
             return s + self._registers_block(core_task, notes)
         # 这个世界能不能操作,由它的【能力声明】决定(通用,不针对具体世界):
         #   有工具 → 可在需要时调用;空工具(如 camera 摄像头世界)→ 只能看 + 聊,无任何动作可调。
@@ -422,9 +423,9 @@ class Orchestrator:
             # 读不到能力时不臆断"不可操作",保持旧行为(由后续真正调用兜底)
             has_tools, guidance, world_config = True, "", {}
         if has_tools:
-            s = base + f"\n\n当前已连接世界「{world.name}」,你能在需要时调用它的工具。"
+            s = base + prompts.WORLD_ATTACHED_BLOCK.format(name=world.name)
         else:
-            s = base + f"\n\n当前已连接世界「{world.name}」,它没有提供任何可调动作——你只能看画面、和用户聊,无法操作它。"
+            s = base + prompts.WORLD_ATTACHED_NO_TOOLS_BLOCK.format(name=world.name)
         # 世界的「说明书」(guidance = MCP prompt)：世界自我介绍怎么跟它打交道。让大脑保持纯净通用——
         # 不为某个世界写死逻辑，改由世界自述、大脑读了就懂。
         # ⛔ v1.1 起它**必须**经过 trust.fence()：这是远端写的文本要进系统提示词，得先声明身份、

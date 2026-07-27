@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+from .. import prompts
 from .awi import NON_MUTATING_KINDS
 
 
@@ -57,6 +58,6 @@ class SafetyGate:
         if d == "allow":
             return True, ""
         if d == "approve":
-            return False, "这是高风险/不可逆动作，需人工批准后才能执行（真机阶段接 HITL 放行）"
-        return False, ("命中确定性安全规则，已拦截" if name in self._blocked
-                       else "未配置确定性安全规则，默认拒绝(上真机前请实现硬检查)")
+            return False, prompts.SAFETY_NEEDS_APPROVAL
+        return False, (prompts.SAFETY_RULE_MATCHED if name in self._blocked
+                       else prompts.SAFETY_NO_RULES)

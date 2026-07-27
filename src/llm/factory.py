@@ -76,13 +76,13 @@ def _registry() -> dict[str, dict]:
                          "build": lambda: OpenAICompatLLM(gpt54_mini_model, None, okey),
                          "ready": lambda: has_openai},
         # —— 本地大脑(经 Ollama,免费离线;版本号可在 .env 改)——
-        "qwen3-vl": {"vendor": "Ollama·本地", "label": "Qwen3-VL 8B", "model": qwen_model, "hosting": "local",
+        "qwen3-vl": {"vendor": "Ollama · local", "label": "Qwen3-VL 8B", "model": qwen_model, "hosting": "local",
                      "build": lambda: OpenAICompatLLM(qwen_model, ollama, "ollama"),
                      "ready": lambda: ollama_ready(qwen_model)},
         # —— 不需要 key 的演示脑：它**不思考**，只把链路走一遍（见 llm/mock.py）——
         # 列在最后、标签里直说它不思考：它是给"刚装完想看看能不能跑"用的，不是一个可选的大脑。
         # ready 恒真是它唯一的意义所在——没有 key 的人也得有一个能跑的东西。
-        "mock": {"vendor": "内置·无需 key", "label": "Mock（不思考，只演示链路）", "model": "mock",
+        "mock": {"vendor": "built in · no key needed", "label": "Mock (does not think — demonstrates the chain)", "model": "mock",
                  "hosting": "local", "build": MockLLM, "ready": lambda: True},
     }
 
@@ -100,5 +100,5 @@ def make_llm(name: str | None = None) -> LLM:
     name = name or DEFAULT_BRAIN
     reg = _registry()
     if name not in reg:
-        raise KeyError(f"未知大脑:{name}。可选:{', '.join(reg)}")
+        raise KeyError(f"Unknown brain: {name}. Available: {', '.join(reg)}")
     return reg[name]["build"]()

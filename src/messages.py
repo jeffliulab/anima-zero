@@ -45,9 +45,11 @@ from __future__ import annotations
 #
 # 之所以分开写，是因为**停下的原因不一样，用户下一步该做的事也不一样**：转太多步/跑太久说明可能卡住了
 # （要不要换个说法），而主动叫停纯粹是用户自己的决定，不该被说成"我卡住了"。
-MAX_STEPS_REPLY = "（这件事我连着做了不少步还没收尾，先停一下——你说「继续」我就接着来。）"
-TIME_BUDGET_REPLY = "（这一轮跑的时间到上限了，先停一下——你说「继续」我就接着来。）"
-INTERRUPTED_REPLY = "（好，停下了。你说「继续」我就接着刚才的做。）"
+MAX_STEPS_REPLY = ("(I have taken a good many steps on this without finishing, so I am "
+                   'pausing here. Say "continue" and I will carry on.)')
+TIME_BUDGET_REPLY = ("(This turn reached its time limit, so I am pausing here. Say "
+                     '"continue" and I will carry on.)')
+INTERRUPTED_REPLY = ('(Stopped. Say "continue" and I will pick up where I left off.)')
 
 # Reason code (the orchestrator's internal steps/time/interrupt) → what the user is told.
 # 停下原因 → 说法。键是编排器内部的原因码。
@@ -56,3 +58,13 @@ STOP_REPLIES = {
     "time": TIME_BUDGET_REPLY,
     "interrupt": INTERRUPTED_REPLY,
 }
+
+
+# The backend has two paths to the same reply — one synchronous, one streaming — and both
+# report these two failures. Kept here so a fix to one wording cannot leave the other behind.
+# 后端到同一个回复有两条路径（同步与流式），这两种失败两边都要报。放在这里收口，
+# 免得改了一处措辞、另一处被落下。
+UNKNOWN_BRAIN_REPLY = "(Unknown brain: {brain})"
+BRAIN_NOT_CONFIGURED_REPLY = ("(The brain {brain} is not configured. Set it up in .env and "
+                              "restart the backend.)")
+BRAIN_CALL_FAILED_REPLY = "(The brain call failed: {error})"

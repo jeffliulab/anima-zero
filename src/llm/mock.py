@@ -64,8 +64,9 @@ from .base import LLMReply, ToolCall
 DISCLAIMER = (
     # ⚠️ 措辞不能假设界面：同一段话会出现在网页里、也会出现在 `anima chat` 的终端里。
     #    说"右边的流水""上面的下拉"在终端里就是错的。
-    "（这是 mock 大脑：它不看画面、不读你说的话、也不做判断，只是把链路走一遍给你看。"
-    "想让它真的思考，配一个 API key 再换一个大脑。）"
+    "(This is the mock brain. It does not look at the picture, does not read what you "
+    "said, and makes no judgement — it walks the chain end to end so you can watch it. "
+    "For a brain that actually thinks, configure an API key and pick another one.)"
 )
 
 _ZERO = {"string": "", "number": 0, "integer": 0, "boolean": False,
@@ -108,10 +109,12 @@ class MockLLM:
             return LLMReply(tool_calls=[ToolCall("mock-1", safe.name, _zero_args(safe.parameters))])
 
         if not tools:
-            return LLMReply(text="这个世界没有提供任何可调的动作，所以没什么可演示的。\n" + DISCLAIMER)
+            return LLMReply(text="This world offers no callable actions, so there is "
+                                 "nothing to demonstrate.\n" + DISCLAIMER)
         if safe is None:
             return LLMReply(text=(
-                f"这个世界的 {len(tools)} 个动作都会改变它，而我是瞎选的——所以我什么都不调。"
-                f"换一个真的大脑来，它才有资格决定动哪个。\n" + DISCLAIMER))
-        return LLMReply(text=f"链路跑通了：我调了「{safe.name}」，世界回了结果，"
-                             f"每一步都留在了这个会话的流水里。\n" + DISCLAIMER)
+                f"All {len(tools)} of this world's actions change it, and I choose at "
+                f"random — so I will call none of them. Bring a real brain; it is the "
+                f"only thing entitled to decide which one to use.\n" + DISCLAIMER))
+        return LLMReply(text=f"The chain works: I called `{safe.name}`, the world answered, "
+                             f"and every step is in this session's trace.\n" + DISCLAIMER)

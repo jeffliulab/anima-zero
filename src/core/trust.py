@@ -165,26 +165,26 @@ def manifest_diff(old: dict, new: dict) -> list[str]:
         lines.append(f"URL: {old.get('url')!r} → {new.get('url')!r}")
     if (old.get("guidance") or "") != (new.get("guidance") or ""):
         lo, ln = len(old.get("guidance") or ""), len(new.get("guidance") or "")
-        lines.append(f"guidance 说明书变了（{lo} 字 → {ln} 字）")
+        lines.append(f"guidance changed ({lo} chars → {ln} chars)")
 
     old_tools = {t["name"]: t for t in old.get("tools", [])}
     new_tools = {t["name"]: t for t in new.get("tools", [])}
     for name in sorted(set(new_tools) - set(old_tools)):
-        lines.append(f"新增工具 {name}（kind={new_tools[name].get('kind')}）")
+        lines.append(f"tool added: {name} (kind={new_tools[name].get('kind')})")
     for name in sorted(set(old_tools) - set(new_tools)):
-        lines.append(f"移除工具 {name}")
+        lines.append(f"tool removed: {name}")
     for name in sorted(set(old_tools) & set(new_tools)):
         o, n = old_tools[name], new_tools[name]
         if o.get("kind") != n.get("kind"):
             # Called out on its own line: `kind` is what the safety gate reads, so a change
             # here is a change in how the action is policed.
             # 单列一行：`kind` 是安全闸要读的东西，它变了就意味着这个动作被管束的方式变了。
-            lines.append(f"⚠ 工具 {name} 的 kind 变了：{o.get('kind')} → {n.get('kind')}")
+            lines.append(f"⚠ tool {name}: kind changed, {o.get('kind')} → {n.get('kind')}")
         if o.get("description") != n.get("description"):
-            lines.append(f"工具 {name} 的描述变了")
+            lines.append(f"tool {name}: description changed")
         if o.get("parameters") != n.get("parameters"):
-            lines.append(f"工具 {name} 的参数 schema 变了")
-    return lines or ["（内容有变化但未能定位到具体字段）"]
+            lines.append(f"tool {name}: parameter schema changed")
+    return lines or ["something changed, but no specific field could be identified"]
 
 
 # ===================================================================================
@@ -232,7 +232,8 @@ def fence(text: str, max_chars: int) -> str:
     clean = (text or "").replace(FENCE_OPEN, "").replace(FENCE_CLOSE, "")
     if len(clean) > max_chars:
         clean = clean[:max_chars] + (
-            f"\n…（这份说明书超过 {max_chars} 字，已截断。你读到的不是全文。）")
+            f"\n… (This guidance exceeds {max_chars} characters and was truncated. "
+            f"What you have read is not all of it.)")
     return f"{FENCE_OPEN}\n{clean}\n{FENCE_CLOSE}"
 
 
@@ -249,7 +250,8 @@ def clip(text: str, max_chars: int) -> str:
     描述的一部分读进去。那里能做的只有限长。
     """
     text = text or ""
-    return text if len(text) <= max_chars else text[:max_chars] + "…（描述过长，已截断）"
+    return (text if len(text) <= max_chars
+            else text[:max_chars] + "… (description too long; truncated)")
 
 
 @dataclass
@@ -310,11 +312,12 @@ class TrustStore:
             # Announced in the decision rather than silently allowed, so that anything
             # printing the reason says out loud why it let this through.
             # 在决定里写明而不是悄悄放行——这样任何打印原因的地方都会把"为什么放它进来"说出口。
-            return TrustDecision(TRUSTED, m, reason=f"{TRUST_ALL_ENV} 已开启（仅限开发）")
+            return TrustDecision(TRUSTED, m,
+                                 reason=f"{TRUST_ALL_ENV} is on — development only")
 
         record = self._data["worlds"].get(url)
         if record is None:
-            return TrustDecision(UNKNOWN, m, reason="这个世界还没有被审批过")
+            return TrustDecision(UNKNOWN, m, reason="this world has not been approved yet")
 
         if record.get("hash") == manifest_hash(m):
             return TrustDecision(TRUSTED, m, approved_manifest=record.get("manifest"))
@@ -322,7 +325,7 @@ class TrustStore:
         old = record.get("manifest") or {}
         return TrustDecision(
             CHANGED, m, approved_manifest=old,
-            reason="这个世界的能力清单和你上次批准时不一样了",
+            reason="this world's manifest is not what you approved last time",
             changes=manifest_diff(old, m),
         )
 

@@ -104,7 +104,7 @@ class SessionStore:
                     frozen_ids.append(s.id)
         s = Session(
             id=_gen_id(), world=world, brain=brain, status="active",
-            created_at=_now(), title="(新会话)", messages=[],
+            created_at=_now(), title="(new session)", messages=[],
         )
         self.save(s)
         return s, frozen_ids
@@ -132,7 +132,7 @@ class SessionStore:
         s = self.load(sid)
         entry.setdefault("ts", _now())
         s.messages.append(entry)
-        if s.title == "(新会话)" and entry.get("role") == "user":  # 用首条用户消息当标题
+        if s.title == "(new session)" and entry.get("role") == "user":  # 用首条用户消息当标题
             s.title = entry["text"][:TITLE_MAX_LEN]
         self.save(s)
 

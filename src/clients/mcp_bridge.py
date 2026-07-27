@@ -95,11 +95,11 @@ def run_alive(coro: Awaitable[_T], *, beat: Beat, liveness_s: float, hard_cap_s:
                 if done:
                     return task.result()
                 if should_abort is not None and should_abort():
-                    raise CallAborted("上层要求放弃等待")
+                    raise CallAborted("the caller gave up waiting")
                 if beat.age() > liveness_s:
-                    raise LivenessTimeout(f"{liveness_s:g}s 无生命迹象")
+                    raise LivenessTimeout(f"no sign of life for {liveness_s:g}s")
                 if time.monotonic() - start > hard_cap_s:
-                    raise HardCapTimeout(f"超过总上限 {hard_cap_s:g}s")
+                    raise HardCapTimeout(f"exceeded the overall cap of {hard_cap_s:g}s")
         finally:
             if not task.done():
                 task.cancel()
