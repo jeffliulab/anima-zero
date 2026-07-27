@@ -3,7 +3,17 @@ requires = ["setuptools>=77"]   # >=77: PEP 639 的 SPDX license 写法
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "anima"
+# The distribution is `anima-zero`; the import is `anima`.
+# Not a mismatch by choice — `anima` on PyPI is registered by someone else (a project with
+# no releases, which is why the JSON API 404s for it and the simple index does not).
+# The repository is called anima-zero too, so this is the more consistent name anyway.
+# Distribution and import names differing is ordinary in this ecosystem: `pip install
+# python-chess` gives you `import chess`.
+# 发行名是 `anima-zero`，导入名是 `anima`。
+# 不是有意错位——PyPI 上的 `anima` 已被别人注册（一个没发过任何版本的项目，所以 JSON API 对它
+# 是 404、而 simple index 不是）。仓库本来也叫 anima-zero，所以这个名字反而更一致。
+# 发行名与导入名不同在这个生态里很常见：`pip install python-chess` 装到的是 `import chess`。
+name = "anima-zero"
 # Single source of truth is src/_version.py (read statically, no import at build time).
 # 版本号的单一来源是 src/_version.py（静态读取，构建期不 import）。
 dynamic = ["version"]
@@ -50,8 +60,8 @@ dependencies = [
 ]
 
 [project.scripts]
-# Without this, `pip install anima` gives you a library and no way to start anything.
-# 没有这一段，`pip install anima` 装到的是一个库、以及"无从启动任何东西"。
+# Without this, installing the package gives you a library and no way to start anything.
+# 没有这一段，装完这个包得到的是一个库、以及"无从启动任何东西"。
 anima = "anima.cli:main"
 
 [project.optional-dependencies]
@@ -95,7 +105,7 @@ version = { attr = "anima._version.__version__" }
 package-dir = { "anima" = "src" }
 packages = ["anima", "anima.core", "anima.clients", "anima.session", "anima.llm",
             "anima.presentation",
-            # 内置的演示世界随 wheel 分发——`pip install anima` 之后得有个去处，
+            # 内置的演示世界随 wheel 分发——装完这个包之后得有个去处，
             # 否则第一条命令就因为"你还没起一个世界"而失败。见 src/worlds/desk/world.py。
             "anima.worlds", "anima.worlds.desk"]
 

@@ -35,7 +35,7 @@ It is a series name, not a version number. **Zero means this line stays open sou
 the brain is ANIMA Zero, the body is SOMA Zero, and any future commercial edition will
 carry a different name rather than closing this one. The whole project is MIT.
 
-Two names to keep straight: the repository is `anima-zero`, the Python package is `anima`.
+On PyPI it is `pip install anima-zero` and the import is `import anima` — `anima` alone was already registered by someone else.
 
 ## Key features
 
@@ -98,7 +98,7 @@ services/      board-game engine   frontend/  web app   eval/  scoring
 ## Installation
 
 ```bash
-pip install anima
+pip install anima-zero
 anima demo
 ```
 

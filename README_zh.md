@@ -32,7 +32,7 @@ ANIMA Zero 是一台具身机器人的脑。它只想、不动手：它决定做
 它是系列名，不是版本号。**Zero 的含义是这条线永远开源**——脑叫 ANIMA Zero，身体叫 SOMA Zero；
 将来若有商业版，会另起名字，而不是把这条线关掉。整个项目是 MIT。
 
-有两个名字别搞混：仓库叫 `anima-zero`，Python 包叫 `anima`。
+装是 `pip install anima-zero`，导入是 `import anima`——光是 `anima` 那个名字在 PyPI 上已被别人注册。
 
 ## 核心能力
 
@@ -88,7 +88,7 @@ services/      棋类引擎顾问       frontend/  网页    eval/  记分卡
 ## 安装
 
 ```bash
-pip install anima
+pip install anima-zero
 anima demo
 ```
 
