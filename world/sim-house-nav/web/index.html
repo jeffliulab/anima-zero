@@ -31,13 +31,13 @@
 <body>
 <header>
   <h1>sim-house-nav · 屋子导航世界</h1>
-  <div class="sub">一间三室住宅 + 一只用学习步态真实行走的宇树 Go2。ANIMA 通过下面这只前视相机看世界。</div>
+  <div class="sub">一套大平层住宅 + 一台用学习步态真实行走的机器人（四足 Go2 或人形 G1，可切换）。ANIMA 通过下面这只前视相机看世界。</div>
 </header>
 
 <main>
   <section class="panel cam">
-    <h2>机器狗前视相机（实时）</h2>
-    <img id="cam" src="/stream" alt="机器狗前视画面">
+    <h2>机器人前视相机（实时）</h2>
+    <img id="cam" src="/stream" alt="机器人前视画面">
     <div class="note">这就是 ANIMA 每轮感知时看到的画面。它必须靠这张图认出自己在哪间屋、往哪走——
       世界不会告诉它坐标，也不会告诉它房间名。</div>
   </section>
@@ -53,8 +53,8 @@
     </table>
     <div class="note warn">⚠️ 这一栏只给人看、用于验收「它是不是真的走到厨房了」。
       这些数字绝不进 ANIMA 的观测。</div>
-    <div style="margin-top:14px"><button id="reset">把狗放回出生点</button></div>
-    <div class="note">动作由 ANIMA 通过 AWI(MCP) 调用三个原语驱动：往前走 / 左转 / 右转。</div>
+    <div style="margin-top:14px"><button id="reset">放回出生点</button></div>
+    <div class="note">动作由 ANIMA 通过 AWI(MCP) 调用导航原语驱动：往前走 / 左转 / 右转（环视默认关闭，可开）。</div>
   </section>
 </main>
 

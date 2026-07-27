@@ -237,7 +237,14 @@ export default function ChatPanel({
   // 点了停止之后、这一轮真的收尾之前：世界那边正在做的那一步还得做完，所以有个中间态。
   const [stopping, setStopping] = useState(false);
   // 思考区的总开关。auto=正在跑的那轮展开、历史折叠（老行为）；all/none=用户一键全展开/全折叠。
-  const [expand, setExpand] = useState<"auto" | "all" | "none">("auto");
+  // 思考区展开策略。默认 auto = 实时回合展开、历史回合折叠。
+  // ?expand=all / ?expand=none 可从地址栏指定初值——分享链接时能直接把思考摊开给人看,
+  // 出文档截图时也用它(headless 截图点不了鼠标)。
+  const [expand, setExpand] = useState<"auto" | "all" | "none">(() => {
+    if (typeof window === "undefined") return "auto";
+    const v = new URLSearchParams(window.location.search).get("expand");
+    return v === "all" || v === "none" ? v : "auto";
+  });
   const bottomRef = useRef<HTMLDivElement>(null);
   const openFor = (isLive: boolean) => (expand === "all" ? true : expand === "none" ? false : isLive);
 

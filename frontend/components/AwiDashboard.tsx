@@ -293,17 +293,25 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
   const [events, setEvents] = useState<Ev[]>([]);
   const termRef = useRef<HTMLDivElement>(null);
 
+  // ?live=0：不开实时流量那条 SSE 长连接。
+  // 用途一是把这块嵌进文档/看板时不该一直占着连接；用途二是**出文档截图**——
+  // headless 浏览器只要页面上还挂着一条不结束的连接就永远等不到"加载完成",
+  // 一张图都截不出来（2026-07-27 实测：挂满 240 秒无输出）。
+  const liveTraffic = typeof window === "undefined"
+    || new URLSearchParams(window.location.search).get("live") !== "0";
+
   useEffect(() => {
     const load = () => getAwi().then(setData).catch(() => {});
     load();
     const id = setInterval(load, OVERVIEW_POLL_MS);
+    if (!liveTraffic) return () => clearInterval(id);
     const es = new EventSource(awiEventsUrl());
     es.onmessage = (e) => setEvents((prev) => [...prev.slice(-AWI_LOG_SHOWN), JSON.parse(e.data) as Ev]);
     return () => {
       clearInterval(id);
       es.close();
     };
-  }, []);
+  }, [liveTraffic]);
   useEffect(() => {
     termRef.current?.scrollTo(0, termRef.current.scrollHeight);
   }, [events]);
@@ -325,9 +333,9 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
 
         {/* 一句人话说明 + 细节全部折叠（想深究再点开） */}
         <p className="text-sm leading-relaxed text-neutral-400">
-          ANIMA（Host）连接两类 MCP server：<b className="text-neutral-200">🌍 World Server</b>——它栖身的现实（有画面，动作会改变现实）；
-          <b className="text-neutral-200">🧠 Engine Server</b>——它请教的引擎顾问（纯计算，问答拿反馈，由 ANIMA 按配置挂载）。
-          这页展示这些连接的契约与实时流量；要看「ANIMA 看到什么→想了什么→调了什么」的完整链，去{" "}
+          {t("ANIMA（Host）连接两类 MCP server：")}<b className="text-neutral-200">🌍 World Server</b>{t("——它栖身的现实（有画面，动作会改变现实）；")}
+          <b className="text-neutral-200">🧠 Engine Server</b>{t("——它请教的引擎顾问（纯计算，问答拿反馈，由 ANIMA 按配置挂载）。")}
+          {t("这页展示这些连接的契约与实时流量；要看「ANIMA 看到什么→想了什么→调了什么」的完整链，去")}{" "}
           {embedded && onOpenLogs ? (
             <button onClick={onOpenLogs} className="text-blue-400 hover:underline">Session Logs</button>
           ) : (
@@ -419,7 +427,7 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
 
         <div className="grid gap-4 md:grid-cols-2">
           <section>
-            <h2 className="mb-2 text-sm font-medium text-neutral-400">大脑接口(LLM)</h2>
+            <h2 className="mb-2 text-sm font-medium text-neutral-400">{t("大脑接口(LLM)")}</h2>
             <div className="space-y-1.5">
               {data?.brains.map((b) => (
                 <div
@@ -437,7 +445,7 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
             </div>
           </section>
           <section>
-            <h2 className="mb-2 text-sm font-medium text-neutral-400">会话</h2>
+            <h2 className="mb-2 text-sm font-medium text-neutral-400">{t("会话")}</h2>
             <div className="space-y-1.5">
               {data?.sessions.length === 0 && <div className="text-xs text-neutral-500">(暂无会话)</div>}
               {data?.sessions.map((s) => (
