@@ -26,6 +26,7 @@ v0.5 重构后的极简架构：**大脑里只剩两样东西——这个主循�
 from __future__ import annotations
 
 import base64
+import dataclasses
 import contextvars
 import logging
 import queue
@@ -38,8 +39,8 @@ from langgraph.graph import END, START, StateGraph
 
 from .. import config, messages
 from ..session import context
-from . import interrupt
-from .awi import ActionResult, NON_MUTATING_KINDS, ToolSpec
+from . import interrupt, trust
+from .awi import ActionResult, ToolSpec
 from ..llm import LLM, LLMReply, ToolCall
 from ..clients.registry import WorldRegistry
 from .safety import SafetyGate
@@ -128,15 +129,23 @@ class Orchestrator:
         return None
 
     # ==================== 节点（看 → 想 → 动）====================
-    # 不变量(改动时务必保持):capabilities 走缓存、perceive 每轮真取、安全闸只拦「会改世界」的动作、
-    #   服务工具按来源路由(只读不过闸)、handle 与 handle_stream 共用同一张图(行为天然一致)。
+    # 不变量(改动时务必保持):capabilities 走缓存、perceive 每轮真取、**每个世界动作都过安全闸**
+    #   (世界声明的 kind 只是闸门的输入,不是跳过闸门的理由——见 _run_tool)、服务工具按来源路由
+    #   (顾问=纯计算无副作用,不过闸)、handle 与 handle_stream 共用同一张图(行为天然一致)。
 
     def _node_perceive(self, state: LoopState) -> dict:
         """看：拿本轮工具单（世界+服务+内建元工具）与画面；画面落会话历史并发 perception 事件。"""
         emit = get_stream_writer()
         session, world = state["session"], state["world"]
         caps = world.capabilities() if world else None      # 握手:首轮拿能力并缓存
-        world_tools = list(caps.tools) if caps else []
+        # 工具描述是远端写的文本，进模型工具单前限长（schema 里没法加围栏，只能限长）。
+        # ⛔ 用 replace() 造新对象，**不改缓存里的原件**——审批界面要给人看的是完整原文，
+        #    如果这里就地截断，人看到的和被审批的就不是同一个东西了。
+        world_tools = [
+            dataclasses.replace(
+                t, description=trust.clip(t.description, config.WORLD_TOOL_DESC_MAX_CHARS))
+            for t in (caps.tools if caps else [])
+        ]
         svc_tools, svc_routes = self._service_toolbox(world, {t.name for t in world_tools})
         meta_tools = self._meta_toolbox({t.name for t in world_tools} | set(svc_routes))
         tools = world_tools + svc_tools + meta_tools
@@ -221,9 +230,26 @@ class Orchestrator:
         if meta_names and tc.name in meta_names:   # 元工具不碰世界：不过安全闸、不进路由
             return self._run_meta_tool(session, tc, emit)
         svc = svc_routes.get(tc.name)
-        changes_world = svc is None and world is not None and kinds.get(tc.name, "tool") not in NON_MUTATING_KINDS
-        if changes_world:
-            ok, reason = self.safety.check(world, tc.name, tc.arguments)
+        # ⛔ Every world action is put to the safety gate. The world's declared `kind` is
+        # passed in as one input to that decision — it is never the thing that decides
+        # whether the decision happens.
+        #
+        # This used to read `if kind not in NON_MUTATING_KINDS: safety.check(...)`, which
+        # meant a world could skip the gate entirely by annotating a destructive tool as
+        # read-only. Harmless while the gate is `default_allow=True` in simulation, but
+        # `safety.py` exists to be switched on before real hardware — and a gate that a
+        # remote party can turn off with one line of metadata is not a gate.
+        #
+        # ⛔ 每一个世界动作都要过安全闸。世界声明的 `kind` 只是这个决定的**一个输入**——
+        # 它永远不能决定"这个决定要不要发生"。
+        #
+        # 这里原本写的是 `if kind not in NON_MUTATING_KINDS: safety.check(...)`，也就是说一个世界
+        # 只要把破坏性工具标成只读，就能整个跳过闸门。在仿真阶段（`default_allow=True`）无害，
+        # 但 `safety.py` 存在的意义正是**上真机前要把它打开**——而一道能被远端一行元数据关掉的闸，
+        # 不算闸。
+        if svc is None and world is not None:
+            ok, reason = self.safety.check(world, tc.name, tc.arguments,
+                                           declared_kind=kinds.get(tc.name, "tool"))
             if not ok:
                 result = ActionResult(False, f"安全闸拦截:{reason}")
                 self.store.append(session.id, {"role": "tool", "id": tc.id, "name": tc.name,
@@ -401,8 +427,11 @@ class Orchestrator:
             s = base + f"\n\n当前已连接世界「{world.name}」,它没有提供任何可调动作——你只能看画面、和用户聊,无法操作它。"
         # 世界的「说明书」(guidance = MCP prompt)：世界自我介绍怎么跟它打交道。让大脑保持纯净通用——
         # 不为某个世界写死逻辑，改由世界自述、大脑读了就懂。
+        # ⛔ v1.1 起它**必须**经过 trust.fence()：这是远端写的文本要进系统提示词，得先声明身份、
+        #    包上世界自己突破不了的围栏、并限长。直接拼接是它原来的样子，别改回去。
         if guidance:
-            s += f"\n\n【这个世界的说明书（它自己写的，教你怎么跟它打交道）】\n{guidance}"
+            s += messages.WORLD_GUIDANCE_BLOCK.format(
+                fenced=trust.fence(guidance, config.WORLD_GUIDANCE_MAX_CHARS))
         # 世界当前的配置（v1.0）：只告诉它「现在是什么样」，**不告诉它能怎么改**——
         # 改配置是人的动作，大脑没有对应的工具，说了只会让它去调一个不存在的东西。
         # 通用：不认识 body/相机/任何具体键名，世界声明什么就转述什么。

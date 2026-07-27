@@ -29,6 +29,7 @@ from pydantic import AnyUrl
 from .. import awi_log, config
 from . import mcp_bridge
 from ..core.awi import ActionResult, Capabilities, Observation, ToolSpec
+from ..core import trust
 from .mcp_bridge import run_sync, with_session
 
 DEFAULT_TIMEOUT = config.WORLD_TIMEOUT       # 读操作（capabilities/perceive）的死线（config，env 可覆盖）
@@ -48,7 +49,37 @@ class RemoteWorld:  # 实现 World 协议(AWI 客户端)
         self.timeout = timeout
         self._client = httpx.Client(timeout=timeout)  # 带外专用(/health /status /stream)
         self._caps: Capabilities | None = None    # 能力缓存:握手一次,之后复用
+        self._raw_caps: Capabilities | None = None  # 未经信任过滤的原件(审批界面看的是它)
+        self._trust: trust.TrustDecision | None = None
         self._last_state: dict | None = None       # 最近一次 perceive 的 state(给 /awi 仪表盘看)
+
+    # ---------- 信任（v1.1）----------
+    def trust_decision(self) -> trust.TrustDecision:
+        """这个世界被审批过吗？没握过手就先握一次（要拿到清单才能问这个问题）。
+        / Has this world been approved? Handshakes first if needed — the question cannot be
+        answered without the manifest."""
+        self.capabilities()
+        return self._trust
+
+    def raw_capabilities(self) -> Capabilities:
+        """世界**原样**声明的能力，未经信任过滤。
+
+        ⛔ 只给审批界面用。给人看的必须是完整原文——如果审批时看到的是过滤后的版本，
+        那这次审批就没有意义了。绝不要拿它去喂大脑。
+
+        ⛔ For the approval UI only. What a human approves has to be the complete text; if
+        the review showed a filtered version the approval would mean nothing. Never feed
+        this to the brain."""
+        self.capabilities()
+        return self._raw_caps
+
+    def approve(self, store: trust.TrustStore | None = None) -> str:
+        """记下操作者对当前这份清单的批准，并让下一次握手重新判定。
+        / Record the operator's approval of the manifest as it stands now."""
+        raw = self.raw_capabilities()
+        h = (store or trust.TrustStore()).approve(self.base, raw.tools, raw.guidance, self.name)
+        self._caps = self._raw_caps = self._trust = None      # 下次握手按新状态重算
+        return h
 
     # ---------- 能力握手（一次 + 缓存）----------
     def capabilities(self) -> Capabilities:
@@ -89,8 +120,26 @@ class RemoteWorld:  # 实现 World 协议(AWI 客户端)
         t0 = time.perf_counter()
         tools, guidance, cfg = run_sync(with_session(self.mcp_url, op, self.timeout),
                                         self.timeout + config.BRIDGE_GRACE_S)
-        self._caps = Capabilities(name=self.name, version="", tools=tools, state_schema={},
-                                  guidance=guidance, config=cfg)
+        self._raw_caps = Capabilities(name=self.name, version="", tools=tools, state_schema={},
+                                      guidance=guidance, config=cfg)
+
+        # ⛔ 信任闸：世界写的工具与说明书，在被操作者审批之前**不进大脑**。
+        # 未批准时返回一份「空能力」——世界仍然列得出来、状态看得见（前端要能显示"待批准"并让人去批），
+        # 但它的文本不会进系统提示词、它的工具不会进工具单。
+        # 不抛异常是有意的：抛异常会让整条链路挂掉，而"这个世界还没批"是一个**正常状态**，不是错误。
+        #
+        # ⛔ Trust gate: a world's tools and guidance do not reach the brain until the
+        # operator has approved them. An unapproved world returns empty capabilities — it
+        # still lists, and its state is still visible so the UI can offer approval — but its
+        # text never enters the system prompt and its tools never enter the tool sheet.
+        # Deliberately not an exception: "not approved yet" is a normal state, not a failure.
+        self._trust = trust.TrustStore().check(self.base, tools, guidance)
+        if self._trust.allowed:
+            self._caps = self._raw_caps
+        else:
+            self._caps = Capabilities(name=self.name, version="", tools=[], state_schema={},
+                                      guidance="", config=cfg)
+
         awi_log.record(self.name, "capabilities", "capabilities() 握手[mcp]",
                        (time.perf_counter() - t0) * 1000,
                        resp={"transport": "mcp", "n_tools": len(tools),
@@ -99,8 +148,13 @@ class RemoteWorld:  # 实现 World 协议(AWI 客户端)
         return self._caps
 
     def refresh(self) -> None:
-        """丢掉能力缓存,下次 capabilities() 重新握手(世界换了工具 / 重启后用)。"""
-        self._caps = None
+        """丢掉能力缓存,下次 capabilities() 重新握手(世界换了工具 / 重启后用)。
+
+        ⛔ 三份缓存必须一起丢。只丢 `_caps` 会留下一个**过时的信任判定**——世界改了工具之后，
+        重新握手拿到新清单，却拿旧判定去放行它，rug pull 就从这个缝里过去了。
+        ⛔ All three must go together: dropping only `_caps` would leave a stale trust
+        decision, and a rug pull would walk straight through that gap."""
+        self._caps = self._raw_caps = self._trust = None
 
     # ---------- 世界配置：读走 AWI（握手时一起拿），改走带外 HTTP ----------
     def set_config(self, key: str, value: str) -> dict:

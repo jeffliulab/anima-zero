@@ -72,17 +72,70 @@ app.add_middleware(
 )
 
 
-@app.get("/api/worlds")  # 可连的世界 + 是否在线
+@app.get("/api/worlds")  # 可连的世界 + 是否在线 + 是否已审批
 def worlds() -> list:
     out = []
     for name in registry.list_worlds():
         w = registry.get(name)
+        online = w.online() if hasattr(w, "online") else True
+        # 信任状态要和在线状态并列显示：一个世界可以「在线但没批准」，那时它列得出来、
+        # 却驱动不了——不把这个状态说出来，用户只会看到一个莫名其妙没有工具的世界。
+        # 世界不在线时不去问（问就要握手，等超时），状态留空。
+        trust_state = ""
+        if online:
+            try:
+                trust_state = w.trust_decision().state
+            except Exception:
+                trust_state = ""
         out.append({
             "name": name,
             "url": getattr(w, "base", ""),
-            "online": w.online() if hasattr(w, "online") else True,
+            "online": online,
+            "trust": trust_state,          # unknown / changed / trusted / ""(问不到)
         })
     return out
+
+
+# ---- 世界信任（v1.1）----
+# 世界的说明书会进系统提示词、工具描述会进工具单——都是远端写的文本。所以在操作者亲眼看过并
+# 批准之前，这些内容不进大脑（见 core/trust.py 与 clients/world_client.py 的信任闸）。
+# 这两个端点就是那道人类审批：一个把**完整原文**摊出来给人看，一个记下他的决定。
+
+@app.get("/api/worlds/{name}/manifest")  # 待审阅的完整清单（给人看，不是给大脑看）
+def world_manifest(name: str) -> dict:
+    w = registry.get(name)
+    if w is None:
+        return {"ok": False, "message": f"没有名叫「{name}」的世界。"}
+    try:
+        d = w.trust_decision()
+        raw = w.raw_capabilities()
+    except Exception as e:
+        return {"ok": False, "message": f"连不上这个世界，没法取它的清单：{e}"}
+    return {
+        "ok": True,
+        "state": d.state,
+        "reason": d.reason,
+        "changes": d.changes,          # state=changed 时：这次和上次批准的差在哪
+        "url": getattr(w, "base", ""),
+        # ⛔ 摊给人看的必须是**未经过滤的原文**——审批时看到的东西如果和被审批的东西不是同一个，
+        #    这次审批就没有意义了。
+        "guidance": raw.guidance,
+        "tools": [{"name": t.name, "kind": t.kind, "description": t.description,
+                   "parameters": t.parameters} for t in raw.tools],
+    }
+
+
+@app.post("/api/worlds/{name}/approve")  # 记下操作者对当前这份清单的批准
+def approve_world(name: str) -> dict:
+    w = registry.get(name)
+    if w is None:
+        return {"ok": False, "message": f"没有名叫「{name}」的世界。"}
+    try:
+        h = w.approve()
+    except Exception as e:
+        return {"ok": False, "message": f"批准失败：{e}"}
+    return {"ok": True, "hash": h,
+            "message": f"已批准世界「{name}」当前的能力清单。它以后再变会重新来问你。"}
 
 
 # ---- 世界配置（v1.0 的 AWI 新通道）----

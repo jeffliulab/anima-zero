@@ -66,6 +66,19 @@ class Settings(BaseSettings):
         description="单条笔记的字数上限。笔记是备忘不是日记；超长就退回让它自己缩写，"
                     "**绝不截断**（截断会把一条笔记变成半句话，比没有更糟）。")
 
+    # ---- 世界给的文本：进大脑之前的长度上限（安全，见 core/trust.py）----
+    # 世界的说明书和工具描述都是**远端写的文本**，会进系统提示词和工具单。除了信任审批那道闸，
+    # 还要有个长度上限：一份 500KB 的说明书不需要任何巧思就能把上下文预算撑爆、把每一轮都变贵。
+    # 上限之外的部分**如实截断并说明**（不静默丢——静默丢会让人以为世界写的东西全生效了）。
+    world_guidance_max_chars: int = Field(
+        4000, validation_alias="ANIMA_WORLD_GUIDANCE_MAX_CHARS", ge=100,
+        description="世界说明书注入系统提示的字数上限。真实世界的说明书都在一千字上下"
+                    "（sim-house-nav 约 844 字），4000 是宽裕的；它挡的是恶意或失控的超长文本。")
+    world_tool_desc_max_chars: int = Field(
+        1000, validation_alias="ANIMA_WORLD_TOOL_DESC_MAX_CHARS", ge=50,
+        description="单个工具描述进工具单的字数上限。工具描述是 3~4 句话说清「何时调/何时别调」，"
+                    "1000 字已经远超正常；同样只挡异常，不影响正经世界。")
+
     # ---- 开发自测接口（仅开发用，默认关）----
     dev_api: bool = Field(
         False, validation_alias="ANIMA_DEV_API",
@@ -165,6 +178,8 @@ TURN_TIME_BUDGET_S = _settings.turn_time_budget_s
 CONTEXT_TOKEN_BUDGET = _settings.context_token_budget
 NOTES_MAX = _settings.notes_max
 NOTE_MAX_CHARS = _settings.note_max_chars
+WORLD_GUIDANCE_MAX_CHARS = _settings.world_guidance_max_chars
+WORLD_TOOL_DESC_MAX_CHARS = _settings.world_tool_desc_max_chars
 DEV_API = _settings.dev_api
 WORLD_TIMEOUT = _settings.world_timeout
 WORLD_PROBE_TIMEOUT = _settings.world_probe_timeout

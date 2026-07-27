@@ -9,6 +9,8 @@
 """
 from __future__ import annotations
 
+from .awi import NON_MUTATING_KINDS
+
 
 class SafetyGate:
     """确定性安全闸。`default_allow` 把「放行」变成显式策略,而不是隐式写死。
@@ -27,18 +29,31 @@ class SafetyGate:
 
     # 三档决策：'allow'(放行) / 'approve'(需人批) / 'deny'(硬拦)。真机硬检查（夹爪角度≤100°、目标在
     # 标定工作区/合法棋盘格、CAN 是否被占用）按动作在此补；当前仿真阶段按集合 + default_allow 分档。
-    def decide(self, world, name: str, args: dict) -> str:
+    def decide(self, world, name: str, args: dict, declared_kind: str = "tool") -> str:
+        """⛔ `declared_kind` 是**世界自己说**这个动作改不改变世界（AWI 的 kind / MCP 的
+        readOnlyHint）。它是**输入，不是授权**——本方法可以参考它，但绝不能因为它而不被调用。
+
+        这条边界是有原因的：编排器过去按 kind 决定"要不要过闸"，等于把闸门开关交给了远端。
+        现在编排器对每个世界动作都调本方法，判断权完整地留在这里（= 操作者的策略）。
+        改回去等于把红线还给世界，别改。
+
+        当前策略：非改动类（read/judge）在仿真阶段放行——与历史行为一致，所以今天的行为零变化；
+        变的只是**谁在做这个判断**。上真机时在这里按 world/name/args 填确定性硬检查，
+        并且**不要**信 declared_kind 就免检。
+        """
         if name in self._blocked:
             return "deny"
         if name in self._needs_approval:
             return "approve"
+        if declared_kind in NON_MUTATING_KINDS:
+            return "allow"
         return "allow" if self.default_allow else "deny"
 
-    def check(self, world, name: str, args: dict) -> tuple[bool, str]:
+    def check(self, world, name: str, args: dict, declared_kind: str = "tool") -> tuple[bool, str]:
         """主循环用的二元闸（向后兼容）：返回 (放行?, 拦截原因)。
         'approve' 档在当前【同步】主循环里先拦下并说明——真机阶段再补"挂起→人工批准→放行"的 HITL 放行流程
         （那时复用 AskHuman 那套 interrupt/resume，不在仿真阶段假装已实现）。"""
-        d = self.decide(world, name, args)
+        d = self.decide(world, name, args, declared_kind)
         if d == "allow":
             return True, ""
         if d == "approve":

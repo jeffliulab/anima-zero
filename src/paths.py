@@ -19,3 +19,18 @@ LOGS_DIR = os.path.join(REPO_ROOT, "logs")            # 流水日志：awi-*/gam
 MEMORY_DIR = os.path.join(REPO_ROOT, "memory")        # 会话记忆根（记录 + 图）
 SESSIONS_DIR = os.path.join(MEMORY_DIR, "sessions")   # 会话记录 + imgs → memory/sessions
 ENV_FILE = os.path.join(REPO_ROOT, ".env")            # 后端/CLI 读的 .env
+
+# ---- 用户级目录（与仓库无关）--------------------------------------------------------
+# User-level directory, deliberately NOT derived from the repository.
+#
+# Everything above is repo-relative, which is right for logs and session memory: they
+# belong to a checkout. Trust decisions do not. Someone who installed ANIMA with pip has
+# no repository at all, and a decision like "I have reviewed this world and approved it"
+# should follow the person, not the working copy — deleting a clone must not silently
+# re-trust anything.
+#
+# 上面那些都是相对仓库的，对日志和会话记忆来说是对的：它们属于某一份 checkout。**信任决定不是。**
+# 用 pip 装 ANIMA 的人根本没有仓库；而"我审阅过这个世界并批准了它"这种决定应当跟着**人**走、
+# 不跟着工作副本走——删掉一个 clone 绝不该悄悄地把什么东西重新变成可信的。
+ANIMA_HOME = os.environ.get("ANIMA_HOME") or os.path.join(os.path.expanduser("~"), ".anima")
+TRUST_FILE = os.path.join(ANIMA_HOME, "trust.json")   # 已审批世界的清单哈希（见 core/trust.py）
