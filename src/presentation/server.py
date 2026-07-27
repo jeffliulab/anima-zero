@@ -522,6 +522,19 @@ def ui_build_time() -> str | None:
     index = os.path.join(_UI_DIR, "index.html")
     if not os.path.exists(index):
         return None
+    # Written by scripts/build_ui.py at build time. Read it in preference to the file's
+    # mtime, because `pip install` rewrites mtimes to the install moment — an installed copy
+    # would otherwise always claim to be freshly built, which is the one case this check
+    # exists for. mtime remains the fallback for a tree built before the stamp existed.
+    # 由 scripts/build_ui.py 在构建时写入。优先读它、而不是文件 mtime，因为 `pip install` 会把
+    # mtime 重写成安装那一刻——否则**装出来的副本永远自称刚刚构建**，而那正是这个检查要防的唯一场景。
+    # mtime 保留为回退，给"时间戳出现之前构建的"那些树用。
+    stamp = os.path.join(_UI_DIR, ".build-time")
+    if os.path.exists(stamp):
+        with open(stamp, encoding="utf-8") as fh:
+            text = fh.read().strip()
+        if text:
+            return text
     return time.strftime("%Y-%m-%d %H:%M", time.localtime(os.path.getmtime(index)))
 
 

@@ -99,6 +99,22 @@ Found by installing the wheel and running it, not by reading the source. The sca
 them is worth keeping: walk the AST, collect string constants that are not docstrings, and
 look for CJK.
 
+### R7 · The UI staleness check was blind where it mattered
+
+`anima serve` prints when the bundled web app was built, so that a wheel packaged without
+rebuilding the interface can be noticed. It read the build time off `index.html`'s mtime —
+and `pip install` rewrites mtimes to the moment of installation, so **every installed copy
+claimed to be freshly built**. The check worked only in a development checkout, where it was
+least needed.
+
+Fixed in the repository (the build writes a `.build-time` file, which now wins over mtime,
+and a test pins it). **The 1.1.0 wheel on PyPI still has the old behaviour** — its reported
+build time is its install time. Nothing else about that release is affected; the interface it
+ships was verified by reading the page itself, not by trusting the timestamp.
+
+Found by installing 1.1.0 from PyPI and noticing it claimed a build time six hours after the
+actual build.
+
 ## Not planned
 
 Saying no is part of a roadmap.

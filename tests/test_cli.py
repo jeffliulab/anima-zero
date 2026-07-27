@@ -17,6 +17,7 @@ CLI 比代码库里任何东西都烂得快：它在项目内部没有调用方�
 """
 from __future__ import annotations
 
+import os
 import pytest
 
 from anima import cli
@@ -149,3 +150,48 @@ def test_doctor_runs_without_anything_configured(capsys, monkeypatch):
     out = capsys.readouterr().out
     assert "mock" in out, "没配 key 的人也得看到有一个能用的大脑"
     assert "anima demo" in out, "得告诉他下一步能跑什么"
+
+
+# ---------------------------------------------------------------- the UI staleness check
+
+def test_ui_build_time_survives_an_mtime_rewrite(tmp_path, monkeypatch):
+    """⛔ The build stamp must beat the file's mtime.
+
+    `pip install` rewrites every file's mtime to the moment of installation. Reading the
+    build time off `index.html`'s mtime therefore made an installed copy always claim to be
+    freshly built — the staleness check failed in precisely the case it exists for, and
+    worked only in a development checkout, where nobody needed it. Found by installing 1.1.0
+    from PyPI and watching it report a build time six hours after the real build.
+
+    ⛔ 时间戳必须压过文件的 mtime。
+
+    `pip install` 会把每个文件的 mtime 重写成安装那一刻。于是"从 index.html 的 mtime 读构建时间"
+    这个做法，让**任何装出来的副本都自称刚刚构建**——这道检查在它唯一要防的场景里失效，只在最不需要
+    它的开发目录里有效。是从 PyPI 装了 1.1.0、看它报出的构建时间比真实构建晚六小时才发现的。
+    """
+    from anima.presentation import server
+
+    web = tmp_path / "web"
+    web.mkdir()
+    (web / "index.html").write_text("<html></html>", encoding="utf-8")
+    monkeypatch.setattr(server, "_UI_DIR", str(web))
+
+    # No stamp: it can only fall back to the mtime, whatever that happens to be.
+    # 没有时间戳时只能退回 mtime——不管那碰巧是什么。
+    assert server.ui_build_time() is not None
+
+    # With a stamp, the mtime must not win — even when the mtime is much later, which is
+    # exactly what an install looks like.
+    # 有时间戳时 mtime 不许赢——哪怕 mtime 晚得多，而那正是"被安装过"的样子。
+    (web / ".build-time").write_text("2020-01-02 03:04", encoding="utf-8")
+    os.utime(web / "index.html", None)          # 把 mtime 打到"现在"，模拟 pip
+    assert server.ui_build_time() == "2020-01-02 03:04"
+
+
+def test_ui_build_time_is_none_without_a_web_app(tmp_path, monkeypatch):
+    """No bundled web app is a valid install (`--no-ui`), not an error.
+    / 没有随包网页是一种合法安装（`--no-ui`），不是错误。"""
+    from anima.presentation import server
+
+    monkeypatch.setattr(server, "_UI_DIR", str(tmp_path / "nothing-here"))
+    assert server.ui_build_time() is None

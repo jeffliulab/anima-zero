@@ -27,6 +27,7 @@ step belongs in CI rather than in anyone's memory.
 """
 from __future__ import annotations
 
+import datetime
 import shutil
 import subprocess
 import sys
@@ -36,6 +37,8 @@ ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 OUT = FRONTEND / "out"
 DEST = ROOT / "src" / "presentation" / "web"
+# 构建时间戳的文件名。server.py 用同一个名字读它——两边必须一致。
+BUILD_STAMP = ".build-time"
 
 
 def main() -> int:
@@ -57,6 +60,19 @@ def main() -> int:
     if DEST.exists():
         shutil.rmtree(DEST)
     shutil.copytree(OUT, DEST)
+
+    # ⛔ Stamp the build time into a file rather than leaving it to be read off the file's
+    # mtime. `pip install` rewrites mtimes to the moment of installation, so an installed
+    # copy always looked freshly built — the staleness check failed in exactly the case it
+    # was written for, and only worked in a development checkout where it was least needed.
+    # Caught by installing 1.1.0 from PyPI and finding it claim a build time six hours after
+    # the actual build.
+    # ⛔ 把构建时间**写进文件**，而不是留给别人去读文件的 mtime。`pip install` 会把 mtime 重写成
+    #    安装那一刻，于是**任何装出来的副本都显示"刚刚构建"**——这道防线在它唯一要防的场景里失效，
+    #    只在最不需要它的开发目录里有效。是从 PyPI 装了 1.1.0、发现它报出的构建时间比真实构建
+    #    晚了六个小时，才抓到的。
+    (DEST / BUILD_STAMP).write_text(
+        datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), encoding="utf-8")
 
     n = sum(1 for _ in DEST.rglob("*") if _.is_file())
     print(f"✓ 网页已放到 {DEST.relative_to(ROOT)}（{n} 个文件）")
