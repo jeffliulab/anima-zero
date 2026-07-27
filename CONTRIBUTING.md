@@ -1,44 +1,126 @@
-# 参与贡献 / Contributing
+<div align="center">
 
-> ANIMA Zero 是一个**开源研究原型**(求职展示 + 教学用,MIT,见 [LICENSE](LICENSE))。它是一份个人作品集项目,主要由维护者推进;
-> 但欢迎你提 issue、给反馈、或提交小的修复 / 文档改进。参与前请先读 [`README.md`](README.md)(顶层架构)和
-> [行为准则](CODE_OF_CONDUCT.md)。
+<a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
+<a href="CONTRIBUTING_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
 
-## 先搞清楚这是什么
+</div>
 
-ANIMA = 具身机器人的「大脑」(System 2,只想不动);它隔着一套 **AWI(Anima World Interface)** 接口去观测、
-操作一个独立运行的「世界」(System 1)。框架本身**领域无关**——不写死任何具体世界的知识。详见 README 的
-「框架结构」「请求处理链路」「工具调用」三节。
+# Contributing
 
-## 本地跑起来
+> ANIMA Zero is an **open research prototype** — a portfolio and teaching project, MIT
+> licensed (see [LICENSE](LICENSE)). It is mostly moved forward by its maintainer, but
+> issues, feedback, small fixes and documentation improvements are welcome. Please read
+> [`README.md`](README.md) for the architecture and the
+> [code of conduct](CODE_OF_CONDUCT.md) first.
 
-按 README「快速上手」即可,三件一起跑:**世界(`world/sim-desk`)· ANIMA 后端 · 网页**。配置(API key /
-本地 Ollama 地址 / 世界清单)见 [`.env.example`](.env.example)。注意 `world/sim-desk` 是 **git 子模块**,
-clone 时记得 `git clone --recursive` 或事后 `git submodule update --init`。
+## What this is
 
-## 想加点东西?
+ANIMA is the **brain** of an embodied robot: System 2, it thinks and never moves. It
+observes and operates a separately running **world** (System 1) across an interface called
+**AWI**, carried over MCP. The framework is domain-agnostic — it hard-codes nothing about
+any particular world.
 
-- **加一个新世界**:世界就是一个标准 **MCP server**(挂在 `/mcp`),用三类原语说话——**Tools**(能力)、
-  **Resources**(感知,`anima://observation`)、**Prompts**(说明书 `guidance`);在 `.env` 的
-  `ANIMA_WORLDS` 里加一行 URL 即可被 ANIMA 连上。框架一行都不用改。参考 [`world/sim-desk`](world/sim-desk)
-  与 README「怎么接入一个世界」一节。
-- **加一个新大脑(LLM)**:见 [`src/llm/README.md`](src/llm/README.md);多数模型走 OpenAI 兼容口,登记到
-  `src/llm/factory.py` 那张表即可。
-- **工具(tool)怎么写**:工具是世界在 MCP `tools/list` 里声明的(名字 + 3~4 句描述写清「何时调 / 何时别调」+
-  JSON Schema 参数 + kind),框架以**原生 function-calling** 转给大脑——不要在提示词里手写 JSON。
+## Running it locally
 
-## 约定
+```bash
+uv tool install anima-zero && anima demo     # nothing else needed, no key, no node
+```
 
-- 代码风格跟着周围现有代码走;改动尽量小而聚焦,一个 PR 只做一件事。
-- 改了行为请顺手更新对应的 README / `CHANGELOG.md`。
-- **不要**提交密钥、`.env`、本地记忆(`memory/`)、日志(`logs/`)——它们都在 `.gitignore` 里。
-- ⚠️ 涉及真机的代码/命令有物理风险,**真机操作一律由在场操作者亲手执行**(见 [`SECURITY.md`](SECURITY.md))。
+For development, three processes: a world, the backend, the web app — see the README.
+Configuration (API keys, a local Ollama address, the world list) is in
+[`.env.example`](.env.example). `world/sim-desk` is a **git submodule**, so clone with
+`--recursive` or run `git submodule update --init` afterwards.
 
-## 提问 / 报告问题
+## Adding something
 
-开一个 issue 即可;安全 / 风险相关见 [`SECURITY.md`](SECURITY.md)。也可邮件联系维护者(邮箱见
-[`pyproject.toml`](pyproject.toml) 的 `authors`)。
+- **A new world.** A world is a standard **MCP server** (mounted at `/mcp`) speaking three
+  primitives: **Tools** (what it can do), **Resources** (perception, `anima://observation`)
+  and **Prompts** (its own guidance). Add its address with `anima world add NAME URL` and
+  the brain drives it without a line changing. Start from
+  [`world/sim-desk`](world/sim-desk) for the simplest case or
+  [`world/sim-house-nav`](world/sim-house-nav) for the complete one, and read
+  [`world/README.md`](world/README.md) first.
+- **A new brain (LLM).** See [`src/llm/README.md`](src/llm/README.md). Most models speak
+  the OpenAI-compatible protocol; register yours in the table in `src/llm/factory.py`.
+- **A tool.** Tools are declared by the world in MCP's `tools/list`: a name, three or four
+  sentences saying **when to call it and when not to**, a JSON Schema, and a `kind`. The
+  framework passes them to the model as native function calls — never hand-write JSON into
+  a prompt.
 
-许可证:本项目以 [MIT](LICENSE) 发布。提交贡献即表示你同意你的贡献同样以 MIT 提供。
-MIT 本身就允许闭源商用,所以不需要额外的贡献者协议,也没有商业双授权那一套。
-许可证沿革(哪个版本受哪套条款约束)见 [NOTICE](NOTICE)。
+## House rules
+
+Most of these exist because something went wrong once. They are enforced by
+`python scripts/selfcheck.py`, which CI runs on every push.
+
+- **The orchestrator stays task-agnostic.** `src/core/orchestrator.py` must not know what
+  game or task it is driving. Task-specific knowledge belongs in the world. When unsure:
+  *would this code still make sense against a different world?*
+- **Whole sets are appended to, never replaced.** `ANIMA_WORLDS`, `.env.example`, default
+  lists, README tables — adding an entry must not drop an existing one. This is a hard
+  rule because it has been broken: adding one world once removed another from the UI
+  entirely.
+- **No hard-coding.** Paths are derived or come from the environment. Tunable numbers go in
+  `src/config.py` with a description, not inline. Anything the model should judge —
+  intent, whether to stop, which move — is judged by the model, never by a keyword list.
+- **A placeholder is declared, never buried.** If you must leave one, say so in the pull
+  request.
+- **Claimed tests and capabilities must exist.** A comment saying something is covered,
+  when it is not, is the same lie as faking data.
+
+### Language
+
+The split is by **audience**, and it is deliberate:
+
+| What | Language |
+|---|---|
+| Text a **model** reads — system prompt, tool descriptions, a world's guidance | **English only.** See `src/prompts.py` for why |
+| Text a **person** reads — UI strings, docs, README | Both, kept in step |
+| Public API docstrings — `core/awi.py`, each `awi_mcp.py`, module headers | Both |
+| Internal comments explaining why something is the way it is | **Chinese, and that is on purpose** |
+
+That last row is a real decision rather than an omission. Those comments are the
+maintainer's thinking, and translating them would flatten what makes them useful. They do
+not stop anyone using the project, and the parts you need in order to *extend* it — the
+contract, the guidance, the docs — are in both languages.
+
+### Commits
+
+English first, then Chinese, so the history reads as English at a glance:
+
+```text
+type: English summary line
+
+English body — what changed and why.
+
+---
+中文说明：这次改了什么、为什么这么改。
+```
+
+Explain the reasoning, not just the diff. A commit that says *why* is worth more later than
+one that restates *what*.
+
+## Checklist
+
+- [ ] `pytest -q` passes
+- [ ] `ruff check .` passes
+- [ ] `python scripts/selfcheck.py` passes
+- [ ] `python docs/check_readme.py` passes if you touched a README
+- [ ] Behaviour changed → `CHANGELOG.md` and the relevant README updated
+- [ ] **A guard you added actually fires.** Break the thing on purpose, watch the test go
+      red, put it back. A guard nobody has seen fail is a guard nobody knows works — this
+      project has caught three that had silently stopped guarding.
+
+## Real hardware
+
+⚠️ Code and commands that touch real hardware carry physical risk. **Anyone running them
+must be present at the machine.** See [SECURITY.md](SECURITY.md).
+
+## Reporting
+
+Open an issue. For anything security-related, read [SECURITY.md](SECURITY.md) first — in
+particular §2, on why connecting a world is a trust decision.
+
+Licence: this project is released under [MIT](LICENSE). Contributing means agreeing that
+your contribution is offered under MIT as well. MIT already permits closed-source
+commercial use, so there is no contributor agreement to sign and no dual-licensing
+arrangement. Which terms apply to which release is recorded in [NOTICE](NOTICE).

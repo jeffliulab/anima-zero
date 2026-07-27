@@ -1,88 +1,122 @@
-# 安全说明 / 风险披露
+<div align="center">
 
-> ANIMA Zero 是一个**开源研究原型**，用于求职展示与教学。下面披露已知风险，使用前请知悉。
+<a href="SECURITY.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
+<a href="SECURITY_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
 
-## 1. 这是原型，不是安全认证系统
+</div>
 
-ANIMA 没有经过任何安全认证，**不要**用于医疗、工业、汽车等安全攸关场景。要在这类场景使用，必须由你
-自己做完整的验证与认证。
+# Security
 
-## 2. ⭐ 连一个世界，是一次信任决定
+> ANIMA Zero is an **open research prototype**, built as a portfolio and teaching project.
+> What follows is an honest account of what it does and does not protect against.
 
-这是本项目**最需要你理解的一条**，因为它来自这套架构本身，不是某个 bug。
+## 1. This is a prototype, not a certified system
 
-ANIMA 是 MCP 意义上的 **host**，而「世界」是一个**独立的远端进程**，通过 URL 连上。ANIMA 交给它的
-权限异乎寻常地大：
+ANIMA carries no safety certification. **Do not** use it in medical, industrial, automotive
+or any other safety-critical setting. Doing so would require verification and certification
+you would have to carry out yourself.
 
-| 通道 | 世界写的内容会到哪 |
+## 2. ⭐ Connecting a world is a trust decision
+
+This is the section worth understanding, because it follows from the architecture rather
+than from any particular bug.
+
+ANIMA is a **host** in the MCP sense, and a **world** is a separate process reached over a
+URL. The authority it hands that world is unusual:
+
+| Channel | Where the world's text ends up |
 |---|---|
-| **说明书（guidance）** | 拼进大脑的**系统提示词**——模型权限最高的通道 |
-| **工具描述** | 进模型的 function-calling 工具单 |
-| **动作结果（message）** | 进对话历史 |
-| **`kind` / `readOnlyHint`** | 曾经决定安全闸跑不跑（v1.1 已收回，见下） |
+| **Guidance** | Concatenated into the brain's **system prompt** — the model's highest-authority channel |
+| **Tool descriptions** | The model's function-calling tool sheet |
+| **Action results** | The conversation history |
+| **`kind` / `readOnlyHint`** | Used to decide whether the safety gate ran at all (reclaimed in v1.1, below) |
 
-也就是说：**接一个别人写的世界，等于让一个陌生人往你大脑的系统提示词里写字。**
-这不是理论担忧——业界对这两类攻击有专门的名字：**tool poisoning**（服务器控制的描述文本进入 agent
-上下文并被当成可信内容执行）和 **rug pull**（被审阅时表现正常、批准之后再偷偷改描述）。
+In other words: **connecting somebody else's world means letting a stranger write into your
+brain's system prompt.** This is not a theoretical worry. The industry has names for the two
+attacks — **tool poisoning** (description text a server controls enters the agent's context
+and is acted on as trusted) and **rug pull** (a server behaves while being reviewed and
+changes its descriptions once approved) — along with real incidents and CVEs.
 
-### 我们做了什么
+### What we do about it
 
-1. **审批绑定内容，不绑定名字。** 首次连一个世界时，它声明的全部工具（名字/kind/描述/参数）和说明书
-   **原文**会摊给你看，由你决定批不批。批准记录的是这份清单的 SHA-256 哈希。清单没变就不再问；
-   **一变就重新问，并告诉你变了什么**。这和 SSH 钉主机密钥、Docker 钉镜像摘要是同一个思路——
-   拿新东西顶着旧名字换进来，必须是能被发现的。
-2. **未批准的世界，内容不进大脑。** 它照样列得出来、状态看得见（好让你去批），但它的说明书不进系统
-   提示词、它的工具不进工具单。
-3. **说明书进系统提示词前先加围栏并声明身份**：告诉模型这段是**资料不是指令**、不能覆盖上面的规则；
-   围栏标记会从世界的文本里剥掉（否则它可以自己伪造一个结束标记越狱）；另有长度上限。
-4. **安全闸的开关从世界手里收回（v1.1）。** 此前编排器按世界自己声明的 `kind` 决定要不要过闸——
-   一个世界只要把破坏性工具标成只读就能整个跳过它。现在**每个世界动作都过闸**，`kind` 只是闸门的
-   一个输入。这条在仿真阶段无害，但上真机把闸门打开那天它就是一个洞。
-5. 上面每一条都有测试钉着（`tests/test_world_trust.py`，用一个真会干坏事的"恶意世界"夹具）。
+1. **Approval binds to content, not to a name.** The first time you connect a world, every
+   tool it declares (name, kind, description, schema) and its guidance **in full** are put
+   in front of you, and you decide. What is recorded is the SHA-256 of that manifest. If it
+   has not changed you are not asked again; **if it has, you are asked again and told what
+   changed**. This is the same idea as SSH pinning a host key or Docker pinning an image
+   digest: substituting something new under an old name has to be detectable.
+2. **An unapproved world's content does not reach the brain.** It still lists and still
+   reports whether it is online — so you can approve it — but its guidance never enters the
+   system prompt and its tools never enter the tool sheet.
+3. **Guidance is fenced and labelled before injection.** The model is told the block is
+   **material, not instruction**, and that it cannot override the rules above it. The fence
+   markers are stripped from the world's own text, so it cannot close the fence early and
+   have the rest read as ANIMA's own words. There is also a length cap.
+4. **The safety gate was taken back from the world (v1.1).** The orchestrator used to read
+   the world's own `kind` to decide whether to consult the gate — so a world could skip it
+   entirely by annotating a destructive tool as read-only. **Every world action now goes to
+   the gate**, with `kind` as one input to that decision and never a bypass. Harmless while
+   the gate is open in simulation; a hole the day it is switched on for real hardware, which
+   is the only reason `safety.py` exists.
+5. Each of the above is held by a test in `tests/test_world_trust.py`, against a fixture
+   that does what a malicious world would actually do.
 
-### 我们**没有**做到什么（请务必读这段）
+### What we do **not** do — please read this part
 
-- **提示词注入无法根治。** 围栏和长度上限只是提高门槛。没有任何代码在检查说明书里有没有恶意，
-  也不存在可靠的这种检查——这是全行业的未解问题。
-- **信任模型只管"要不要连"，不管"连上之后它说的是不是真的"。** 一个已批准的世界照样可以发假的相机
-  画面、把失败的动作报成成功。大脑看到的世界，就是那个世界愿意让它看到的样子。
-- **所以真正的保护是你**：批准时**真的把那份清单读一遍**。一路回车点过去的审批等于没有审批。
+- **Prompt injection is not solved.** Fencing and length caps raise the bar. Nothing
+  inspects the guidance for hostile intent, and no such check would be reliable. This is an
+  open problem for the entire field.
+- **The trust model governs whether to connect, not whether what you are told is true.** An
+  approved world can still send fabricated camera frames or report a failed action as a
+  success. What the brain sees is what that world chose to show it.
+- **So the real protection is you**: read the manifest when you approve it. An approval
+  clicked through without reading is not an approval.
 
-### 一句话
+### In one line
 
-**只连你信任的世界。**
+**Only connect worlds you trust.**
 
-> 开发时可以用 `ANIMA_TRUST_ALL=1` 跳过全部审批（自己改世界时清单每次都变、每次都要重批）。
-> 它**只该出现在你本地**，绝不要写进任何共享或发布的配置。
+> `ANIMA_TRUST_ALL=1` skips every approval, for development — when you are editing your own
+> world, the manifest changes on every save. It belongs on your machine only, never in
+> anything shared or published.
 
-## 3. 大脑会犯错（LLM 固有风险）
+## 3. The brain makes mistakes (inherent to LLMs)
 
-ANIMA 的决策由大语言模型（云端或本地视觉模型）给出，**可能产生幻觉或错误判断**。因此设计上：大脑只
-"想"、只负责选工具填参数，不持有逻辑真值；真正动手前必须经过安全闸和人工确认。
+ANIMA's decisions come from a large language model, cloud or local, and **it can hallucinate
+or judge wrongly**. The design accounts for this: the brain only *thinks* — it selects tools
+and fills in arguments — and never holds the logical ground truth. Before anything real
+happens there is a safety gate and, where it matters, a human.
 
-## 4. 真机风险（连接真实身体时）
+## 4. Real hardware
 
-当前版本仍是纯软件——虚拟世界与物理仿真，**尚未接真机**，没有真实硬件风险。但 ANIMA 的目标是将来
-驱动真实机械臂与人形机器人：
+The current version is software only — virtual worlds and physics simulation. It **has
+never driven real hardware**. But that is where ANIMA is going, so:
 
-- 真机运动有物理风险，相关命令必须由**在场操作者**亲手执行。
-- 这是舵机 / 伺服臂，**急停 = 切电**；切电瞬间关节会失力下塌，需人手扶住。
-- 舵机夹爪角度 **≤100°**（超过会因齿轮误差带来危险）。
-- 下发真机前必做自检（合法？看清了？抓取角度安全？），高风险 / 不可逆动作前强制人工确认。
-- ⚠️ 上真机前 `src/core/safety.py` 要从 `default_allow=True` 改成 `False` 并填入确定性硬检查。
-  **那些硬检查绝不能依赖世界声明的 `kind` 来免检**——理由见上面第 2 节第 4 条。
+- Real motion carries physical risk. Those commands must be run by someone **present at the
+  machine**.
+- This is a servo arm: **the emergency stop is cutting power**, and when power is cut the
+  joints go limp and drop. Someone has to be holding it.
+- Keep the servo gripper angle **≤100°**; beyond that, gear backlash makes it dangerous.
+- Check before dispatching: is the action legal, did you actually see clearly, is the grasp
+  angle safe? High-risk or irreversible actions need explicit human approval.
+- ⚠️ Before real hardware, `src/core/safety.py` must move from `default_allow=True` to
+  `False` with real deterministic checks filled in. **Those checks must never exempt an
+  action because of the `kind` a world declared** — see §2, point 4.
 
-## 5. 网络暴露
+## 5. Network exposure
 
-后端默认只服务本机。把它绑到 `0.0.0.0` 或把 `ANIMA_CORS_ORIGINS` 设成 `*` 之前请想清楚：那意味着
-同网段的任何人都能建会话、驱动你连着的世界。`.env.example` 里那个 `*` 是本地 demo 的口径，不是发布
-默认值。
+The backend serves this machine only by default. Before binding to `0.0.0.0` or setting
+`ANIMA_CORS_ORIGINS=*`, be clear about what that means: anyone on the network can create a
+session and drive whatever world you have connected. The `*` in `.env.example` is a local
+demo convenience, not a deployment default.
 
-## 6. 密钥安全
+## 6. Keys
 
-大脑用的 API key 放在本地 `.env`（已在 `.gitignore`，不会入库），不要把密钥提交到仓库。
-注意大脑的会话内容会发给你选的模型提供商——别在会话里贴不该外传的东西。
+Model API keys live in a local `.env`, which is gitignored and never committed. Note also
+that conversation content goes to whichever model provider you choose — do not paste into a
+session anything that must not leave the machine.
 
-## 7. 发现问题
+## 7. Reporting
 
-发现安全或风险相关问题，欢迎开 issue，或邮件联系维护者（邮箱见 `pyproject.toml` 的 `authors`）。
+Open an issue for anything security-related, or email the maintainer (address in
+`pyproject.toml` under `authors`).

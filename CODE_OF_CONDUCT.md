@@ -1,40 +1,56 @@
-# 行为准则 / Code of Conduct
+<div align="center">
 
-> 本准则改编自 [Contributor Covenant](https://www.contributor-covenant.org) v2.1。
+<a href="CODE_OF_CONDUCT.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
+<a href="CODE_OF_CONDUCT_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
 
-## 我们的承诺
+</div>
 
-为营造开放、友好的环境,我们作为成员、贡献者与维护者承诺:让每个人参与本项目和社区的体验都不受骚扰,
-无论其年龄、体型、可见或不可见的身心障碍、族裔、性别认同与表达、经验水平、教育程度、社会经济地位、
-国籍、外貌、种族、宗教、性取向如何。
+# Code of Conduct
 
-我们承诺以有助于建立开放、热情、多元、包容、健康社区的方式行事与互动。
+> Adapted from the [Contributor Covenant](https://www.contributor-covenant.org) v2.1.
 
-## 我们的准则
+## Our pledge
 
-**鼓励的行为**:对他人友善与同理;尊重不同的观点与经验;得体地给予并接受建设性反馈;为自己的错误负责、
-向受影响者致歉并从中学习;着眼于整个社区的共同利益。
+We as members, contributors and maintainers pledge to make participation in this project
+and its community a harassment-free experience for everyone, regardless of age, body size,
+visible or invisible disability, ethnicity, gender identity and expression, level of
+experience, education, socio-economic status, nationality, personal appearance, race,
+religion, or sexual identity and orientation.
 
-**不可接受的行为**:任何形式的性化言论或行为、性骚扰;辱骂、侮辱或贬损性评论,人身或政治攻击;公开或私下
-的骚扰;未经明确许可公开他人的私人信息(如住址、邮箱);其他在专业场合中合理认定为不当的行为。
+We pledge to act and interact in ways that contribute to an open, welcoming, diverse,
+inclusive and healthy community.
 
-## 执行责任
+## Our standards
 
-社区维护者负责阐明并执行上述准则,并对任何被认定为不当、威胁、冒犯或有害的行为采取适当、公正的纠正措施
-(包括编辑或删除相关评论、提交、代码、issue 等,并在必要时说明理由)。
+**Behaviour that helps**: showing kindness and empathy; respecting differing viewpoints and
+experiences; giving and gracefully accepting constructive feedback; taking responsibility
+for our mistakes, apologising to those affected, and learning from the experience; focusing
+on what is best for the community as a whole.
 
-## 适用范围
+**Behaviour that does not**: sexualised language or imagery, and sexual attention or
+advances of any kind; trolling, insulting or derogatory comments, and personal or political
+attacks; public or private harassment; publishing others' private information — a physical
+or email address, for instance — without their explicit permission; and other conduct that
+could reasonably be considered inappropriate in a professional setting.
 
-本准则适用于所有项目空间,以及个人在公开场合代表本项目时的言行(例如使用项目邮箱、官方社交账号,或作为
-指定代表参加线上线下活动时)。
+## Enforcement
 
-## 举报
+Maintainers are responsible for clarifying and enforcing these standards, and will take
+appropriate and fair corrective action in response to any behaviour they deem
+inappropriate, threatening, offensive or harmful.
 
-如遇辱骂、骚扰或其他不可接受的行为,请通过 GitHub issue 联系项目维护者,或邮件联系(邮箱见
-[`pyproject.toml`](pyproject.toml) 的 `authors`)。所有投诉都会被及时、公正地审阅与处理;维护者有义务为
-举报者保密。
+Maintainers have the right and responsibility to remove, edit or reject comments, commits,
+code, issues and other contributions that are not aligned with this Code of Conduct, and
+will explain the reasons for moderation decisions when appropriate.
 
----
+## Scope
 
-> 完整条款与「执行准则」分级处理指引,参见 Contributor Covenant v2.1:
-> https://www.contributor-covenant.org/version/2/1/code_of_conduct/
+This Code of Conduct applies within all community spaces, and also applies when an
+individual is officially representing the community in public spaces.
+
+## Reporting
+
+Report abusive, harassing or otherwise unacceptable behaviour to the maintainer by email —
+the address is in `pyproject.toml` under `authors`. All complaints will be reviewed and
+investigated promptly and fairly, and the privacy and security of the reporter will be
+respected.
