@@ -10,7 +10,7 @@
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org)
 [![MCP](https://img.shields.io/badge/protocol-MCP-6f42c1.svg)](https://modelcontextprotocol.io)
 [![MuJoCo](https://img.shields.io/badge/sim-MuJoCo-orange.svg)](https://mujoco.org)
-[![Version](https://img.shields.io/badge/version-v1.0-lightgrey.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/github/v/tag/jeffliulab/anima-zero?label=version&color=lightgrey)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-yellow.svg)](LICENSE)
 
 ## Overview

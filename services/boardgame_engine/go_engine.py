@@ -45,10 +45,12 @@ def _neighbor_table(n):
     for i in range(n * n):
         r, c = divmod(i, n)
         nb = []
-        if r > 0:     nb.append(i - n)
-        if r < n - 1: nb.append(i + n)
-        if c > 0:     nb.append(i - 1)
-        if c < n - 1: nb.append(i + 1)
+        # Aligned on purpose: four parallel edge cases read better as a block than as
+        # eight lines. / 有意对齐：四个边界情形排成一块比拆成八行好读。
+        if r > 0:     nb.append(i - n)   # noqa: E701
+        if r < n - 1: nb.append(i + n)   # noqa: E701
+        if c > 0:     nb.append(i - 1)   # noqa: E701
+        if c < n - 1: nb.append(i + 1)   # noqa: E701
         res.append(tuple(nb))
     _NEIGHBOR_CACHE[n] = res
     return res

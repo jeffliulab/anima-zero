@@ -14,7 +14,7 @@ from anima.core.awi import ActionResult, Capabilities, Observation, ToolSpec
 from anima.llm import LLMReply, ToolCall
 from anima.core.orchestrator import Orchestrator
 from anima.clients.registry import WorldRegistry
-from anima.session import Session, SessionStore
+from anima.session import SessionStore
 
 
 class _World:
@@ -124,7 +124,7 @@ def test_pure_chat_also_supports_core_task(tmp_path):
 def test_name_collision_world_wins_meta_yields(tmp_path):
     world = _World(tool_name="set_core_task", tool_kind="tool")   # 世界抢注了同名工具
     orch, session = _orch(tmp_path, world)
-    out = orch.handle(session, "x", _SeqLLM([
+    orch.handle(session, "x", _SeqLLM([          # 这条测试查的是副作用，不看返回值
         LLMReply(tool_calls=[ToolCall("1", "set_core_task", {"task": "t"})]),
         LLMReply(text="fin")]))
     assert world.invoked and world.invoked[0][0] == "set_core_task", "同名时元工具让位，调用应到世界"

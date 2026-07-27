@@ -1,0 +1,83 @@
+# CI — the house rules, enforced on every push.
+#
+# Deliberately ONE job on ONE Python version: a check suite that finishes in a minute
+# is a check suite people actually read. Add a matrix when someone reports a real
+# compatibility problem, not before.
+#
+# CI —— 每次推送都强制执行的项目规矩。
+#
+# 有意只用一个 job、一个 Python 版本：一分钟跑完的检查才会有人看。
+# 等真有人报了兼容性问题再加矩阵，不要提前加。
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  python:
+    name: Python checks / Python 侧检查
+    runs-on: ubuntu-latest
+    steps:
+      # Worlds live in submodules; check them out so CI sees what `git clone --recursive` gives.
+      # 世界在子模块里；递归拉取，让 CI 看到的和贡献者 clone 到的一样。
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0          # check_readme.py inspects git-tracked content / 按 git 内容查图片
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install / 安装
+        run: pip install -e ".[dev]"
+
+      - name: Lint (ruff) / 代码风格
+        run: ruff check .
+
+      - name: Tests / 测试
+        run: pytest -q
+
+      # The four house rules that used to live only in a maintainer's private notes.
+      # 那四条原先只写在维护者私人笔记里的规矩。
+      - name: Self-checks / 项目自检
+        run: python scripts/selfcheck.py
+
+      # On a release tag, additionally assert tag == __version__ == CHANGELOG top entry.
+      # 打 release tag 时，额外校验 tag == __version__ == CHANGELOG 顶栏。
+      - name: Version consistency on tag / 封版三处版本号一致
+        if: github.ref_type == 'tag'
+        run: python scripts/selfcheck.py --tag "${{ github.ref_name }}"
+
+      # Guards against the "looks fine locally, broken image on GitHub" failure mode.
+      # 防的是「本地看得见、GitHub 上裂图」那种翻车。
+      - name: README links and images / README 链接与图片
+        run: python docs/check_readme.py
+
+  frontend:
+    name: Frontend checks / 前端检查
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install / 安装
+        run: npm ci
+
+      - name: Typecheck / 类型检查
+        run: npm run typecheck
+
+      - name: Build / 构建
+        run: npm run build

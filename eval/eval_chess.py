@@ -310,7 +310,7 @@ def main() -> None:
 
     # 终端摘要
     s, a, sc = report["summary"], report["awi"], report["strength"]
-    print(f"\n=== ANIMA 下棋记分卡 ===")
+    print("\n=== ANIMA 下棋记分卡 ===")
     by_w = " ".join(f"{w}:{n}" for w, n in sorted(s.get("games_by_world", {}).items()))
     print(f"对局 {s['games']}（{by_w}） · ANIMA 走子 {s['scored_moves']} · 引擎 {report['engine']}")
     for w, aw in a.items():

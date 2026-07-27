@@ -1,0 +1,51 @@
+name: Connecting my own world / 接入我自己的世界
+description: You are implementing AWI for your own simulator or robot and something does not line up.
+labels: ["world-integration"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A world is a separate process that speaks AWI over MCP. If ANIMA cannot drive yours,
+        the mismatch is almost always in one of the three primitives or in the out-of-band
+        channels. Start with [`world/README.md`](../../world/README.md).
+
+        「世界」是一个独立进程，经 MCP 说 AWI。ANIMA 驱动不了你的世界时，问题几乎总在三个原语
+        或带外通道上。先读 [`world/README.md`](../../world/README.md)。
+
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Where it breaks / 卡在哪一步
+      options:
+        - "capabilities() — ANIMA does not see my tools / 看不到我的工具"
+        - "observe() — the frame or state does not arrive / 画面或状态传不过来"
+        - "invoke() — the action runs but the result is wrong / 动作跑了但结果不对"
+        - "guidance — the brain ignores my instructions / 大脑不理我的说明书"
+        - "out-of-band (/status, /streams, /health, /config) / 带外通道"
+    validations:
+      required: true
+
+  - type: textarea
+    id: world-description
+    attributes:
+      label: What your world is / 你的世界是什么
+      description: Simulator or real hardware? What can the robot do? What does the camera see?
+    validations:
+      required: true
+
+  - type: textarea
+    id: capabilities
+    attributes:
+      label: Your capabilities output / 你的能力声明
+      description: The tool list your world advertises, with names, kinds and JSON Schemas.
+      render: json
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: What you see / 你观察到的现象
+      description: Paste the AWI traffic from the `/awi` dashboard if you can.
+    validations:
+      required: true

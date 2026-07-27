@@ -4,7 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "anima"
-version = "0.1.0"
+# Single source of truth is src/_version.py (read statically, no import at build time).
+# 版本号的单一来源是 src/_version.py（静态读取，构建期不 import）。
+dynamic = ["version"]
 description = "ANIMA — the brain of an embodied robot: an object standard + registry + a generic agent loop. Connects to one object at a time and operates it through vision-capable LLMs."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -52,6 +54,11 @@ dev = [
 [project.urls]
 Homepage = "https://github.com/jeffliulab/anima-zero"
 
+# Version is read statically from src/_version.py — never duplicate it here.
+# 版本号从 src/_version.py 静态读取——绝不在这里再写一份。
+[tool.setuptools.dynamic]
+version = { attr = "anima._version.__version__" }
+
 # 扁平 src/ 映射成 anima 包(不建 src/anima);llm/ 是子包
 [tool.setuptools]
 package-dir = { "anima" = "src" }
@@ -66,3 +73,6 @@ pythonpath = ["."]                # 仓库根进 sys.path：services.boardgame_e
 line-length = 100
 target-version = "py311"
 cache-dir = ".cache/ruff"         # 把 .ruff_cache 收进 .cache/
+# Submodules are separate repositories with their own lint setup — you don't lint
+# someone else's repo from yours. / 子模块是独立的仓、有自己的 lint；不从本仓去管别人的仓。
+exclude = ["world/sim-desk"]

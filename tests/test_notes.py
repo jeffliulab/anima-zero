@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import os
 
-from anima import config, messages
+from anima import config
 from anima.clients.registry import WorldRegistry
 from anima.core.awi import ActionResult, Capabilities, Observation, ToolSpec
 from anima.core.orchestrator import Orchestrator

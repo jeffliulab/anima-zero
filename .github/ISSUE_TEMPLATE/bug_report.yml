@@ -1,0 +1,58 @@
+name: Bug report / 报告缺陷
+description: Something in ANIMA behaves differently from what the docs say.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please say which **layer** the problem is in — it decides where the fix goes.
+        请说清问题在**哪一层**——这决定了修在哪里。
+
+        - **brain** (`src/`) — the loop, sessions, LLM adapters, HTTP backend
+        - **world** (`world/…`) — a specific world's physics, tools or guidance
+        - **web app** (`frontend/`) — the UI
+        - **not sure** — that is a fine answer, describe what you saw
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Which layer / 哪一层
+      options: [brain, world, web app, not sure]
+    validations:
+      required: true
+
+  - type: input
+    id: world
+    attributes:
+      label: World and brain / 世界与大脑
+      description: e.g. `sim-house-nav` + `gpt-5.4`. Say "none" for pure chat.
+      placeholder: sim-desk + claude-opus
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened / 实际发生了什么
+      description: |
+        Include the exact steps. If a turn went wrong, the Session Log for that turn is
+        the single most useful thing you can paste — it has the frame, the reasoning, the
+        tool call and the world's answer.
+        附上确切步骤。如果是某一轮出了问题，**贴那一轮的 Session Log 最有用**——里面有画面、
+        推理、工具调用和世界的回答。
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected / 你预期的是什么
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment / 环境
+      description: Output of `python -c "import anima; print(anima.__version__)"`, OS, Python version.
+      render: shell

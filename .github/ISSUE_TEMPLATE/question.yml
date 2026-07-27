@@ -1,0 +1,28 @@
+name: Question / 提问
+description: Ask about the architecture, a design decision, or how something is meant to work.
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Design questions are welcome — several of this project's rules exist because
+        someone asked "why is it done that way?" and the answer turned out to be weak.
+
+        欢迎问设计问题——这个项目有好几条规矩，就是因为有人问了「为什么这么做」、
+        而当时的答案站不住脚，才立起来的。
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question / 你的问题
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: What you already read / 你已经读过什么
+      description: |
+        Linking the README section or source file you looked at helps a lot — if the docs
+        were unclear, that is itself worth fixing.
+        贴出你看过的 README 章节或源码文件很有帮助——如果是文档没写清楚，那本身就该修。

@@ -1,0 +1,30 @@
+# Dependency *version* updates.
+#
+# Deliberately NOT enabling npm here: the frontend has ~150 transitive packages and routine
+# version PRs would bury the ones that matter.
+#
+# ⚠️ This does NOT leave the frontend unwatched. Dependabot *security* updates are a
+# separate, repository-level setting (Settings → Code security → Dependabot security
+# updates) and cover every ecosystem including npm regardless of this file. Turn that on —
+# it is what catches the CVEs; this file only controls routine version bumps.
+#
+# 依赖的**版本**更新。
+#
+# **有意不在这里开 npm**：前端约 150 个间接依赖，例行升级 PR 会把真正要紧的淹掉。
+#
+# ⚠️ 这**不等于**前端没人看着。Dependabot 的**安全**更新是**仓库级的另一个开关**
+# （Settings → Code security → Dependabot security updates），无论本文件怎么写，它都覆盖
+# 包括 npm 在内的所有生态。**那个开关要打开**——抓 CVE 的是它；本文件只管例行版本升级。
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
