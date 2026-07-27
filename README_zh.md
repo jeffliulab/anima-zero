@@ -188,13 +188,13 @@ curl -s localhost:8112/status
 ## 接你自己的世界
 
 实现一个标准 MCP server，提供上面那四条通道，把地址加进 `ANIMA_WORLDS`，大脑一行不改就能驱动它。
-最小的一份只有三个方法，`capabilities()`、`observe()`、`invoke()`，用每个世界都自带的
-`awi_mcp.py` 适配层包一下即可。照 [sim-desk](world/sim-desk) 抄最简单的，
-照 [sim-house-nav](world/sim-house-nav) 抄最完整的，动手前先读 [world/README_zh.md](world/README_zh.md)。
+最小的一份只有三个方法，`capabilities()`、`observe()`、`invoke()`，用每个世界都自带的 `awi_mcp.py`
+适配层包一下即可。照 [sim-desk](world/sim-desk) 抄最简单的，照 [sim-house-nav](world/sim-house-nav)
+抄最完整的，动手前先读 [world/README_zh.md](world/README_zh.md)。契约写在
+[docs/awi-spec-v1_zh.md](docs/awi-spec-v1_zh.md)，`anima conformance <地址>` 照它核一个世界。
 
 ## 致谢
 
 场景、机器人模型和运动策略来自 [alice-house](https://github.com/jeffliulab/alice-house)。
 人形的转弯策略在 [unitree-g1-locomotion](https://github.com/jeffliulab/unitree-g1-locomotion) 里训练。
-物理引擎是 [MuJoCo](https://mujoco.org)，机器人模型源自
-[MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie)。
+物理引擎是 [MuJoCo](https://mujoco.org)，机器人模型源自 [MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie)。

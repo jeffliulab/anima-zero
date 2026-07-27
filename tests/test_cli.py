@@ -103,7 +103,13 @@ def test_world_add_shows_the_manifest_and_stops_when_you_say_no(_fake_add, monke
     out = capsys.readouterr().out
     assert "Clear everything." in out, "工具描述必须摊给人看"
     assert "I am a world." in out, "说明书必须**全文**摊给人看"
-    assert "系统提示词" in out, "得说清批准之后这些字会去哪"
+    # ⛔ Asserts on the *substance*, not on one phrasing: the operator must be told that
+    # what they are approving lands in the system prompt and the tool sheet. When the CLI
+    # went from Chinese to English this test went red — which is the whole point of it.
+    # ⛔ 断言的是**实质**、不是某一种措辞：必须告诉操作者他批的东西会落进系统提示词和工具单。
+    # CLI 从中文改英文时这条测试红了——那正是它存在的意义。
+    assert "system prompt" in out, "得说清批准之后这些字会去哪"
+    assert "tool sheet" in out, "工具单也要说到"
     assert rc != 0 and not _fake_add.approved
 
 
@@ -119,7 +125,9 @@ def test_world_add_yes_flag_is_marked_as_the_dangerous_one():
     action = next(a for a in cli.build_parser()._subparsers._group_actions)
     add = action.choices["world"]._subparsers._group_actions[0].choices["add"]
     help_text = next(a.help for a in add._actions if a.dest == "yes")
-    assert "⚠" in help_text and ("别用" in help_text or "脚本" in help_text)
+    assert "⚠" in help_text
+    assert "without reading" in help_text, "必须说明它跳过的是审阅这一步"
+    assert "script" in help_text, "必须说明它是给脚本用的、不是常规路径"
 
 
 def test_world_remove_revokes_by_url(tmp_path, monkeypatch):

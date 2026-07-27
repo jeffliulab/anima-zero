@@ -185,16 +185,16 @@ Runs that did work, with per-frame verification, are written up in
 
 ## Add your own world
 
-Implement a standard MCP server with the four channels above, add its address to `ANIMA_WORLDS`, and
-the brain will drive it unchanged. The smallest version is three methods — `capabilities()`,
-`observe()` and `invoke()` — wrapped in the `awi_mcp.py` adapter that ships with every world. Copy
-from [sim-desk](world/sim-desk) for the simplest case or [sim-house-nav](world/sim-house-nav) for the
-complete one, and read [world/README.md](world/README.md) first.
+Implement a standard MCP server with the four channels above, add its address to `ANIMA_WORLDS`, and the
+brain will drive it unchanged. The smallest version is three methods — `capabilities()`, `observe()` and
+`invoke()` — wrapped in the `awi_mcp.py` adapter that ships with every world. Copy from
+[sim-desk](world/sim-desk) for the simplest case or [sim-house-nav](world/sim-house-nav) for the complete
+one, and read [world/README.md](world/README.md) first. The contract is written down in
+[docs/awi-spec-v1.md](docs/awi-spec-v1.md), and `anima conformance <url>` checks a world against it.
 
 ## Acknowledgements
 
 Scenes, robot models and locomotion policies come from [alice-house](https://github.com/jeffliulab/alice-house).
-The humanoid's turning policy was trained in
-[unitree-g1-locomotion](https://github.com/jeffliulab/unitree-g1-locomotion).
+The humanoid's turning policy was trained in [unitree-g1-locomotion](https://github.com/jeffliulab/unitree-g1-locomotion).
 Physics is [MuJoCo](https://mujoco.org); the robot models originate from
 [MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie).
