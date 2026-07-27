@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { tt, useI18n } from "@/lib/i18n";
+import { WorldTrust } from "./WorldTrust";
 import {
   getAwi, awiEventsUrl, AWI_LOG_SHOWN, POLL_AWI_MS, setWorldConfig, refreshWorld,
   type AwiOverview, type AwiWorld, type AwiService, type AwiTool, type WorldConfigOption,
@@ -127,6 +128,10 @@ function WorldCard({ w }: { w: AwiWorld }) {
         </div>
       </div>
       <div className="mt-1 text-[11px] text-neutral-500">{w.url}</div>
+
+      {/* 审批闸：世界的工具与说明书在被批准之前不进大脑，所以下面那几区会是空的——
+          这块必须紧挨着它们，否则看的人只会以为这个世界坏了。 */}
+      <WorldTrust name={w.name} state={w.trust ?? ""} onApproved={() => location.reload()} />
 
       <div className="mt-3 space-y-3">
         {online && (w.config?.options?.length ?? 0) > 0 && (

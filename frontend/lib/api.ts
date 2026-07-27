@@ -45,7 +45,33 @@ export type RuntimeParam = {
   description: string;
 };
 
-export type World = { name: string; url: string; online: boolean };
+// trust: "" 表示问不到（世界离线）。unknown = 没审批过；changed = 批准过但清单变了；trusted = 可用。
+export type World = { name: string; url: string; online: boolean; trust?: TrustState };
+
+export type TrustState = "" | "unknown" | "changed" | "trusted";
+
+// 一个世界**原样**声明的东西——审批界面看的就是它。
+// ⛔ 这是未经信任过滤的原文：给人看的必须和被批准的是同一份，否则这次审批毫无意义。
+export type WorldManifest = {
+  ok: boolean;
+  message?: string;
+  state: TrustState;
+  reason: string;
+  changes: string[];        // state=changed 时：和上次批准的差在哪
+  url: string;
+  guidance: string;
+  tools: { name: string; kind: string; description: string; parameters: unknown }[];
+};
+
+export async function getWorldManifest(name: string): Promise<WorldManifest> {
+  const r = await fetch(`${BASE}/api/worlds/${encodeURIComponent(name)}/manifest`);
+  return (await r.json()) as WorldManifest;
+}
+
+export async function approveWorld(name: string): Promise<{ ok: boolean; message: string }> {
+  const r = await fetch(`${BASE}/api/worlds/${encodeURIComponent(name)}/approve`, { method: "POST" });
+  return (await r.json()) as { ok: boolean; message: string };
+}
 
 // 世界的一项可配置项（v1.0 的 AWI 声明通道）。世界声明什么，网页就渲染什么——
 // ⛔ 前端不认识任何具体键名（body/相机/…），加新配置项不用改前端。
@@ -131,6 +157,9 @@ export type AwiWorld = {
   state_schema: Record<string, string>; // 世界【声明】的 perceive.state 契约（键→含义）——面板据此显示，不靠缓存上次 perceive 猜
   guidance: string; // 世界的「说明书」（= MCP prompt）：自我介绍怎么跟它打交道；大脑读它进系统提示，面板第四区显示
   config?: { options?: WorldConfigOption[] }; // 世界声明的可配置项（v1.0 新通道；改它走带外 HTTP，大脑只读）
+  trust?: TrustState; // 审批状态（v1.1）。⚠️ 上面的 tools / guidance 是**过滤后**的：
+                      // 未批准的世界这两栏是空的，所以这个字段必须和它们一起显示，
+                      // 否则看的人只会以为这个世界坏了。
 };
 // Engine Server（引擎顾问，如棋类引擎）：和 World Server 一样都是标准 MCP server，只是纯计算——
 // 只有 tools，无画面(resource)、无说明书(prompt)。由 ANIMA（Host）按 config.services() 挂载

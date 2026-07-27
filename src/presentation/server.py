@@ -400,10 +400,13 @@ def awi_overview() -> dict:
         online = w.online() if hasattr(w, "online") else True
         info = {"name": name, "url": getattr(w, "base", ""), "kind": "world", "online": online,
                 "version": "", "tools": [], "state": None, "status": None, "state_schema": {},
-                "guidance": "", "config": {}}
+                "guidance": "", "config": {}, "trust": ""}
         if online:
             try:
                 caps = w.capabilities()  # 命中握手缓存,不再问世界(见 RemoteWorld.capabilities)
+                # 信任状态要和能力一起给：面板显示的 tools / guidance 是**过滤后**的，
+                # 未批准的世界这两栏是空的。不把状态一起说出来，看的人只会以为这个世界坏了。
+                info["trust"] = w.trust_decision().state if hasattr(w, "trust_decision") else ""
                 info["version"] = caps.version
                 info["tools"] = [
                     {"name": t.name, "description": t.description, "kind": t.kind, "parameters": t.parameters}
