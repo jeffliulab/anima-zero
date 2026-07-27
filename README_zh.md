@@ -190,7 +190,7 @@ curl -s localhost:8112/status
 实现一个标准 MCP server，提供上面那四条通道，把地址加进 `ANIMA_WORLDS`，大脑一行不改就能驱动它。
 最小的一份只有三个方法，`capabilities()`、`observe()`、`invoke()`，用每个世界都自带的
 `awi_mcp.py` 适配层包一下即可。照 [sim-desk](world/sim-desk) 抄最简单的，
-照 [sim-house-nav](world/sim-house-nav) 抄最完整的，动手前先读 [world/README.md](world/README.md)。
+照 [sim-house-nav](world/sim-house-nav) 抄最完整的，动手前先读 [world/README_zh.md](world/README_zh.md)。
 
 ## 致谢
 

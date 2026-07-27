@@ -1,58 +1,76 @@
-# 如何给 ANIMA 增加一个语言大脑
+<div align="center">
 
-这个目录(`src/llm/`)是 ANIMA 的**大脑层**:把"具体哪家 LLM"和编排器解耦。编排器只认一个统一接口
-(`LLM` 协议),不关心背后是 Claude、OpenAI 还是本地 Ollama。所以**加一个新大脑,编排器、object、前端都不用动**。
+<a href="README.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
+<a href="README_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
 
-本目录现有文件:
+</div>
 
-| 文件 | 作用 |
+# Adding a language brain to ANIMA
+
+This directory (`src/llm/`) is ANIMA's **brain layer**: it keeps *which LLM* away from the
+orchestrator. The orchestrator knows one interface — the `LLM` protocol — and not whether
+Claude, OpenAI or a local Ollama sits behind it. So **adding a brain changes nothing in the
+orchestrator, the worlds or the frontend**.
+
+What is here:
+
+| File | Role |
 |---|---|
-| `base.py` | 统一接口 `LLM` 协议 + 中立类型(`ToolCall` / `LLMReply`) |
-| `openai_compat.py` | `OpenAICompatLLM` —— 一切走 **OpenAI 兼容口**的(OpenAI 云端 + 本地 Ollama) |
-| `claude.py` | `ClaudeLLM` —— Anthropic 自家 SDK |
-| `factory.py` | `make_llm()` 选脑 + `list_brains()` 报告每个脑是否配置好 |
+| `base.py` | The `LLM` protocol and its neutral types (`ToolCall` / `LLMReply`) |
+| `openai_compat.py` | `OpenAICompatLLM` — anything speaking the **OpenAI-compatible API** (OpenAI itself, local Ollama, most gateways) |
+| `claude.py` | `ClaudeLLM` — Anthropic's own SDK |
+| `mock.py` | `MockLLM` — a scripted brain, so the whole chain runs with no key and no network |
+| `factory.py` | `make_llm()` builds a brain; `list_brains()` reports which ones are configured |
 
 ---
 
-## 一、大脑要满足的契约(`LLM` 协议)
+## 1. The contract (`LLM` protocol)
 
-任何大脑类都要有这三样(见 `base.py`):
+Any brain provides these three things (see `base.py`):
 
 ```python
 class LLM(Protocol):
-    vision: bool   # 能不能看图。ANIMA 是具身大脑,必须 True(见末尾红线)
-    model: str     # 模型名/tag,给日志和前端显示用
+    vision: bool   # can it see images? ANIMA is an embodied brain, so this must be True
+    model: str     # model name/tag, shown in logs and in the UI
     def chat(self, system: str, history: list[dict],
              tools: list[ToolSpec], image_png: bytes | None) -> LLMReply: ...
 ```
 
-`chat()` 的输入:
-- `system` —— 系统提示(编排器拼好的)。
-- `history` —— **中立格式**的对话历史(每家自己翻译成自家格式),item 形如:
+Into `chat()`:
+
+- `system` — the system prompt, already assembled by the orchestrator.
+- `history` — the conversation in a **neutral format**, which each brain translates into its
+  own. Items look like:
   - `{"role": "user", "text": ...}`
   - `{"role": "assistant", "text": ..., "tool_calls": [ToolCall, ...]}`
   - `{"role": "tool", "id": ..., "name": ..., "content": ...}`
-- `tools` —— 当前可调的能力清单(`ToolSpec`,带 JSON Schema)。
-- `image_png` —— 当前画面(可能是 `None`,表示没连 object、纯聊天)。
+- `tools` — the callable capabilities right now (`ToolSpec`, carrying a JSON Schema).
+- `image_png` — the current frame, or `None` when no world is connected and it is just chat.
 
-`chat()` 的输出:一个 `LLMReply`
+Out of `chat()`: an `LLMReply`.
+
 ```python
-LLMReply(text="给人看的话(可空)", tool_calls=[ToolCall(id, name, arguments_dict), ...])
+LLMReply(text="prose for the human (may be empty)", tool_calls=[ToolCall(id, name, arguments_dict), ...])
 ```
-有 `tool_calls` → 编排器执行后再循环;没有 → 当作最终回复返回给用户。
 
-> 你要做的,就是在 `chat()` 里把中立的 `system/history/tools/image_png` **翻译成目标家的请求**,
-> 调它的 API,再把它的回复**翻译回** `LLMReply`。`openai_compat.py` 和 `claude.py` 就是两个现成范例。
+With `tool_calls`, the orchestrator executes them and loops. Without, the text is the final
+reply to the user.
+
+> Your job in `chat()` is to translate neutral `system` / `history` / `tools` / `image_png`
+> **into** that provider's request, call it, and translate its answer **back** into an
+> `LLMReply`. `openai_compat.py` and `claude.py` are two worked examples.
 
 ---
 
-## 二、情况 A:新大脑走 OpenAI 兼容口 → 不写新类,只在 factory 加一行
+## 2. Case A: the provider is OpenAI-compatible → one line in the factory
 
-绝大多数服务(OpenAI、本地 Ollama、各种「OpenAI 兼容」的云/自托管网关)都能直接复用 `OpenAICompatLLM`,
-它的构造是 `OpenAICompatLLM(model, base_url, api_key)`。只需在 `factory.py` 的 `_registry()` 登记表里加一项:
+Most services — OpenAI, local Ollama, the many "OpenAI-compatible" cloud and self-hosted
+gateways — reuse `OpenAICompatLLM` directly. It is constructed as
+`OpenAICompatLLM(model, base_url, api_key)`. Add an entry to the `_registry()` table in
+`factory.py`:
 
 ```python
-# 例:接一个 OpenAI 兼容的云服务
+# an OpenAI-compatible cloud service
 "my-vlm": {"label": "My VLM", "model": "some-vision-model", "kind": "api",
            "build": lambda: OpenAICompatLLM(
                os.getenv("MY_VLM_MODEL", "some-vision-model"),
@@ -60,20 +78,20 @@ LLMReply(text="给人看的话(可空)", tool_calls=[ToolCall(id, name, argument
                os.getenv("MY_VLM_API_KEY", "")),
            "ready": lambda: bool(os.getenv("MY_VLM_API_KEY"))},
 
-# 例:再加一个本地 Ollama 视觉模型(复用现成的 ollama 地址 + 查模型是否已 pull)
+# another local Ollama vision model — reuse the existing address, check the model is pulled
 "llava": {"label": "LLaVA 13B", "model": os.getenv("ANIMA_LLAVA_MODEL", "llava:13b"), "kind": "local",
           "build": lambda: OpenAICompatLLM(os.getenv("ANIMA_LLAVA_MODEL", "llava:13b"), ollama, "ollama"),
           "ready": lambda: ollama_ready(os.getenv("ANIMA_LLAVA_MODEL", "llava:13b"))},
 ```
 
-然后做第四节的两步登记即可。
+Then do the two registration steps in §4.
 
 ---
 
-## 三、情况 B:新大脑是另一套 SDK / 协议 → 新建一个文件
+## 3. Case B: the provider has its own SDK → a new file
 
-如果目标家不是 OpenAI 兼容(自有 SDK、自有请求格式),就照着 `claude.py` 在本目录新建一个文件,
-写个类实现 `LLM` 协议。骨架:
+If it is not OpenAI-compatible, add a file here modelled on `claude.py` with a class
+implementing the `LLM` protocol. The skeleton:
 
 ```python
 # src/llm/my_provider.py
@@ -81,7 +99,7 @@ from __future__ import annotations
 
 import base64
 
-from ..object import ToolSpec
+from ..core.awi import ToolSpec
 from .base import LLMReply, ToolCall
 
 
@@ -89,52 +107,65 @@ class MyProviderLLM:
     vision = True
 
     def __init__(self, model: str):
-        import my_sdk  # 该家的 SDK
+        import my_sdk  # the provider's SDK
         self.model = model
-        self.client = my_sdk.Client()  # 一般在这里读自家的 API key 环境变量
+        self.client = my_sdk.Client()  # usually reads its own API-key env var here
 
     def chat(self, system, history, tools, image_png) -> LLMReply:
-        # 1) 把 history 翻译成该家的 messages 格式
-        # 2) 把 tools(ToolSpec)翻译成该家的工具/函数声明
-        # 3) image_png 有的话,按该家的多模态格式塞进去(base64 / data-uri / 文件…)
+        # 1) translate history into the provider's message format
+        # 2) translate tools (ToolSpec) into its tool/function declarations
+        # 3) if image_png is present, attach it the way this provider wants it
+        #    (base64 / data URI / file upload …)
         resp = self.client.create(model=self.model, system=system, messages=..., tools=...)
-        # 4) 把该家的回复翻译回 LLMReply
+        # 4) translate the reply back into LLMReply
         text = ...
         calls = [ToolCall(id=..., name=..., arguments=...) for c in ...]
         return LLMReply(text=text, tool_calls=calls)
 ```
 
-> 工具调用如果该家支持不好,可改用「受约束 JSON 输出」:不发 tools,改成在 prompt 里要求按某个 schema
-> 吐一个动作 JSON,并用该家的 `response_format` / grammar 锁死格式,自己 parse 后构造 `ToolCall`。
+> If the provider's tool calling is weak, use **constrained JSON output** instead: send no
+> tools, ask in the prompt for one action object matching a schema, lock the shape with the
+> provider's `response_format` or grammar support, and build the `ToolCall` yourself after
+> parsing.
 
 ---
 
-## 四、登记两步(两种情况都要做)
+## 4. Registration, two steps (both cases)
 
-### 1. 在 `factory.py` 的 `_registry()` 表里加一项
-就是上面那种 `{label, model, kind, build, ready}` 的字典,key 是大脑名字(前端下拉 / API 传的 `brain`
-用它)。`make_llm()`(创建大脑)和 `list_brains()`(报告版本号 + 配没配好)都从这张表派生——
-**只此一处,版本号不重复**。
-- `model`:版本号,会显示在前端下拉里。
-- `ready`:是否配置好。在线脑看 key 在不在(`bool(os.getenv("XX_API_KEY"))`);本地 Ollama 脑用现成的
-  `ollama_ready(模型名)`(查模型是否已 pull)。
+### 4.1 Add an entry to `_registry()` in `factory.py`
 
-### 2. 在 `../.env.example` 里加配置说明
-把新大脑要的环境变量(key / base_url / model 版本号)按现有风格写清楚,方便别人 clone 下来照填。
+The `{label, model, kind, build, ready}` dictionary above, keyed by the brain's name — that
+key is what the UI dropdown shows and what the API's `brain` field carries. Both
+`make_llm()` (build a brain) and `list_brains()` (report version and readiness) derive from
+this one table, so **the version string is written once**.
 
----
+- `model` — the version string, shown in the dropdown.
+- `ready` — is it configured? For hosted brains, whether the key exists
+  (`bool(os.getenv("XX_API_KEY"))`). For local Ollama brains, `ollama_ready(model)`, which
+  checks the model has been pulled.
 
-## 五、一条红线:必须能看图
+### 4.2 Document its settings in `../../.env.example`
 
-ANIMA 是**具身机器人的大脑**,连上 object 后每一轮都会拿到画面(`image_png`)。所以新大脑**必须是视觉模型**
-(`vision = True`,并真的把 `image_png` 喂进去)。纯文本模型(只会读字、看不了图)**不要接**——
-它在"连了 object、要看着画面操作"的场景里没法用。
+Write the new brain's environment variables — key, base URL, model version — in the style of
+the existing entries, so somebody cloning the repo can fill them in.
 
 ---
 
-## 六、加完自检清单
+## 5. One hard rule: it must be able to see
 
-- [ ] 起后端不报错;`GET /api/brains` 里能看到它、带版本号,配置好后 `available` 变 `true`。
-- [ ] `GET /api/check?brain=<新名字>` 配置好后返回 `ok:true`。
-- [ ] 前端下拉能选到它、标着版本号;没配置时标「(未配置)」但仍可选,选中会提示未配置。
-- [ ] 连上桌面说一句"把笔移到右上角",它能看着画面调 `move_pen`,左边画面更新。
+ANIMA is the brain of an **embodied robot**. With a world connected it receives a frame every
+turn (`image_png`). So a new brain **must be a vision model** — `vision = True`, and it must
+genuinely pass `image_png` through. **Do not add a text-only model.** It cannot do the one
+thing this system is for: looking at what is in front of it and acting on that.
+
+---
+
+## 6. Checklist
+
+- [ ] The backend starts. `GET /api/brains` lists it with its version, and `available` turns
+      `true` once configured.
+- [ ] `GET /api/check?brain=<name>` returns `ok: true` once configured.
+- [ ] The dropdown offers it with its version. Unconfigured, it is marked as such but still
+      selectable, and selecting it says so.
+- [ ] Connected to the desk world, "move the pen to the top right" makes it look at the image,
+      call `move_pen`, and the picture on the left changes.

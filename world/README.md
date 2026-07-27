@@ -1,122 +1,150 @@
-# 怎么给 ANIMA 接一个新世界
+<div align="center">
 
-一个「世界」是一个**独立进程**，自己起一个 HTTP 服务。它和 ANIMA 之间有**两条完全不同的线**，
-接世界时最容易出错的地方就是**把东西挂错了线**。
+<a href="README.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
+<a href="README_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
+
+</div>
+
+# Connecting a new world to ANIMA
+
+A **world** is a separate process serving its own HTTP endpoints. Between it and ANIMA run
+**two completely different lines**, and the most common mistake when writing one is
+**putting something on the wrong line**.
 
 ```
-                    ┌─────────────────────────────────────────┐
-   ANIMA 大脑 ──①──▶│  /mcp     AWI：大脑↔世界，走 MCP        │
-                    │           大脑能看到、能调用的一切       │
-   ANIMA 网页 ──②──▶│  /stream  带外：世界↔人，走普通 HTTP    │
-   （人在看）        │  /status  大脑**看不到**这条线上的东西   │
-                    └─────────────────────────────────────────┘
+                     ┌────────────────────────────────────────────┐
+   ANIMA brain ──①──▶│  /mcp     AWI: brain ↔ world, over MCP     │
+                     │           everything the brain can see     │
+   ANIMA web  ──②──▶ │  /stream  out-of-band: world ↔ human       │
+   (a person          │  /status  the brain sees NONE of this      │
+    watching)        └────────────────────────────────────────────┘
 ```
 
-**判据只有一句**：这东西是给**大脑**的，还是给**人**的？
-给大脑 → 走 ①（AWI）；给人 → 走 ②（带外）。挂错了不会报错、不会崩，
-只会让实验结果虚高或者大脑去调一个不存在的东西——**最难发现的那种坏法**。
+**One question decides it**: is this for the **brain**, or for a **person**?
+For the brain → line ①. For a person → line ②. Getting it wrong raises no error and
+crashes nothing. It just inflates your results, or has the brain reach for something that
+does not exist — **the hardest kind of broken to notice.**
 
 ---
 
-## ① AWI（`/mcp`）—— 大脑这条线
+## ① AWI (`/mcp`) — the brain's line
 
-用 `awi_mcp.py` 里的 `build_awi_mcp()` 把你的世界对象包成标准 MCP server。
-⚠️ 这个文件在每个世界目录**各存一份字节一致的副本**（世界是独立进程、各自 venv、不共享 import）。
-改协议要各处同步，`tests/test_awi_mcp_copies.py` 字节级守着；**加了新世界记得把它加进那份清单**
-（v0.9 加 sim-house-nav 时就漏登记过——当时五份其实没漂，但那正是守卫会失效的方式）。
+Wrap your world object into a standard MCP server with `build_awi_mcp()` from `awi_mcp.py`.
 
-| 通道 | 你实现什么 | 大脑得到什么 | 必须吗 |
+⚠️ That file exists as a **byte-identical copy in every world directory** — worlds are
+separate processes with their own virtualenvs and share no imports. Changing the protocol
+means changing every copy; `tests/test_awi_mcp_copies.py` holds them to the byte. **When you
+add a world, add it to that test's list** — this was missed when sim-house-nav arrived in
+v0.9. The five copies had not in fact drifted, but that is exactly how the guard would have
+stopped guarding.
+
+| Channel | What you implement | What the brain gets | Required |
 |---|---|---|---|
-| **tools** | `capabilities() -> {"tools":[…]}` | 可调用的原子动作（带 JSON schema） | 可以为空（纯观察世界） |
-| **observation** | `observe() -> (state, image)` | 每轮的画面 + 结构状态 | ✅ 必须 |
-| **guidance** | 一段说明书文本 | 拼进系统提示，让它"懂"这个陌生世界 | 强烈建议 |
-| **config** | `config() -> {"options":[…]}` | 世界当前的场地配置（只读转述） | 可选 |
+| **tools** | `capabilities() -> {"tools":[…]}` | Callable atomic actions, with JSON Schema | May be empty (an observe-only world) |
+| **observation** | `observe() -> (state, image)` | The image and structured state, each turn | ✅ yes |
+| **guidance** | A block of prose | Joined into the system prompt so the model can make sense of an unfamiliar world | Strongly recommended |
+| **config** | `config() -> {"options":[…]}` | The world's current setup, read-only | Optional |
 
-**长动作**：世界的一个原语可能要几十秒。在 `invoke` 签名里声明 keyword-only 的 `_progress`，
-执行中调 `_progress(0.5, "已夹取，正在移向 e4")`——大脑会把进度实时发到网页，用户不会黑等。
-没声明的世界零改动。
+**Long actions.** A single primitive may take tens of seconds. Declare a keyword-only
+`_progress` in your `invoke` signature and call `_progress(0.5, "grasped, moving to e4")`
+while you work — the brain forwards it to the web page live, so nobody waits at a blank
+screen. Worlds that do not declare it are unaffected.
 
-### ⛔ AWI 上不许出现的东西
+### ⛔ What must never appear on AWI
 
-**世界的上帝视角真值**：坐标、房间名、地图、棋盘 FEN、"你现在其实在哪"。
-这些走带外 `/status`。给大脑上帝视角，等于把这个世界要考的能力直接送掉。
+**The world's god's-eye ground truth**: coordinates, room names, the map, a chess FEN,
+"where you actually are". That goes out of band, on `/status`. Handing the brain a
+god's-eye view gives away the very ability the world exists to test.
 
-判据：**真实机器人身上有这个传感器吗？** 相机、IMU 朝向、激光测距、"我摔倒了没" → 有，可以给；
-"我在客厅" → 没有，那是你从外面看到的。
+The test: **would a real robot carry this sensor?** A camera, IMU orientation, a laser
+range, "have I fallen" — yes, those are fair. "I am in the living room" — no. That is what
+*you* can see from outside.
 
 ---
 
-## ② 带外 HTTP —— 人这条线
+## ② Out-of-band HTTP — the human's line
 
-大脑**看不到**这条线。这里放：给人看的直播、给人验收的真值、给人操作的控制。
+The brain sees **none** of this. Here go the live view for people to watch, the ground truth
+for people to check against, the controls for people to operate.
 
-| 端点 | 干什么 | 必须吗 |
+| Endpoint | Purpose | Required |
 |---|---|---|
-| `GET /health` | 探活。网页的"在线"小圆点、不计入流量 | ✅ 必须 |
-| `GET /` | 人类页（直接打开就能看这个世界） | 建议 |
-| `GET /stream` | MJPEG 直播（单路时的默认地址） | 有画面就要 |
-| `GET /streams` | **有哪几路直播，以及每一路大脑看不看得见**（见下，最容易错） | 多于一路时必须 |
-| `GET /status` | ⚠️ 上帝视角真值，**只给人验收** | 有真值就该有 |
-| `GET /config` `POST /config` | 读/改世界配置（和 AWI 的 config 声明是同一份内容） | 声明了 config 才要 |
-| `POST /reset` | 复位 | 建议 |
+| `GET /health` | Liveness. Drives the "online" dot; not counted as traffic | ✅ yes |
+| `GET /` | A human page — open it and watch the world | Recommended |
+| `GET /stream` | MJPEG live view (the default address when there is one) | If there is an image |
+| `GET /streams` | **Which live views exist, and which of them the brain can see** (below — the easiest thing to get wrong) | Required beyond one |
+| `GET /status` | ⚠️ God's-eye ground truth, **for humans only** | If you have ground truth |
+| `GET /config` `POST /config` | Read/change the world's setup (the same content the AWI `config` channel declares) | If you declare `config` |
+| `POST /reset` | Reset | Recommended |
 
-### ⭐ `/streams` 的 `awi` 字段（v1.0 新增，接世界时最容易踩）
+### ⭐ The `awi` field on `/streams` (added in v1.0, and easy to miss)
 
 ```jsonc
 [
-  {"name": "head_front",   "label": "头部前视相机", "url": "/stream",       "awi": true},
-  {"name": "third_person", "label": "第三视角跟拍", "url": "/stream/third", "awi": false}
+  {"name": "head_front",   "label": "Head-front camera", "url": "/stream",       "awi": true},
+  {"name": "third_person", "label": "Third-person chase", "url": "/stream/third", "awi": false}
 ]
 ```
 
-- `awi: true`（**或者不写**）＝ 这一路就是大脑经 `observe()` 看到的画面。
-  不写按 true 处理，所以**老世界零改动**。
-- `awi: false` ＝ **只给人看的旁观视角**，大脑看不到。
+- `awi: true` — **or omitted** — means this is the view the brain gets through `observe()`.
+  Omitted counts as true, so **existing worlds need no change**.
+- `awi: false` means a **spectator view for people only**; the brain cannot see it.
 
-**为什么必须标**：网页把传感区分成两块——上面「👁 ANIMA 看到的画面」、
-下面「🎥 只有你看得到，ANIMA 看不到」。不标的话，旁观画面会被摆在前一个标题底下，
-**那是撒谎**——看的人会以为大脑也有那个上帝视角，整个 demo 的可信度就没了。
+**Why it must be marked.** The web page splits the sensor area in two: "👁 What ANIMA sees"
+above, "🎥 Only you can see this; ANIMA cannot" below. Leave it unmarked and a spectator view
+gets filed under the first heading — **which is a lie**. Anyone watching will believe the
+brain had that god's-eye view, and the demo is worth nothing.
 
-**旁观视角属于世界自己的功能**（不是网页的功能）：世界决定要不要提供、从哪个角度拍、
-挂在机器人哪个部件上。网页只是照着 `/streams` 渲染，它不认识"第三视角"这个概念。
-所以加一路旁观画面 = 世界侧加一个 `/stream/xxx` 端点 + 在 `/streams` 里标 `awi: false`，
-网页一行都不用改。
+**A spectator view is a feature of the world**, not of the web page. The world decides
+whether to offer one, from what angle, mounted on which part of the robot. The page just
+renders whatever `/streams` says; it has no concept of "third person". So adding one means
+a `/stream/xxx` endpoint on the world plus `awi: false` in `/streams` — and not one line of
+the frontend.
 
-**⛔ 三处一致，缺一不可**（`tests/test_third_person.py` 逐条钉着 sim-house-nav 那份）：
+**⛔ Three places must agree** (`tests/test_third_person.py` pins each one against
+sim-house-nav):
 
-1. `observe()` 里**完全不出现**旁观画面（连变量名都不该有）；
-2. `/streams` 给它标 `awi: false`；
-3. 它只经自己的直播端点出去，AWI 那一层（世界对象）不碰它。
+1. the spectator view **does not appear at all** in `observe()` — not even as a variable name;
+2. `/streams` marks it `awi: false`;
+3. it leaves only by its own stream endpoint, and the AWI layer (the world object) never
+   touches it.
 
 ---
 
-## 接一个新世界的清单
+## Checklist for a new world
 
-1. 写世界对象：`capabilities()` / `observe()` / `invoke()`（可选 `config()`）。
-2. 从任一现有世界拷一份 `awi_mcp.py`（**字节一致，别改**），用 `build_awi_mcp()` 挂到 `/mcp`。
-3. 补带外端点：至少 `/health`，有画面就加 `/stream`（多路则 `/streams` 并标好 `awi`）。
-4. 可调项集中到世界自己的 `config.py`，env 前缀取一个没人用过的（`SIMCHESS_` / `HOUSENAV_` …）。
-   ⛔ 世界**不 import 大脑的 config**（脑/身不互相 import 是项目铁律）。
-5. **注册**——⛔ 这几处都是"全集"，一律**追加不替换**（T0 红线，2026-06-28 血的教训：
-   加 sim-chess 时把 sim-desk 从世界下拉里整个挤没了）：
-   - `src/config.py` 的 `worlds()` 默认清单
-   - `.env.example` 的 `ANIMA_WORLDS`
-   - `tests/test_awi_mcp_copies.py` 的 `WORLDS`
-   - `anima-zero-个人用详细开发日志/运行命令.md` 的启动命令
-6. **起完世界记得让大脑重新握手**：能力清单在首次握手时缓存，世界那边改了工具而后端没重启的话，
-   新工具**永远**上不了 LLM 的工具单。网页 AWI 页每个世界卡上有「重新握手」按钮；
-   排查口诀：`curl -s localhost:8000/api/awi` 看大脑**实际**拿到的工具名。
-   （v0.9 踩过：新增的环视被藏了七次实验，还一度被误判成"模型不想用"。）
+1. Write the world object: `capabilities()` / `observe()` / `invoke()`, optionally `config()`.
+2. Copy `awi_mcp.py` from any existing world (**byte-identical — do not edit it**) and mount
+   it at `/mcp` with `build_awi_mcp()`.
+3. Add the out-of-band endpoints: `/health` at minimum, `/stream` if there is an image,
+   `/streams` with `awi` marked if there is more than one.
+4. Keep tunables in the world's own `config.py` under an env prefix nobody else uses
+   (`SIMCHESS_`, `HOUSENAV_`, …). ⛔ A world **never imports the brain's config** — brain and
+   body not importing each other is a rule of this project.
+5. **Register it.** ⛔ Each of these is a *whole set*, so **append, never replace** (a T0 rule,
+   learned on 2026-06-28: adding sim-chess dropped sim-desk out of the world menu entirely):
+   - the default list in `worlds()` in `src/config.py`
+   - `ANIMA_WORLDS` in `.env.example`
+   - `WORLDS` in `tests/test_awi_mcp_copies.py`
+   - the start-up commands in the maintainer's run-commands notes
+6. **Make the brain shake hands again after starting your world.** The capability list is
+   cached at the first handshake, so if you change your tools without restarting the backend
+   your new tool will **never** reach the model's tool sheet. Each world card on the web AWI
+   page has a "re-handshake" button. To diagnose: `curl -s localhost:8000/api/awi` and look
+   at the tool names the brain **actually** holds. (This cost seven experiments in v0.9 — a
+   newly added look-around tool was invisible the whole time, and was briefly written off as
+   "the model doesn't want to use it".)
 
-## 现有世界
+## Existing worlds
 
-| 世界 | 端口 | 是什么 |
+| World | Port | What it is |
 |---|---|---|
-| `sim-desk` | 8100 | 虚拟桌面：笔 / 画布 / 橡皮（子模块） |
-| `sim-chess` | 8102 | 模拟棋盘（国际象棋 / 五子棋 / 围棋），内置电脑对手 |
-| `camera` | 8104 | 一台真实摄像头（零 tool，只能看） |
-| `sim-house-nav` | 8112 | 住宅导航：机器人在屋里靠视觉找房间；两种身体可切换 |
-| `computer` | — | 占位，尚未实现 |
+| `sim-desk` | 8100 | A virtual desk: pen, canvas, eraser (a git submodule) |
+| `sim-chess` | 8102 | A simulated board (chess / gomoku / go) with a built-in computer opponent |
+| `camera` | 8104 | One real camera (zero tools — it can only be looked through) |
+| `sim-house-nav` | 8112 | House navigation: a robot finds rooms by sight; two switchable bodies |
+| `computer` | — | A placeholder, not implemented |
 
-> `gazebo-chess`（8106）于 2026-07-08 迁去 `soma-zero/sim/`，不在本目录；
-> 它那份 `awi_mcp.py` 的一致性**没有自动守卫**，改 AWI 协议时记得手动同步过去。
+> `gazebo-chess` (8106) moved to `soma-zero/sim/` on 2026-07-08 and is not in this directory.
+> **Its copy of `awi_mcp.py` has no automated guard** — when you change the AWI protocol,
+> remember to sync it by hand.

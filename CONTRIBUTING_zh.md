@@ -29,7 +29,7 @@ clone 时记得 `git clone --recursive` 或事后 `git submodule update --init`�
   **Resources**(感知,`anima://observation`)、**Prompts**(说明书 `guidance`);在 `.env` 的
   `ANIMA_WORLDS` 里加一行 URL 即可被 ANIMA 连上。框架一行都不用改。参考 [`world/sim-desk`](world/sim-desk)
   与 README「怎么接入一个世界」一节。
-- **加一个新大脑(LLM)**:见 [`src/llm/README.md`](src/llm/README.md);多数模型走 OpenAI 兼容口,登记到
+- **加一个新大脑(LLM)**:见 [`src/llm/README_zh.md`](src/llm/README_zh.md);多数模型走 OpenAI 兼容口,登记到
   `src/llm/factory.py` 那张表即可。
 - **工具(tool)怎么写**:工具是世界在 MCP `tools/list` 里声明的(名字 + 3~4 句描述写清「何时调 / 何时别调」+
   JSON Schema 参数 + kind),框架以**原生 function-calling** 转给大脑——不要在提示词里手写 JSON。
