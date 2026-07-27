@@ -1,542 +1,529 @@
 <div align="center">
 
+<p>
+  <a href="README.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="Language: English"></a>
+  <a href="README_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="语言: 简体中文"></a>
+</p>
+
 <h1>ANIMA Zero</h1>
 
 <p>
   <img src="https://img.shields.io/badge/python-3.11+-blue?logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/FastAPI-backend-009688?logo=fastapi&logoColor=white" alt="FastAPI">
   <img src="https://img.shields.io/badge/Next.js-15-black?logo=nextdotjs" alt="Next.js">
-  <img src="https://img.shields.io/badge/Status-Pre--alpha-orange" alt="Status">
+  <img src="https://img.shields.io/badge/MCP-standard-6f42c1" alt="MCP">
+  <img src="https://img.shields.io/badge/version-v1.0-lightgrey" alt="Version">
   <img src="https://img.shields.io/badge/License-AGPL--3.0-blue" alt="License">
 </p>
 
-<p>
-  <strong>ANIMA 是一台具身机器人的「脑」:它只想、不动手。它决定「做什么」,身体决定「怎么动」。</strong>
-</p>
+<p><strong>The brain of an embodied robot — it thinks, it does not move.<br>
+It decides <em>what to do</em>; the body decides <em>how to move</em>.</strong></p>
+
+<img src="docs/images/nav-go2.gif" alt="ANIMA driving a quadruped through a house" width="820">
+
+<p><sub><b>Left is ANIMA's only input</b> (the robot's head camera). <b>Right is what actually happens</b> (a spectator view ANIMA cannot see).<br>
+You say “go to the living room” once. Everything after that is it looking, deciding, and walking.</sub></p>
 
 </div>
 
-> 这份 README 讲的是**顶层思维**:ANIMA 是什么、怎么运转、为什么这么设计。代码细节以仓库为准。
+---
+
+## Thirty seconds
+
+| | |
+|---|---|
+| **What it is** | An agent — the same species as a coding agent, except its eyes are a camera and its hands are a robot. It turns a goal into a sequence of actions, hands them to a “world” to execute, and reads the feedback to decide whether it worked. |
+| **What it can do today** | Drive a **quadruped** or a **humanoid** through a full apartment: walk, recognise rooms, and find the one you named. No map, no coordinates — **rooms must be recognised from the camera image alone**. |
+| **Where the difficulty is** | One sentence has to cross five layers before it becomes leg motion: LLM decision → MCP protocol → the world translating it into a velocity command → a learned gait policy → joint torques. Every boundary is deliberate — see [One command, end to end](#one-command-end-to-end). |
+| **⚠️ What does not work yet** | Cross-room navigation is **unreliable**: five target rooms, one run each — **2 right, 2 wrong, 1 unfinished**. The cause is now understood; see [Honest limits](#honest-limits). |
+
+**Contents**
+
+- **What it does** — [Finding a room in a house](#finding-a-room-in-a-house) · [The ANIMA front end](#the-anima-front-end) · [AWI and its dashboard](#awi-and-its-dashboard) · [Bundled worlds](#bundled-worlds) · [Honest limits](#honest-limits)
+- **How it works** — [Overview](#overview) · [⭐ One command, end to end](#one-command-end-to-end) · [AWI: what a world must implement](#awi-what-a-world-must-implement) · [Inside the brain](#inside-the-brain) · [Inside the body](#inside-the-body) · [Which layer does it belong to](#which-layer-does-it-belong-to)
+- **Getting started** — [Run it](#run-it) · [Swap body / brain / world](#swap-body--brain--world) · [Connect your own world](#connect-your-own-world)
+- **Project** — [Repository layout](#repository-layout) · [Status and roadmap](#status-and-roadmap) · [License](#license)
 
 ---
 
-## 它现在能做什么
+# 1 · What it does
 
-跟它说一句「去客厅」。它没有地图、没有坐标、没有房间清单——**只有机器人头上那只相机**。
-于是它自己看、自己判断这是哪儿、自己决定往哪走,一路走到看见客厅为止。
+## Finding a room in a house
+
+Say “go to the living room”. It has no map, no coordinates, no list of rooms —
+**only the camera on the robot's head**. So it looks, works out where it is, decides which way to
+go, and keeps going until it sees the living room.
+
+It has exactly four actions: **walk forward / turn left / turn right / look around**.
+Which way to go, which room this is, whether it has arrived — **all of it is judged live from the
+image**. The world contains no navigation intelligence whatsoever.
+
+### Swap the body and it still walks
+
+Same house, same code. Swap the quadruped for a **humanoid** (Unitree G1, 29 dof) and
+**not one line of ANIMA changes** — its eyes simply move from 0.38 m to 1.25 m.
+
+| Quadruped (eye height 0.38 m) | Humanoid (eye height 1.25 m) |
+|---|---|
+| <img src="docs/images/nav-go2.png" alt="Quadruped view" width="420"> | <img src="docs/images/nav-g1.png" alt="Humanoid view" width="420"> |
+
+The same living room: the dog can only crane up at a corner of the TV, while the humanoid takes in
+the TV, the floor lamp, the tree outside the window and the cups on the coffee table in one glance.
+**What it can see determines what it can conclude** — which is exactly why the scene is
+**built to be realistic rather than tailored to one robot**.
+
+> The scene and robot models come from a separate open-source asset library,
+> **[alice-house](https://github.com/jeffliulab/alice-house)** (MIT): a 364 m² apartment with 12
+> spaces, all geometry generated from code, shipping the Go2 and G1 robots and their trained
+> locomotion policies.
+
+---
+
+## The ANIMA front end
+
+Three columns: sessions on the left, **sensors** in the middle, **conversation** on the right.
+One screen shows what it saw this step, what it thought, which tool it called, and what the world
+answered.
 
 <div align="center">
-  <img src="docs/images/nav-go2.gif" alt="ANIMA 指挥四足机器狗在住宅里导航" width="820">
-  <br>
-  <sub><b>左边是 ANIMA 唯一的输入</b>(机器人头部相机)<b>,右边是实际发生的事</b>(旁观视角,ANIMA 看不到)。<br>
-  狗是靠训练出来的步态<b>真的迈腿走路</b>,不是瞬移。<br>
-  <i>这几张图别手工截——机位和动作写在 <code>docs/make_readme_media.py</code> 里,改了场景重跑就行。</i></sub>
+<img src="docs/images/ui-chat-en.png" alt="The ANIMA front end" width="900">
 </div>
 
-三个原语就是它能做的全部——**往前走一段 / 左转 / 右转**。往哪走、这是哪间屋、到没到,
-全部由它看着画面现场判断。世界这边不含任何导航智能:
+A few deliberate choices:
 
-```
-ANIMA(脑) ──看画面──▶ 想「这像玄关,客厅大概在右边」──发原语──▶ 世界
-                                                            │
-                                                  翻成速度指令 (vx,vy,wz)
-                                                            ▼
-                                                  学出来的步态策略,腿真的迈出去
-                                                            │
-                                        相机拍下新画面 ◀────┘  (回到最上面)
-```
-
-### 换一副身体,它照样走
-
-同一间屋子、同一套代码,把身体从四足机器狗换成**人形**(宇树 G1,29 自由度)——
-ANIMA 侧**一行不改**,只是它的眼睛从 0.38 米升到了 1.25 米。
-
-| 四足机器狗(眼高 0.38 m) | 人形(眼高 1.25 m) |
+| On screen | Why |
 |---|---|
-| ![狗视角](docs/images/nav-go2.png) | ![人形视角](docs/images/nav-g1.png) |
+| The sensor area is **split in two** | The top is “what ANIMA sees”; the bottom is a third-person chase camera — ⛔ **that one is for you only; ANIMA cannot see it.** Putting a spectator view under the heading “what ANIMA sees” would be a lie. |
+| Each frame carries **the observation of that moment** | `heading_deg`, eight-way `clearance_m` — the numbers it actually read, archived alongside the image. |
+| The reasoning **unfolds step by step** | What it called, and the world's own words back (“turned right 27°, drifting 0.25 m forward”). |
+| The **notebook strip** on top | Its own two state registers (see [Inside the brain](#inside-the-brain)). ⛔ Read-only in the UI — a memory a human can edit is not its memory. |
+| “Send” becomes **“Stop”** while generating | A long turn can run for ten minutes, so it must be interruptible. Stopping lets the current step finish; saying “continue” resumes. |
 
-同一间客厅:狗只能仰头看见电视的一角,人形能一眼看到电视、落地灯、窗外的树和茶几上的杯子。
-**看得见什么,决定了它能想出什么**——这也是场景**按真实做、不为某一种机器人定制**的理由。
+The interface is **bilingual** (toggle in the bottom-left) and follows the browser language on first visit.
 
-### 网页上能看见它在想什么
+---
+
+## AWI and its dashboard
+
+**AWI (Anima World Interface) is the contract between brain and world**, carried over standard
+**MCP**. Any program that implements it can be plugged in as a “world” — swapping worlds means
+swapping a URL, not changing the brain.
+
+A built-in dashboard (`/awi`) lays out what each world **declares** and what ANIMA **actually receives**:
 
 <div align="center">
-  <img src="docs/images/ui.png" alt="ANIMA 网页界面" width="900">
+<img src="docs/images/ui-awi-en.png" alt="AWI dashboard" width="900">
 </div>
 
-左边是会话,中间是**传感区**(上面「ANIMA 看到的画面」,下面第三视角跟拍——⛔ 后者只给人看,
-ANIMA 看不到),右边是对话:每一步的思考、调了什么工具、世界回了什么,全程可见可中断。
-对话顶上那条是它**自己记的笔记本**(见下)。
+A world appears here as: **Tools** (its actions, each with a JSON schema) ·
+**Resources** (what ANIMA perceives: a frame plus structured state) ·
+**Prompts** (the guidance the world writes for the brain) ·
+**Status** (⚠️ ground truth — **for humans only, never part of ANIMA's observation**).
 
-### ⚠️ 诚实的边界
-
-**短距离导航稳,跨房间导航还不行。** 五个目标房间各跑一次:**2 对 2 错 1 没收尾**,
-两种身体一样。走通的案例(含逐张画面核对)在
-[`world/sim-house-nav/实测记录.md`](world/sim-house-nav/实测记录.md)。
-
-**已经查清的病因**:原以为是"低视角下厨房和卫生间长得像",但人形在 1.25 米**能清楚看见
-灶台和抽油烟机,照样说这是洗手间**——所以不是看不见,是**确认偏误**:它会对着同一扇门,
-编出符合当前目标的说辞。下一版的靶子在判据侧,不在感知细节。
+This page is also where you **swap the body**: the world declares its configurable options, you
+change them here, and the brain is then told which body it now has.
 
 ---
 
-## ANIMA 是什么
+## Bundled worlds
 
-ANIMA 本质是一个 **agent(智能体)**——和 Claude Code、Codex 这类当今最强的编码 agent 是同一类东西,
-只不过把「眼」换成相机、「手」换成机械臂(背后是一个学习式的视觉-语言-动作策略,VLA)。它把一个目标变成
-一串**安全、经过核验**的动作,交给「世界」去执行,再根据反馈判断成没成、要不要重试。
+The brain treats every world identically. These ship with the repository:
 
-这就是认知科学的 **System 1 / System 2** 分工:**ANIMA 是 System 2**——慢、深思,每个决策跑一次;
-身体是 **System 1**——快、反射、高频闭环。这套切分是当下主流机器人大脑的共识(π0.5、GR00T N1、Figure Helix)。
-身体侧不在本仓——任何实现 AWI(MCP) 的身体都能作为「世界」接入(见「四、怎么接入一个世界」),大脑一行不改。
+| World | Port | What it is | What ANIMA can do |
+|---|---|---|---|
+| **[sim-house-nav](world/sim-house-nav)** | 8112 | ⭐ A full apartment plus a walking robot (quadruped or humanoid) | forward / turn left / turn right (look-around optional) — recognise rooms, find targets |
+| [sim-chess](world/sim-chess) | 8102 | A chess set: holds the only ground truth, judges legality, renders the board, ships its own computer opponent | a single `move`; perceive returns **only an image**, state is empty — the position must be read from pixels |
+| [sim-desk](world/sim-desk) | 8100 | A virtual desk, a pen and a canvas | `move_pen` / `draw` / `erase`; a human can also draw in the world's own UI, proving the world is independent |
+| [camera](world/camera) | 8104 | A real USB webcam | **zero tools** — look but never touch, guaranteed **structurally**, not by prompting |
+| gazebo-chess | 8106 | The Gazebo physics version of the chess table (real 6-axis arm and gripper); its code lives in the companion body repository | physical pick-and-place moves |
 
-### 这个项目在证明什么(定位)
+<details>
+<summary><b>The chess line is still running too</b> (click to expand)</summary>
 
-不是"又一个能接任意世界的通用框架"那么空——而是想把**长程、需要闭环纠错的具身任务**做到底,而且**可复现**。
-**象棋**是验证载体:它长程(一盘几十步)、要视觉读盘、要推理走子、还要在走错/抓偏时纠错——一个任务把"会想 + 看得见 + 出错能纠"全考到。
+Chess is not a “mode” — it is **an ordinary conversation**. You say “your turn, you're black”; it
+reads the board from a screenshot, derives the FEN itself, calls the engine advisor
+`best_move(fen)`, then calls the world's `move`. No loop, no skill, no vision module underneath —
+**if it misreads the board, it misreads the board, and that is precisely the measurement**
+(8B-class models generally cannot read a full position).
 
-- **可复现 ≠ 看着 demo 跑通**:独立的 [`eval/`](eval/) 读对弈日志、用 Stockfish 按 **ACPL** 等主流标准给出一张 `python eval/eval_chess.py` 就能复现的记分卡。
-- **安全是设计的一部分**:所有真机命令**由人亲手执行**——这不是限制,是有意的 *safe-stop* 设计(舵机臂断电即失力,真正的急停 = 人不按那个按钮),且每个动作都可审计。
-- **"能驱动很多异构世界"是架构内核,不是卖点**:AWI 刻意精简、与 MCP 语义兼容(换世界只换地址,大脑一行不改);但它是手段,真正想做透的是上面那件事。
-- **失败恢复**目前主要待**真机**阶段兑现(仿真棋盘很难"下错子"),是路线图上的下一块——不在此假装已完成。
+The engine is the **second kind of server**: `boardgame-engine` (`:8108`, pure computation, tools
+only, no camera), mounted by the brain from its own config. A separate [`eval/`](eval) reads game
+logs and produces a reproducible scorecard using Stockfish and standard metrics such as ACPL.
+
+</details>
 
 ---
 
-## 一、人 - ANIMA - 世界:三者关系
+## Honest limits
 
-最关键的一点:**「世界」是一个独立运行的程序**(仿真器 / 真机),ANIMA 不碰它的内部,只隔着一套
-「看 / 动」的接口去观测、操作它——就像看真实世界一样。人开会话、看结果;ANIMA 在中间想和编排;世界在另一头自己跑。
+**Short-range navigation is solid; cross-room navigation is not.** Five target rooms, one run each
+(gpt-5.5; every final frame verified by hand against the claim):
+
+| Target | Steps / seconds | Verdict |
+|---|---|---|
+| Kitchen | 9 / 52 | ✅ fridge, counter and wall cabinets all in frame |
+| Living room | 5 / 29 | ✅ TV, sofa, floor lamp — not arguable |
+| Master bedroom | 34 / 256 | ❌ called a marble floor a “white mattress” |
+| Bathroom | 40 / 381 | ❌ that was the kitchen |
+| Laundry | 60 / 454 | ⏸ hit the per-turn step ceiling, never concluded |
+
+⭐ **The most valuable result of this release is a negative one.** The suspected cause used to be
+“at low eye height a kitchen and a bathroom look alike” — which is why the humanoid was added.
+Instead, **the humanoid, at 1.25 m, sees the hob and the range hood clearly and still calls it a
+bathroom**.
+
+**So it is not that it cannot see. It is confirmation bias**: facing the same doorway, it composes
+whatever story matches the room it is currently looking for. The next release aims at the
+**acceptance criterion**, not at perception.
+
+Runs that did work — with per-frame verification — are written up in
+[`world/sim-house-nav/实测记录.md`](world/sim-house-nav/实测记录.md).
+
+---
+
+# 2 · How it works
+
+## Overview
+
+The essential point: **a “world” is a separately running program** (a simulator or real hardware).
+ANIMA never touches its internals; it observes and acts on it through a see/act interface — the way
+you deal with the real world.
 
 ```
-   [ 人 ]                    [ ANIMA = 脑 / 框架 ]                  [ 世界 = 独立进程 ]
-  开会话 ── 选世界/选脑 ─▶  会话(本地记忆) + 主循环          ──MCP───▶  sim-desk / 棋 / 人形
-  看折叠轨迹 ◀── 输入图+真值 / 思考 / 回复                   ◀──MCP───   看(resource)· 动(tool)
-                                                  世界自己另有一套给人用的界面(可手动拨弄世界)
+   [ human ]                 [ ANIMA = brain ]                  [ world = own process ]
+  opens session ─ picks ──▶  session + main loop + registers ──MCP──▶  house / chess / camera / desk
+  watches trace ◀── frames / reasoning / reply ◀──────────────  ◀─MCP───  see (resource) · act (tool)
+                                                                              │
+  a human may also **bypass the brain** and poke the world in its own UI ──────┘
+  (ANIMA's next perception simply shows a changed world — proving the world is independent)
 ```
 
-人甚至可以**绕过大脑、直接在世界自己的界面里拨弄它**(比如拖动桌面上的笔),ANIMA 下一次 perceive 就会
-看到世界变了——这就证明了「世界是独立的,ANIMA 只是个观测者 + 指挥者」。
+⛔ **Brain and body never import each other**; they only talk through the contract. Either side can
+be replaced, and each can be unit-tested against a mock.
+
+This **System 1 / System 2** split is the mainstream consensus for robot brains today
+(π0.5, GR00T N1, Figure Helix): **ANIMA is System 2** — slow, deliberate, one pass per decision;
+the body is **System 1** — fast, reflexive, high-frequency closed loop.
 
 ---
 
-## 二、框架结构
+## One command, end to end
 
-ANIMA 不认识任何具体世界,只认一套 **AWI** 加几个外围件:
-
-| 部件 | 一句话 |
-|---|---|
-| **AWI(Anima World Interface)**(`src/awi.py` + `world_client.py`) | 脑↔世界的接口标准:定个标准,谁符合谁就能接入(像 MCP / ROS);anima 用瘦客户端按 URL 连远程世界 |
-| **注册表**(`src/registry.py`) | 登记有哪些世界(名字 + URL);世界清单配在 `.env` 的 `ANIMA_WORLDS`,加世界 = 加一行配置 |
-| **会话**(`src/session.py`) | 一次任务一个会话,**按世界单活 + 冻结**(同一个世界同时只允许一个活跃会话,安全);记忆存本地 |
-| **上下文**(`src/context.py`) | 发给大脑的历史 = 滑动窗口 + 只发最新一张图(老图只存不发,防上下文腐烂) |
-| **安全闸**(`src/safety.py`) | 动作下发前一道**不经过 LLM 的确定性检查**;只拦「会改世界」的动作(仿真默认放行,上真机把 `default_allow` 显式关掉、再填硬检查) |
-| **Engine Server 挂载**(`src/service_client.py`) | **World Server 之外的第二类 server:引擎顾问**——纯计算、无画面、无副作用(如棋类引擎),问答拿反馈;由**大脑(Host)按 `config.services()` 自行挂载**(标准 MCP 的 Host 组装,World Server 不声明它),工具并进同一张工具单 |
-| **统一日志**(`src/session_log.py`) | **Session Logs**:每会话一条流水(`logs/sessions/<sid>.jsonl`),LLM 调用/世界往返/服务调用按时间合并——「看到什么→想了什么→调了什么」一条链可查、可一键复制 |
-| **裁判** | 是世界提供的一个**确定性工具**,LLM 学会去调它确认成没成——不靠 LLM 自己看图说「做好了」 |
-| **编排器**(`src/orchestrator.py`) | 把上面这些串成一个简单的主循环 |
-
----
-
-## 三、请求处理链路:一条消息从进到出
-
-顶级 agent 的一条共识:**主循环简单到就是个循环,复杂度全在外围**(记忆、验证、安全)。
-ANIMA 照这个来——一条用户消息进来,主循环最多转 N 轮(`DEFAULT_MAX_STEPS`),每一轮就是
-「**看 → 想 →(过安全闸)→ 动 → 再看**」,直到大脑只出文字 = 收尾。骨架用 **LangGraph** StateGraph
-(为未来长出反思/规划等认知节点留好图结构),节点内脏全是自有模块——LLM 层与 MCP 桥不换 LangChain 抽象。
+This is the section worth reading: **how a sentence you type becomes joint torques.**
+The walk-through below uses the **humanoid**, with the real code location and measured numbers at
+each layer.
 
 ```
-   用户发一句话
+  you say “go to the living room”                          (said exactly once)
         │
         ▼
-   ┌──────────────────────────────────────────────────────────────────────┐
-   │ ① 看 perceive   向世界要一帧画面 + 结构化真值        (MCP: resource read) │
-   │      │                                                                  │
-   │      ▼                                                                  │
-   │ ② 想 LLM        把 [系统说明 + 历史 + 工具清单 + 这帧画面] 交给大脑,        │
-   │      │           大脑决定:只回话?还是调某个工具?(见 §五 工具调用)        │
-   │      ├──── 只回话 ───────────────────────────────▶ 作为最终回复,收尾 ✅   │
-   │      │                                                                  │
-   │      ▼ 要调工具                                                          │
-   │ ③ 过安全闸       「会改世界」的动作先过一道不经过 LLM 的确定性检查           │
-   │      │           (打招呼/只读/裁判类不算改世界,直接放行)                  │
-   │      ▼                                                                  │
-   │ ④ 动 invoke     把工具调用交给世界执行               (MCP: tools/call)     │
-   │      │                                                                  │
-   │      └──────── 回到 ① 重新看一眼(闭环纠错)───────────────────────────────┘
+  ┌───────────────────────────────────────────────────────────────────────┐
+  │ ① SEE       ask the world for a frame + structured state               │
+  │             MCP: resources/read anima://observation                    │
+  │             → image + heading_deg + eight-way clearance_m + fallen?    │
+  │             ⛔ no coordinates, no room name, no map                     │
+  │                                                                        │
+  │ ② THINK     [system prompt + two state registers + history             │
+  │              + tool list + this frame] → the LLM decides:              │
+  │             just reply, or call a tool?                                │
+  │             src/core/orchestrator.py                                   │
+  │             ├── just reply ───────────────────▶ turn ends ✅           │
+  │             └── call a tool ↓                                          │
+  │                                                                        │
+  │ ③ GATE      world-changing actions first pass a deterministic check    │
+  │             that **does not involve the LLM** — src/core/safety.py     │
+  │                                                                        │
+  │ ④ ACT       MCP: tools/call  turn_right(degrees=85)                    │
+  └───────────────────────────────────────────────────────────────────────┘
+        │
+        ▼  ── everything below runs inside the world process, invisible to the brain ──
+  ┌───────────────────────────────────────────────────────────────────────┐
+  │ ⑤ velocity command    a humanoid standing still barely turns (measured │
+  │                       3.8° in 8 s), so turning carries forward speed:  │
+  │                       (vx 0.3, vy 0, wz −0.8)                          │
+  │                       world/sim-house-nav/world.py                     │
+  │                                                                        │
+  │ ⑥ gait policy 50 Hz   480-dim observation (6 terms × 5 frames of       │
+  │                       history) → 29 joint targets. ONNX; the layout is │
+  │                       taken from a contract exported by the training   │
+  │                       environment, never hand-transcribed.             │
+  │                       world/sim-house-nav/sim.py                       │
+  │                                                                        │
+  │ ⑦ joint torques       ⛔ the humanoid uses **implicit PD**, the        │
+  │                       quadruped **explicit PD** — get it backwards and │
+  │                       the robot falls instantly (a full day was spent  │
+  │                       diagnosing exactly that)                         │
+  │                                                                        │
+  │ ⑧ physics    500 Hz   MuJoCo. The legs actually step.                  │
+  │                                                                        │
+  │ ⑨ closed loop         measure while turning, **stop when the measured  │
+  │                       angle is reached** (a learned gait tracks only   │
+  │                       ~62% of the commanded yaw rate; open-loop timing │
+  │                       drifts). Measured: 92° turned, 0.64 m of forward │
+  │                       drift — **reported to the brain truthfully**.    │
+  └───────────────────────────────────────────────────────────────────────┘
+        │
+        └────▶ the camera renders a new frame ────▶ back to ① (closed-loop correction)
 ```
 
-对应代码 `src/orchestrator.py` 的 `handle()`(整段返回)/ `handle_stream()`(边跑边流式推给前端)。
-**工具调用发生在第 ② 步(大脑决定调谁)和第 ④ 步(世界执行)——它怎么实现的,见下面 §五。**
+**Every boundary here is deliberate:**
 
-每一轮还会产出一份**结构化轨迹**:这一步看到的图 + ground truth(输入)、想了什么、调了哪些工具(思考)、
-最终回复。前端把它做成**两层折叠**,方便排查「它到底看到了什么、怎么想的」。
+- The brain only issues **human-readable intent** (“turn right 85°”) and never touches joint angles.
+- The world **makes no navigation decisions**; it turns intent into motion and reports what happened.
+- Reports must be **truthful**: if the turn dragged the robot 0.64 m forward, it says so rather than
+  pretending it pivoted in place — the brain relies on that to correct its own sense of position.
+- Deployment on a real Go2 or G1 uses the same interface (the onboard policy takes `(vx, vy, wz)`
+  from a gamepad or a high-level planner). **Sim-to-real is the same brain connecting to another world.**
 
 ---
 
-## 四、怎么接入一个世界(AWI 走标准 MCP)
+## AWI: what a world must implement
 
-接口采标 **MCP(Model Context Protocol)**:任何「世界」实现成一个标准 **MCP server**(挂在 `/mcp`),
-ANIMA 作为 MCP host/client、换个 URL 就能接。世界用 MCP 的三个原语自我描述:
+The interface follows **MCP**: implement your world as a standard MCP server (mounted at `/mcp`).
+Four channels:
+
+| Channel | MCP primitive | What it carries | Used by |
+|---|---|---|---|
+| **Tools** | `tools/list` · `tools/call` | The world's high-level actions (human-readable, not joint angles) | the brain calls them |
+| **Resources** | `resources/read anima://observation` | Perception: an image plus structured state; one read, one snapshot | the brain looks |
+| **Prompts** | `prompts/get "guidance"` | The world's **guidance**: how it introduces itself | read into the system prompt |
+| **Config** | `resources/read anima://config` | The world's **setup** (e.g. “which robot is installed”); new in v1.0 | the world declares, a **human** changes |
+
+⛔ **The brain reads Config but cannot write it.** Choosing a body is stage setup done before the
+run — a human action. The brain is merely told which body it now has, the way a real robot knows
+its own body. Handing it a tool to change its own body would only make it call something that does
+not exist.
+
+**A separate out-of-band line** never goes through MCP (a hard rule):
 
 ```
-Tools    (tools/list, tools/call)      ->  这个世界有哪些高层动作(语言可读,不是关节角),如 move
-Resource (resources/read)              ->  anima://observation = 当前画面(png)+ 结构化 state；读一次给一份
-Prompt   (prompts/get "guidance")      ->  世界的「说明书」:自我介绍怎么跟它打交道；大脑读它进系统提示
+/health  liveness       /status  ⚠️ ground truth, never enters perception       /stream  MJPEG video
 ```
 
-**server 统一只有两类**——都是标准 MCP server,只是角色不同:**World Server**(世界=现实)和
-**Engine Server**(引擎=顾问,纯计算——只填 Tools,没有 Resource / Prompt)。三层组装逻辑:
+The rule in one line: **what is for the brain goes over AWI; what is for humans goes out-of-band.**
+MCP carries JSON-RPC text and cannot carry video; and the moment ground truth enters the perception
+channel, the very ability this world is meant to test is given away for free.
+Every video stream is tagged `awi: true/false` so the front end can separate “what ANIMA sees” from
+“what only you see”.
+
+The full contract is in [`world/README.md`](world/README.md), together with six machine-checked
+guards for registration completeness.
+
+**There are only two kinds of server**, both standard MCP servers differing only in role:
 
 ```
-                                 ┌─ Client: RemoteWorld ───▶ World Server(现实,三原语齐全)
-Host(ANIMA 大脑) ─ 按 config 组装 ─┤   config.worlds()          sim-desk :8100 · sim-chess :8102
-                                 │                            camera :8104 · gazebo-chess :8106
-                                 │                            sim-house-nav :8112
-                                 └─ Client: RemoteService ──▶ Engine Server(顾问,只有 Tools)
-                                     config.services()         boardgame-engine :8108
+                              ┌─ RemoteWorld ───▶ World Server (reality, four channels)
+Host (ANIMA) ─ assembles ─────┤   config.worlds()
+   from its own config        └─ RemoteService ─▶ Engine Server (advisor, tools only)
+                                  config.services()
 ```
 
-`RemoteWorld` / `RemoteService`(`src/world_client.py` / `src/service_client.py`)就是 MCP 的
-**Client 层**:Host 给每个 server 开的那条「专线」在代码里的对象——一条专线只连一个 server,
-Host 经它握手拿能力、发调用;server 彼此隔离、互不相识。
-**组装是 Host 的活(标准 MCP)**:连哪些 server 由大脑按 `config.worlds()` / `config.services()`
-自己决定(两张清单完全对称),World Server 不声明 Engine Server;「棋世界要用引擎」这类配对不靠
-结构绑定——引擎工具并进工具单后,模型看画面自选(面前是棋盘才调 `best_move`,别的世界里不相关就不调)。
-另一条边界:引擎是大脑的高层「想棋」顾问,**真机实时控制永不走 MCP**(那条留在身体内部)。
-
-**视频流永远带外**:世界另推一条 `GET /stream`(MJPEG)给网页看——MCP 只跑 JSON-RPC 文本、传不了视频,所以
-它和 `GET /health`(探活)、`GET /status`(上帝视角真值,绝不进感知)一样走普通 HTTP,不进 MCP(红线)。
-ANIMA 有个 **AWI 仪表盘 `/awi`**,把所有 server(世界 + 引擎)、各自的 tools/state/说明书、实时 MCP 流量都展示出来;
-能力在连接时**握手一次后缓存**,流量同时**落盘到 `logs/awi-*.jsonl`** 方便追溯。
-
-这一版自带一个例子:**[`sim-desk`](world/sim-desk)**——一张虚拟桌面 + 一支笔 + 一块可涂画的画布,声明三个工具
-`move_pen` / `draw` / `erase`,还能让人在它自己的界面里手动作画 / 擦除,模拟「真实世界被人改变」。以后:
-
-- **下棋**:把世界换成「棋盘 + 棋臂」,高层动作变成「把 e2 走到 e4」,裁判用 `python-chess`(期望)对比视觉(观测)。
-- **人形行走**:把世界换成 MuJoCo 人形,高层动作变成「走到门口 / 左转 90°」,裁判对比目标位姿和实测位姿。
-
-**所谓 sim2sim、上真机,就是让大脑去连不同的世界**——接口一样,大脑一行都不用改。
+`RemoteWorld` / `RemoteService` ([`src/clients/`](src/clients)) are the **MCP client layer** — one
+dedicated line per server. **Assembly is the host's job** (the standard MCP model): a World Server
+never declares an Engine Server, and servers do not know about each other.
 
 ---
 
-## 五、工具调用(Tool Use)是怎么实现的
+## Inside the brain
 
-ANIMA **不在提示词里让模型「输出 JSON」**,用的是各家大模型 API 的**原生工具调用(function calling / tool use)**。
+The main loop is simple enough to be just a loop; **the complexity lives around it** (memory,
+verification, safety). The skeleton is a **LangGraph** StateGraph whose nodes are all first-party
+modules — neither the LLM layer nor the MCP bridge is swapped for someone else's abstraction.
 
-- ❌ 老办法:在 prompt 里写「请按 `{"action":...,"args":...}` 输出」,模型吐一段文本,你自己正则 / `json.loads` 去抠——脆、易跑偏。
-- ✅ 原生工具调用(我们用的):把工具清单作为**独立参数**交给 API,模型经专门训练,会把调用放进一个**专门的结构化字段**返回;格式由 API 保证,我们直接读字段。
+| Part | Location | In one line |
+|---|---|---|
+| **Orchestrator** | [`src/core/orchestrator.py`](src/core/orchestrator.py) | see → think → (gate) → act → see again |
+| **AWI contract** | [`src/core/awi.py`](src/core/awi.py) | the world standard: implement three methods and you are in |
+| **Safety gate** | [`src/core/safety.py`](src/core/safety.py) | a deterministic, **LLM-free** check before dispatch; only world-changing actions |
+| **Interrupt** | [`src/core/interrupt.py`](src/core/interrupt.py) | a session-level stop flag, propagated into the action wait |
+| **World line** | [`src/clients/world_client.py`](src/clients/world_client.py) | MCP client: caches capabilities at handshake, translates, supervises timeouts |
+| **Registry** | [`src/clients/registry.py`](src/clients/registry.py) | which worlds exist (name + URL); adding one is a config line |
+| **Sessions** | [`src/session/session.py`](src/session/session.py) | one task per session; **one live session per world**, the rest frozen (a safety rule) |
+| **Context** | [`src/session/context.py`](src/session/context.py) | sliding window, only the newest image is sent (older ones are stored, not resent) |
+| **Unified log** | [`src/session/session_log.py`](src/session/session_log.py) | one trace per session: LLM calls, world round-trips and service calls merged by time |
+| **Copy** | [`src/messages.py`](src/messages.py) | prompts and phrasing in one place, ⛔ never inlined |
 
-**三步(对应代码 `src/llm/`):**
+### Two state registers
 
-1. **把工具交给 API**(不写进 system prompt)。每个工具 = 名字 + 描述 + 参数 JSON Schema,**来自世界声明的 `/capabilities`**,框架原样转发。
-   `openai_compat.py` 的 `_tools()` 转成 `{"type":"function","function":{name,description,parameters}}`;`claude.py` 的 `_tools()` 转成 `{name, description, input_schema}`。
-2. **让模型自己决定调不调**:`tool_choice="auto"` —— 可以调一个 / 多个,**也可以一个都不调、只回话**。正因为是 auto,「你好」才能只回文字;若改成 required / any 会强制它每轮必须调一个工具。
-3. **从结构化字段读回调用**(不解析正文):
-   - OpenAI / Ollama:读 `message.tool_calls`,参数在 `function.arguments`(一个 JSON 字符串)→ `json.loads`。
-   - Claude:读 `content` 里 `type=="tool_use"` 的块,拿 `name` + `input`(已是对象)。
+Over a long turn, the frame seen at step 3 has long been pushed out of the sliding window. So the
+brain carries two registers that are **injected into the system prompt every turn and never occupy
+history**. They are built-in meta-tools, independent of any world (chess can use them to note an
+opponent's style):
 
-**关键心智模型——谁负责什么:**
+| | Core task | Notebook |
+|---|---|---|
+| Answers | **what am I doing** | **what have I found out** |
+| Shape | one sentence, updated by rewriting | a list, updated by adding and dropping (default cap 20) |
+| Tools | `set_core_task` / `clear_core_task` | `add_note` / `drop_note` |
 
-| 负责 | 由谁管 |
-|---|---|
-| **要不要调、何时调**(行为) | system prompt + 工具 description ←「打招呼也乱调工具」就是改这里修好的 |
-| **怎么把这次调用表达成 JSON**(机制) | `tools` 参数 + 结构化返回字段(API 这层管,JSON 不进提示词) |
+⛔ When to write and what to write is **entirely the LLM's own decision** — no keyword triggers, no
+“automatically log a note when entering a new room”. All three rejections state their reason:
+empty, too long (**never truncated** — half a note is worse than none), and full (**never evicts
+the oldest**).
 
-**怎么自己看实物**:发一条消息后,后端会话记录里 `role:"tool"` 那条、以及 `/awi` 仪表盘的 invoke 流量,就是真实的工具调用;轨迹里某轮 `tool_calls` 字段空不空,就代表「这轮调没调工具」。
+Real notes, from a run looking for the laundry room:
+
+> 3. the room on the left actually looks more like a kitchen: island, long worktop, wall units and a
+>    tall fridge/cabinet — **no washing machine or dryer visible**
+> 8. this is confirmed to be the kitchen area: fridge, hob/oven, range hood, long worktop…
+>    **this is not the laundry**
+
+Rule it out once it is clearly seen, then move on — exactly the behaviour these registers exist to support.
+
+### One turn = one thing
+
+**ANIMA itself decides when a turn ends**, by producing text. The step ceiling (60) and the
+wall-clock ceiling (900 s) are **a seatbelt, not a metronome** — the “one thing” in chess is a
+single move (2–6 steps), while in navigation it is finding the room (dozens of steps, run to
+convergence). Hitting a ceiling is not an error but a polite pause: the core task stays on the
+books and “continue” picks it back up.
 
 ---
 
-## 六、换大脑 & 本地模型
+## Inside the body
 
-**换脑零成本**:5 个大脑登记在 `src/llm/factory.py` 一张表里(名字 / 显示名 / 版本号 / 怎么创建 / 是否配置好)。
-OpenAI 和本地 Ollama **共用** `OpenAICompatLLM`(只换 `base_url`),Claude 用 `ClaudeLLM`。在网页里下拉换,别处一行不动。
+The robot **really walks** — no teleporting, no formula-driven translation.
 
-**本地 Ollama 也是原生工具调用**:Ollama 暴露 OpenAI 兼容口,内部把 `tools` 按模型自己的对话模板注入 prompt、再把模型输出**解析回结构化 `tool_calls`**——所以我们代码零改动,拿到的同样是 `tool_calls`,不用手写 JSON。
+Both the Go2 and the G1 run a **velocity-conditioned** locomotion policy (trained in Isaac Lab,
+exported to ONNX): the observation carries a command `(vx, vy, wz)` = (forward speed, lateral
+speed, yaw rate), randomised during training with rewards that force the policy to **track** it.
+At deployment each control step (50 Hz) feeds in the desired velocity and the policy returns joint
+targets, so the legs produce that velocity with a real gait. The navigation primitives are simply
+human-readable names for that velocity triple.
 
-> ⚠️ **本地模型可靠性参差**:有的产非法 JSON、有的工具一多就乱;Ollama 官方都提醒某些路径「只建议用于一次只返回一个工具调用的模型」。目前 **Qwen3 系最稳**(漏调率最低),这也是默认本地脑选 `qwen3-vl` 的原因。**建议先用云端(GPT / Claude)把闭环验证通,本地当备选。**
+**Primitives run closed-loop.** A learned gait does not track its command 1:1 (measured: ~83% on
+straight lines, ~62% on turns), so open-loop timing systematically undershoots and navigation
+drifts. The world therefore measures while moving and **stops when the measured value is reached**,
+then tells the brain how far it actually went. Hitting a wall is detected as a stall and reported
+as “blocked”.
 
-**给「原生支持差的本地模型」的可靠性兜底(以后可选,当前未做):**
-- **受约束解码 / GBNF 语法(llama.cpp)**:在 token 层强制输出符合 JSON Schema——非法 token 概率归零,**生成的 JSON 形状一定合法**。Ollama v0.5+ 可直接给 `format` 参数传 JSON Schema,内部转 GBNF。⚠️ 它只保证「格式对」,不解决「该不该调、何时调」(那仍归 prompt)。
-- **Instructor / Outlines**:Python 库,用 Pydantic 校验 + 自动重试(把校验错误回灌模型重出)逼出合法结构。
-
----
-
-## 七、设计哲学(详见教程 5.1)
-
-- **慢脑快手**:ANIMA(System 2)只想、不动;那只「快手」(System 1,VLA / 行走策略)藏在世界的 invoke 背后。
-- **期望 × 观测 × 裁判**:逻辑真值(应该怎样)在工具里(如 python-chess),物理真相(实际怎样)在眼睛里,
-  判定权在脑——脑拿这两个比对,而不是让 LLM 自己看图打分。
-- **硬安全不写在提示词里**:提示词对模型只是「参考」,它可以不听;要真拦住一个动作,必须有一道不经过 LLM 的
-  确定性闸。连续控制(人形)还需要世界侧就近控制器的快确定性盾(MPC / CBF)。
-- **单脑编排、不盲目并行**:一个编排者收口,串行主干;不为了「多 agent」而堆一堆 LLM。
-
-这些都来自我们对 2025–2026 业界 agent + 机器人框架的调研,详细展开见配套教程「5.1 agent 系统」。
+⚠️ **The humanoid cannot pivot in place**: standing still, the policy prefers to save energy
+(measured: 3.8° in 8 s). Its turn primitive therefore carries 0.3 m/s of forward speed, so a 90°
+turn drifts 0.6–0.8 m forward — much as a person turning around does. A dedicated policy was
+trained for this (widening the yaw command range from ±0.2 to ±0.8); ⚠️ **only 2 of 3
+pre-registered acceptance gates passed** — the in-place turn gate did not. Method and data are in
+experiment 14 of [unitree-g1-locomotion](https://github.com/jeffliulab/unitree-g1-locomotion).
 
 ---
 
-## 八、快速上手
+## Which layer does it belong to
 
-需要三件一起跑:**世界(sim-desk)· ANIMA 后端 · 网页**。
+Before adding anything, answer one question: **which layer does this belong to?**
+
+| Layer | May it contain task-specific logic? | Examples |
+|---|---|---|
+| **Orchestrator** (the generic loop) | ⛔ **Absolutely not.** Not one line of chess rules, room names or navigation strategy | see → think → gate → act → see |
+| **World** (its own process) | ✅ Yes — it *is* the physics | board ground truth, endgame detection, gait policy, room geometry |
+| **Tools** (capabilities a world declares) | — (implemented by the world) | `move` · `turn_right` · `add_note` |
+
+When unsure, ask: **“would this code still make sense in a different world, for a different task?”**
+If not, it does not belong in the orchestrator — push it down.
+
+This rule is enforced: a grep over the orchestrator must match zero task-specific vocabulary.
+**This is not fastidiousness** — it is precisely because the orchestrator stayed clean that v1.0
+could swap in an entirely different body without changing a line of the brain.
+
+---
+
+# 3 · Getting started
+
+## Run it
+
+Three things run together: **a world · the ANIMA backend · the web app**.
 
 ```bash
-# 1) 起世界(独立进程)
-cd world/sim-desk && pip install -e . && uvicorn server:app --port 8100
-
-# 2) 起 ANIMA 后端
-pip install -e .                       # 在 anima-zero 根目录
-cp .env.example .env                   # 填一个 API key(或配本地 Ollama)
-uvicorn anima.presentation.server:app --port 8000
-
-# 3) 起网页
-cd frontend && npm install && npm run dev      # 默认 :3000
-```
-
-然后打开 `localhost:3000`:**新建会话 → 选世界 + 选大脑 → 对话**(例:「把笔移到右上角」)。
-大脑在网页里下拉选(Opus 4.8 / Haiku 4.5 / GPT-5.5 / GPT-5.4 / GPT-5.4-mini / 本地 Qwen3-VL),配置在 `.env`。
-也可以打开 `localhost:8100` 手动拖笔,看 ANIMA 那边能不能观测到变化。
-
-### 想直接看开头那个导航 demo
-
-把上面第 1 步换成住宅世界即可(**纯 MuJoCo,不需要 ROS、不需要 conda**),后端和网页不变:
-
-```bash
-# 场景与机器人来自开源资产库 alice-house(github.com/jeffliulab/alice-house),
-# 默认按仓库同级目录找它;放在别处就设 HOUSENAV_ASSETS_ROOT。
+# 1) Start a world (house navigation; pure MuJoCo — no ROS, no conda).
+#    Scene and robots come from the alice-house asset library, looked up next to this
+#    repository by default; set HOUSENAV_ASSETS_ROOT if it lives elsewhere.
 cd world/sim-house-nav && pip install -e . && uvicorn server:app --port 8112
 
-# 想换成人形:起服务前加一个环境变量,或者起来后在网页的 AWI 仪表盘里切
-HOUSENAV_ROBOT=g1 uvicorn server:app --port 8112
-```
-
-网页新建会话选 `sim-house-nav`,说一句「去客厅」。想核对它说的是不是真的:
-
-```bash
-curl -s localhost:8112/status      # ⚠️ 上帝视角真值,只给人验收,绝不进大脑的观测
-```
-
-世界本身的详细说明(动作清单、观测里有什么、踩过的坑)见
-[`world/sim-house-nav/README.md`](world/sim-house-nav/README.md)。
-
----
-
-## 九、下棋:LLM 亲自下每一步(无任何"模式")
-
-下棋不再是一个"模式"——**就是普通对话**。你说「该你了,你执黑」,ANIMA 自己看棋盘截图认局面、
-自己从画面和对话历史推出 FEN、自己调引擎顾问 `best_move(fen)` 拿最佳着法、再自己调世界的 `move` 落子、
-回你一句话。没有循环、没有技能、没有视觉模块兜底——**读错棋盘就读错,这本身就是对模型能力的测量**
-(8B 级小模型基本认不对整盘;演示请用 GPT-5.4 / Claude 这类强脑)。
-
-- **world `sim-chess`**(`world/sim-chess/`):独立棋具——握唯一真值、判合法、渲染棋盘、内置电脑棋手
-  (自带 `chess_bot.py`,与引擎服务零共享代码)。对大脑只暴露一个动作 `move`,perceive 只给画面、
-  state 空 `{}`,绝不给局面/FEN/轮次/胜负。
-- **Engine Server `boardgame-engine`**(`services/boardgame_engine/`,`:8108`,下棋必起):纯计算顾问,
-  给 FEN 回最佳着法/评估/合法着;FEN 不合法会报可读错误,让大脑自我修正后重试。由大脑按
-  `config.services()` 挂载(World Server 不声明它)。
-- 一回合的真实链路:看图 → `best_move(fen=自己推的)` → 重新看图 → `move(from,to)` → 出文字。
-  全过程在 **Session Logs** 里一条链可查(llm_call → service_call → world_call)。
-
-**跑法**:起 sim-chess 世界 + 引擎服务 + 后端,会话连 sim-chess,聊天里直接说「该你了」:
-```bash
-# 终端1:棋具世界(独立进程)
-cd world/sim-chess && pip install -e . && uvicorn server:app --port 8102
-# 终端2:棋类引擎服务(下棋必起;大脑按 config.services() 默认挂载它)
-./.venv/bin/uvicorn services.boardgame_engine.app:app --port 8108     # 在 anima-zero 根
-# 终端3:后端(默认清单已含全部世界)
+# 2) Start the ANIMA backend
+pip install -e .                       # from the repository root
+cp .env.example .env                   # add an API key (or point it at a local Ollama)
 uvicorn anima.presentation.server:app --port 8000
-# 网页新建会话(世界选 sim-chess)→ 在 sim-chess 网页(:8102)人执白走一步 → 聊天说"该你了,你执黑"
+
+# 3) Start the web app
+cd frontend && npm install && npm run dev      # :3000 by default
 ```
 
-## 十、Camera World：让 ANIMA 看真实摄像头(v0.3)
+Open `localhost:3000`: **new session → pick the world `sim-house-nav` → say “go to the living room”.**
 
-ANIMA 第一次看**真实物理世界**(不再是程序画出来的合成图)。本版很轻:**只能看、能聊、不能操作**——给将来上真机的"眼睛"先把"真摄像头 → 编码 → 喂给视觉大模型"这条链路跑通。
-
-- **world `camera`**(`world/camera/`):把真实 USB 摄像头的实时画面通过 AWI 交给 ANIMA。`capabilities` 的 **tools 是空的** —— ANIMA 在这个世界里**没有任何可执行动作**("只能看、不能操作"是结构上保证的,不是靠提示词)。`perceive` 给当前所选摄像头的真帧 + 极简 state(选了哪个、是否在线);`/invoke` 一律拒绝。
-- **摄像头由人来选、来开**:服务启动**不主动打开任何摄像头**,只枚举有哪些。打开哪个,由人在世界页(`localhost:8104`)下拉框里选,插了多个可随时切。
-- **脑侧零改动**:零动作世界走的就是主循环现成的"看画面→大模型→出文字"纯聊天路径。
+To check whether what it claims is true:
 
 ```bash
-# 终端1:起摄像头世界(独立进程)
-cd world/camera && pip install -e . && uvicorn server:app --port 8104
-# 打开 localhost:8104 选一个摄像头 → 画面出现
-# 网页新建会话(世界选 camera)→ 问"你看到了什么"→ ANIMA 描述真实画面
+curl -s localhost:8112/status      # ⚠️ ground truth — for human verification only, never part of perception
 ```
 
----
+## Swap body / brain / world
 
-## 十一、接口采标 MCP + 物理世界起步(v0.4)
+```bash
+# Body: the Config dropdown on the AWI dashboard, or an environment variable before starting
+HOUSENAV_ROBOT=g1 uvicorn server:app --port 8112
 
-这一版做两件大事,外加一条诚实的边界。
+# Brain: the dropdown in the web app (Opus / Haiku / GPT-5.5 / GPT-5.4 / local Qwen3-VL); configured in .env
+# World: pick another one when creating a session; the list lives in ANIMA_WORLDS (⛔ append, never replace)
+```
 
-- **接口从自研 HTTP(AWI)换成业界标准 MCP**:世界＝标准 **MCP server**、脑＝**host**。MCP 三原语 **Tools / Resources / Prompts** 恰好对应我们本来的**动作 / 感知 / 说明书**——`tools/call`＝动作,`resources/read anima://observation`＝感知(画面快照 + 结构 state),`prompts/get "guidance"`＝**说明书**(世界自我介绍怎么跟它打交道,注入脑的系统提示)。世界 server＝三原语齐全的现实;引擎 server＝只有 Tools 的纯计算顾问——同一套协议。下棋引擎独立成一个 MCP server(`:8108`)。
-- **第一个物理世界 `gazebo-chess`(`:8106`)**:sim-chess 那张棋桌的 **Gazebo 3D 物理版**,真实建模六轴臂 + 真实夹爪,对大脑只露和 sim-chess 一样的 MCP 接口,内部把 ROS2 + MoveIt + Gazebo 全包起来。v0.4 先跑通 infra(往 Gazebo spawn 棋盘/棋子/相机、读位姿、俯视相机出图、MoveIt 解 IK + 发轨迹让臂动)。**(2026-07-08 起,这个世界的代码迁到配套的身体仓 `soma-zero/sim/gazebo-chess/`、作为 soma 的虚拟身体;ANIMA 仍按 `:8106` 连它。)**
-- **teleop 手动遥控(网页 GUI,`:8110`)**:先把「人能顺畅点动这条臂」验通——纯 ROS2(发 `joint_trajectory` 话题)+ MoveIt `/compute_ik` + `joint_trajectory_controller` 插值,平滑的笛卡尔点动。
+## Connect your own world
 
-> **诚实的边界**:ANIMA **自主**走子那条链路(大脑发 `move` → 世界内部解 IK + 夹取 + 搬运 + 放下 + 自检)在 v0.4 会超时,**v0.5 已按框架问题修通**(见下节)。v0.4 交付的是「标准接口 + 物理世界基础设施 + 手动遥控」。
+Implement a standard MCP server exposing [the four channels above](#awi-what-a-world-must-implement),
+add its address to `ANIMA_WORLDS`, and you are done — **the brain does not change.**
 
----
-
-## 十二、长动作通信修正 + 视觉桥:ANIMA 在物理世界下棋(v0.5)
-
-这一版先修地基、再长能力。
-
-- **长动作的「生命迹象」语义(框架修正)**:物理动作要几十秒,v0.4 的固定超时会把它误杀,且世界把活儿跑在事件循环上、一次 move 冻住整个世界服务器。v0.5 采标 **MCP progress notifications**:世界把工具执行放到工作线程、分阶段报人话进度(「已夹取,正在移向 e4」);大脑**有进度就续命、失联才判死、另设总上限**,进度实时上 AWI 仪表盘与对弈面板。对任何"慢原子动作"的世界通用。
-- **双层视觉桥(大脑读真 3D 盘)**:相机改**斜上方**机位(看得出子型);第一只眼**追踪层**(板角自标定 + 透视矫正 + 逐格采样,只认 空/白/黑——便宜、稳、但盲),第二只眼 **CNN**(逐格 13 类认子型——懂、但会认错,合成数据可复现训练,权重缺失自动降级单层);**裁判三方对账**(两眼互检 × 信念期望)——一致才推进,冲突/看不清一律"再看一眼",绝不静默走错。
-- **多子 + 失败补救**:`GZCHESS_SETUP_FEN` 按 FEN 摆多子(棋子分六型剪影,碰撞体不变);失败注入(夹空/放偏,默认关)+ 世界执行自检分类(grip_miss/place_offset/drop + 实际落格)→ 大脑针对性补救(夹空原样重试、放偏从实际落格夹回),每次重试前必重新感知。
-- **活体验收**:王兵残局上,ANIMA 经真实斜视相机读盘、真夹真放走子、**纯视觉认出对手挪的子**,4 个半回合信念盘与世界真值完全一致;注入夹空后 检测→补救→走成。
+The minimum is three methods — `capabilities()` / `observe()` / `invoke()` — wrapped with the
+`awi_mcp.py` adapter that already ships in each world. Copy from
+[`world/sim-desk`](world/sim-desk) (simplest) or [`world/sim-house-nav`](world/sim-house-nav)
+(most complete), and read the contract in [`world/README.md`](world/README.md) first.
 
 ---
 
-## 十三、引擎内聚 + 回归标准 MCP「Host 组装」(v0.6)
+# 4 · Project
 
-这一版不长新能力,把边界理干净——面向真机前必须先理清的一步:
+## Repository layout
 
-- **引擎内聚,仓库自足**:三个棋类引擎内核(chess/gomoku/go)搬进 `services/boardgame_engine/`
-  (此前跨仓 importlib 读外部文件,clone 下来起不了)。chess 三工具就活;go/gomoku 就位待接
-  (无消费方,不造死工具——原因登记在该包 README)。
-- **顾问与对手彻底分开**:大脑的引擎顾问(`boardgame_engine/chess_engine.py`)和 sim-chess 世界的
-  内置电脑(`world/sim-chess/chess_bot.py`)是**两份有意独立的副本、零共享代码**(禁去重合并)——
-  关掉引擎服务,世界的电脑照走;顾问跟着大脑跨身体走,不属于任何一个世界。
-- **服务挂载回归标准 MCP 的「Host 组装」**:废除 v0.5 的「world 声明服务(`anima://services`)」,
-  改为大脑按 `config.services()` 自行挂载(与 `worlds()` 对称)。MCP 规范把「连哪些 server」划给
-  Host、server 之间互不相识——配对靠模型看画面自选工具,不靠结构绑定。
+```
+src/
+  core/         orchestrator · AWI contract · safety gate · interrupt
+  clients/      MCP client layer: world line / service line / registry / sync bridge
+  session/      sessions and local memory · context window · unified log
+  llm/          model adapters (OpenAI-compatible / Claude / local)
+  presentation/ HTTP backend (FastAPI)
+  config.py     ⭐ single source of truth for every tunable (env-overridable)
+  messages.py   prompts and phrasing
+world/          the worlds (separate processes, separate virtualenvs)
+services/       Engine Server: the board-game engine advisor
+frontend/       web app (Next.js, bilingual)
+eval/           reproducible evaluation: game logs in, scorecard out
+docs/           README assets and the scripts that generate them
+tests/          tests
+```
 
-## 十四、整盘棋:裁判、瞬移对手与全格可达(v0.7)
+## Status and roadmap
 
-这一版让 gazebo-chess 从「能走几手」长成「能下完一整盘」,大脑侧零代码改动:
+**v1.0 (pre-alpha), under active development.** Version history lives in [CHANGELOG.md](CHANGELOG.md).
 
-- **世界内置裁判**:三个物理原语动臂之前先过合法闸(非法秒拒、臂不动);吃子/易位/升变按标准
-  拆解表逐原语核对,**全部物理核实后真值才推进**——真值与物理永不静默分叉;终局判定+棋谱落档
-  (含物理失败计数)都在世界内。
-- **内置电脑对手**:大脑每凑完一手,对手立刻「瞬移」应手(不用机械臂、不播报走了哪步——
-  大脑下次感知看画面自己认,延续 v0.5 纯视觉认对手步的设计)。
-- **64 格全可达 + 真实外观**:几何对齐真实摆位(4.5cm 格、底座轴心到板边 10cm),抓取姿态改**径向倾斜**
-  (朝远离基座方向倒,抓取半径 0.44m→0.53m)——v0.5 遗留的「h 列整列不可达」就此修复;**重试多样性**
-  把确定性失手的「诅咒格」变成换姿态一次即过(同一目标连续失败自动轮换候选);棋子换**真实斯汤顿网格**
-  外观(CC-BY 4.0,来源/许可入仓;碰撞体零改动,抓取物理不用重调)。
-- **会话核心任务**(大脑侧唯一改动,通用机制):「当前在执行什么任务」是**状态**不是聊天记录——
-  会话新增核心任务寄存器,LLM 经内建元工具 `set_core_task`/`clear_core_task` 亲自登记/改写/清除,
-  常驻注入系统提示(不随滑动窗口被遗忘)。回合制不变:ANIMA 每完成一手就停下等用户,
-  靠寄存器,用户只说「我走完了」它就知道该干嘛。
-- **整盘跑法**:世界摆标准开局 FEN,一句「我们来下棋,你用白的,你先走。」开局,
-  之后每轮只说「我走完了。」——两盘完整对局(38/44 步)实测下到终局,三类物理失败
-  全部自然出现并被 LLM 自主补救;每盘自动落档,`eval/` 记分卡按世界分指标评分。
-  先后手可配:`GZCHESS_BOT_SIDE`(默认 `black`=ANIMA 执白;设 `white`=ANIMA 执后手,开局对手自动先走一手)。
+**Next, in priority order:**
 
-## 十五、四足机器狗在住宅里导航 + 一个回合做一件事(v0.9)
+1. **Fix confirmation bias** — currently the single dominant cause of unreliable cross-room
+   navigation (see [Honest limits](#honest-limits)).
+2. **In-place turning for the humanoid** — the pre-registered gate did not pass; fixing it means
+   changing the reward side, which is no longer a single-variable experiment.
+3. **Failure recovery** only becomes meaningful on real hardware (it is hard to “misplace a piece”
+   in simulation). It is the next block on the roadmap and **is not claimed as done here**.
 
-前面所有世界都在一张桌子那么大的地方做事,这一版把 ANIMA 放进**一整间屋子**。
-
-- **新世界 `sim-house-nav`(`:8112`)**:一间大平层住宅里一只**宇树 Go2 四足机器狗**,头上一只前视相机。
-  ANIMA 通过这只相机看世界,靠**认家具**判断自己在哪个房间,用三个原语(前进/左转/右转)指挥它走过去。
-  狗是**真的迈腿走路**——三个原语被翻译成速度指令 `(vx,vy,wz)` 喂给 Isaac Lab 训出来的运动策略,
-  不是瞬移;而且**闭环执行**(学出来的步态跟踪速度只有约 83%/62%,所以边走边量、实测达标才停)。
-  观测里**只有画面 + IMU 朝向 + 有没有摔**——⛔ 不给坐标、不给房间名、不给地图,认房间就是这个世界要考的。
-  场景与机器人模型外置在独立资产库里,换场景只改一个环境变量。详见 [`world/sim-house-nav`](world/sim-house-nav)。
-- **一个回合 = 一件事**:以前一轮最多 8 步(下棋一手一停),放到导航上就断了——「去厨房」走两步就被闸住。
-  这一版把口径改成:**一轮什么时候收尾由 ANIMA 自己出文字决定**,步数上限和新增的单轮墙钟上限
-  退化成**安全带、不是节拍器**。下棋的「一件事」还是一手棋(2-6 步自然收尾,行为一点没变),
-  导航的「一件事」是找到那个房间(几十步,一路跑到收敛)。
-- **长回合得有刹车**:网页「发送」在生成期间就地变「停止」,叫停一直传到动作等待期
-  (点了不用干等机器狗把这步走完);撞到闸=礼貌停顿(核心任务留在册,说「继续」接着来),不是报错。
-
-## 十六、换得了身体、记得住路、撞不上家具(v1.0)
-
-同一间屋子,这一版让它**换一副身体**也照样走,并且第一次把"它到底为什么认错房间"看清楚了。
-
-- **一个世界,两副身体**:`sim-house-nav` 不再为四足狗写死任何东西——模型、策略、相机、出生高度、
-  力矩怎么发,全从场景资产库的**机器人清单**读。新增**宇树 G1 人形**(29 自由度,眼高 1.25 m),
-  同一间屋子和四足看到的完全不是一回事。⛔ 两台的力矩发法是**相反**的(四足显式 PD、人形隐式 PD),
-  搞反当场倒——这一项是训练侧的事实,写在清单里。
-  为人形**专门训了一个会转弯的策略**;⚠️ 它仍**不能原地转**(站着不动时策略选择省力),
-  转弯要带一点前进速度、转 90° 会往前挪 0.6~0.8 米,世界把这个位移**如实报给大脑**。
-- **AWI 新增「世界配置」通道**:有些世界不止一种布置法。世界经 AWI **声明**它能配什么,
-  用户经**带外 HTTP** 改它——改配置是**人**的动作;大脑只被告知"你现在是什么身体",
-  就像真机器人知道自己是什么身体。⛔ 大脑没有改它的工具。
-- **笔记本 + 拿掉答案清单**:核心任务管"我在干什么"(一句话),新增的**笔记本**管"我发现了什么"
-  (一条条增删),两个都常驻注入、不随对话变长滑走。同时把世界说明书里那份"每间屋摆着什么"的
-  清单整段删掉——这个世界要考的就是**自己看画面认出这是哪间屋**,喂答案测出来的分数没有意义。
-- **激光测距 + 撞前刹车**:八向测距进感知(真机 Go2 头上就有激光雷达),往前走太近会主动刹车站住、
-  如实报还剩多远。⛔ **只停不拐**——往哪走永远是大脑的决定。
-- **第三视角跟拍(⛔ 只给人看)**:`/streams` 每一路标明"大脑看不看得见",网页据此把传感区分成两块。
-  把旁观画面摆在「ANIMA 看到的画面」标题下就是撒谎,红线由测试钉着。
-  世界接入的完整契约见 [`world/README.md`](world/README.md)。
-
-**这一版最有价值的结果是一个否定**:v0.9 以为认错房间是"低视角下厨房和卫生间长得像",
-而人形在 1.25 m 能清楚看见灶台和抽油烟机,**照样说这是洗手间**——所以不是看不见,
-是**确认偏误**:它会对着同一扇门编出符合当前目标的说辞。跨房间导航仍不可靠(五个目标 2 对),
-下一版的靶子在判据侧、不在感知细节。走通的案例见
-[`world/sim-house-nav/实测记录.md`](world/sim-house-nav/实测记录.md)。
-
-## 补充:机器人到底怎么"真的走路"
-
-这是最容易被误解的一环,所以单独讲清楚——**没有任何一处是把机器人"挪"过去的**。
-
-Go2 和 G1 身上跑的都是**速度条件式**的运动策略(Isaac Lab 里训的,导出成 ONNX):
-它的观测里带一个指令 `(vx, vy, wz)` = (前进速度、侧移速度、**转向角速度**),训练时这个指令被
-随机化、奖励逼策略去**跟踪**它。部署时每个控制步(50 Hz)把想要的速度喂给策略,策略吐出各关节
-的目标角度,腿就按真实步态走出那个速度。所以导航原语只是给这个速度三元组起的人话名字:
-
-| 原语 | 世界下发的速度指令 |
-|---|---|
-| 往前走 | `vx = +WALK_SPEED`,`wz = 0` |
-| 左转 | `wz = +TURN_RATE`(人形还要带一点 `vx`,见下) |
-| 右转 | `wz = −TURN_RATE` |
-
-**原语是闭环执行的**:学出来的步态跟踪速度并不是 1:1(四足实测直线约 83%、转向约 62%),
-纯按时间开环下发会系统性走不够、导航一路偏。所以世界一边走一边量,**实测位移/转角达标才停**,
-并如实告诉大脑实际走了多远、转了多少度。撞墙走不动会判"卡住"并明说被挡住了。
-
-⚠️ **人形不能原地转**:站着不动时策略选择站住省力(实测 8 秒只转 3.8°)。它的转弯原语因此
-带 0.3 m/s 前进速度——转 90° 会往前挪 0.6~0.8 米,**和真人转身一样**;这个位移世界如实报给大脑,
-不假装原地没动。为此专门训了一个策略(把偏航命令范围从 ±0.2 放到 ±0.8),
-过程与数据见 [unitree-g1-locomotion](https://github.com/jeffliulab/unitree-g1-locomotion) 的实验 14。
-
-真机 Go2 / G1 部署也是同一个接口(板上策略从手柄或高层规划器收 `(vx,vy,wz)`)——
-这正是"大脑发高层意图、身体负责怎么动"这条分界在真机上的样子。
-
-## 补充:它靠什么记住自己在干什么
-
-长回合里几十步走下来,第 3 步看到的画面早就被滑动窗口挤出去了。所以大脑自带两个**状态寄存器**,
-**常驻注入系统提示、不占历史窗口**——它们是内建元工具,与世界无关(下棋可以用来记对手棋风):
-
-| | 核心任务 | 笔记本 |
-|---|---|---|
-| 答什么 | **我在干什么** | **我发现了什么** |
-| 形状 | 一句话 | 一条条(默认上限 20 条) |
-| 工具 | `set_core_task` / `clear_core_task` | `add_note` / `drop_note` |
-
-⛔ 什么时候写、写什么,**完全由 LLM 自己决定**——没有关键词触发,也没有"进了新房间就自动记一条"
-这类规则。世界那边同样不喂答案:说明书里**不写屋里有什么**,房间必须自己看出来。
-
-真实的一段笔记(它在找洗衣房):
-
-> 3. 当前左侧疑似房间实际更像厨房:有岛台、长操作台、吊柜和高冰箱/橱柜,**未见明确洗衣机或烘干机**
-> 8. 当前视野确认是厨房区域:有冰箱、炉灶/烤箱、抽油烟机、长台面…**这不是洗衣房**
-
-看清了就否定、然后换地方接着找——这正是这个寄存器要支撑的行为。
-
-## 状态
-
-**v1.0(Pre-alpha),持续迭代中。** v0.1 封版了顶层架构(世界独立 + 会话 + 主循环 + 外围 hook + 原生 tool-calling);
-v0.2 长出对弈技能与行为树;v0.3 接入真实摄像头世界 camera;v0.4 接口**采标 MCP** + 物理世界 gazebo-chess;
-**v0.5 先修长动作通信语义(MCP progress + 生命迹象等待),随后反向大简化**:删掉整个 game mode
-(行为树/技能/视觉栈),下棋回归普通对话、**每一步由 LLM 亲自决定**;server 分成 **World Server(现实)+
-Engine Server(顾问)** 两类;主循环迁 **LangGraph** 骨架;三套日志统一成按会话的
-**Session Logs**;**v0.6 引擎内聚 + 服务挂载回归标准 MCP「Host 组装」**(见 §十三);
-**v0.7 整盘棋**:世界内置裁判+瞬移对手、径向倾斜抓取 64 格全可达、真实斯汤顿棋子外观、
-对局落档进 eval 记分卡(见 §十四)。真机安全硬检查、持续响应模式按依赖顺序后做。
-**v1.0 一个世界两副身体 + AWI 世界配置通道 + 笔记本寄存器 + 激光测距**(见 §十六)。
-`anima-zero` 是开源(AGPL-3.0)的 Zero 线展示版;不愿受 AGPL 开源义务约束的商业集成可另购商业授权(见 License)。
+**Safety is part of the design**: every command that touches real hardware is **executed by a human**.
+That is not a limitation but a deliberate *safe-stop* design (a servo arm goes limp when power is
+cut, so the real emergency stop is a person not pressing the button), and every action stays auditable.
 
 ## License
 
-[GNU AGPL-3.0](LICENSE)(v3 或任何后续版本)— **双授权(dual licensing)**:
+[GNU AGPL-3.0](LICENSE) (v3 or any later version) — **dual licensed**:
 
-- **AGPL-3.0**:自由使用、修改、分发;若你把本软件(含修改版)分发出去、装进产品、或作为网络服务
-  提供给他人使用,须按 AGPL 向你的用户开放对应源码。与依赖 GPL-3 的 python-chess 天然兼容。
-- **商业授权**:不愿承担上述开源义务的商业集成(闭源产品、闭源 SaaS 等),
-  可另行取得商业许可 — 联系 jeff.pang.liu@gmail.com。
-- 本次协议变更之前发布的历史版本(≤ v0.6.0)仍按其原 Apache License 2.0 条款可用。
+- **AGPL-3.0**: use, modify and distribute freely; if you distribute this software (including
+  modified versions), ship it in a product, or offer it to others as a network service, you must
+  make the corresponding source available to your users under the AGPL.
+- **Commercial licence**: for commercial integrations unwilling to take on those obligations, a
+  separate licence is available — contact jeff.pang.liu@gmail.com.
+- Versions released before this licence change (≤ v0.6.0) remain available under their original
+  Apache License 2.0 terms.
 
-Copyright 2026 Jeff Liu
-([jeffliulab.com](https://jeffliulab.com),GitHub [@jeffliulab](https://github.com/jeffliulab))。
+Copyright 2026 Jeff Liu ([jeffliulab.com](https://jeffliulab.com) · GitHub [@jeffliulab](https://github.com/jeffliulab))
