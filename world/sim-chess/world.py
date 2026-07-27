@@ -41,17 +41,24 @@ GAMES = ("chess", "gomoku", "go")
 # ---- AWI 工具声明：对大脑只有 move 一个动作 ----
 MOVE_TOOL = {
     "name": "move",
+    # 工具描述与参数说明是**模型读的**，所以是英文（同 guidance；见大脑仓 src/prompts.py）。
     "description": (
-        "把 from 格（我识别为 piece 的）子走到 to 格。世界拿真值试这步："
-        "识别错 / from 没子 / 不合法（含没轮到你走的一方）→ 失败；成了 → 成功。只回成败，不回局面——"
-        "局面你自己看画面。轮到谁走由走子合法性天然管：白子只能在白方回合走。"
+        "Move the piece on the `from` square — the one you have identified as `piece` — to "
+        "the `to` square. I try it against the ground truth: if you misread the piece, if "
+        "`from` is empty, or if the move is illegal (including it not being that side's "
+        "turn), it fails; otherwise it succeeds. I return only success or failure, never "
+        "the position — the position is yours to read from the picture. Whose turn it is "
+        "takes care of itself through legality: a white piece only moves on white's turn."
     ),
     "parameters": {"type": "object",
                    "properties": {
-                       "from": {"type": "string", "description": "起格，如 e2"},
-                       "to": {"type": "string", "description": "目标格，如 e4"},
-                       "piece": {"type": "string", "description": "你识别的子 P/N/B/R/Q/K（可选，核对识别）"},
-                       "promotion": {"type": "string", "description": "升变 q/r/b/n（可选）"}},
+                       "from": {"type": "string", "description": "Square moved from, e.g. e2"},
+                       "to": {"type": "string", "description": "Square moved to, e.g. e4"},
+                       "piece": {"type": "string", "description": "The piece you read there, "
+                                                                 "P/N/B/R/Q/K (optional; lets "
+                                                                 "me check your reading)"},
+                       "promotion": {"type": "string", "description": "Promote to q/r/b/n "
+                                                                     "(optional)"}},
                    "required": ["from", "to"]},
     "kind": "tool",
 }

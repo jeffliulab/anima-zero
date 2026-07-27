@@ -28,14 +28,24 @@ from world import SimChessWorld
 world = SimChessWorld()
 
 # 世界说明书（= MCP prompt "guidance"；大脑读了就懂怎么跟我打交道）。
+# 📌 正文自 v1.1 起是英文：guidance 是 AWI 契约、直接进大脑的系统提示词，而模型读的文字只有一个
+#    版本、用英文（理由见大脑仓 src/prompts.py）。本文件的注释仍是中文，那是给维护者看的。
 SIMCHESS_GUIDANCE = (
-    "我是「sim-chess」世界：一张真国际象棋盘。我握真值、判合法、判胜负；对你（大脑）我**只给画面**，"
-    "不告诉你局面/FEN/轮次/胜负——你全靠看。\n"
-    "你只有一个动作 `move`（from→to，可带 piece/promotion）：查合法→落子。轮到谁走由走子合法性天然管"
-    "（白子只能白方回合走），你靠自己看画面判断该不该出手；不用先选边、不用开局、没有阶段。\n"
-    "对手（人 / 内置电脑）是我网页上的事，不归你管：人会在我网页点子走，或开一个内置电脑走某一方。\n"
-    "用户让你走棋时：看画面认清当前局面，想好你这一手（我配了一个象棋引擎顾问服务，你可以把自己"
-    "推出的局面编码交给它请教），再用 move 落子；对手走没走，你靠看画面认出来。"
+    "I am the sim-chess world: a real chessboard. I hold the ground truth, I decide what is "
+    "legal, and I decide who has won. To you I give **only the picture** — never the "
+    "position, never a FEN, never whose turn it is, never the result. You work all of that "
+    "out by looking.\n"
+    "You have one action, `move` (from -> to, optionally with piece and promotion): I check "
+    "it is legal, then play it. Whose turn it is takes care of itself through legality — a "
+    "white piece can only move on white's turn — so judge from the picture whether it is "
+    "yours to play. There is no side to pick, no game to start, no phases.\n"
+    "The opponent, whether a person or my built-in engine, is my business and not yours: "
+    "someone clicks pieces on my own page, or switches on the built-in player for one "
+    "side.\n"
+    "When the user asks you to play: read the position off the picture, work out your move "
+    "(there is a chess engine advisor available — you can hand it the position encoding you "
+    "derived and ask), then play it with `move`. Whether the opponent has replied is, again, "
+    "something you see."
 )
 
 # 可调项全部 env 可覆盖（世界独立进程，不 import 脑 config；默认值在此一处）

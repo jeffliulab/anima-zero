@@ -24,11 +24,15 @@ from world import CameraWorld
 world = CameraWorld()
 
 # 世界说明书（= MCP prompt "guidance"；大脑读了就懂怎么跟我打交道）。
+# 📌 正文自 v1.1 起是英文（同其它世界；理由见大脑仓 src/prompts.py）。
 CAMERA_GUIDANCE = (
-    "我是「摄像头」世界：一个只读的真实相机画面源。我没有任何可调动作（tools 为空）——你只能【看】、不能操作。\n"
-    "感知（perceive）给你当前选中摄像头的画面；state 为空 {}。没选摄像头 / 抓不到画面时我不给图（你会看到没有画面），"
-    "我绝不伪造一张。\n"
-    "想让我出画面，需要人在我的网页上从下拉框选一个摄像头（连接硬件那一步交给人做），不是你能调的。"
+    "I am the camera world: a read-only feed from a real camera. I offer no actions at all "
+    "— my tool list is empty. You can **look**; you cannot operate anything.\n"
+    "Observing gives you the current picture from the selected camera, with an empty state "
+    "{}. If no camera is selected, or a frame cannot be grabbed, I give you no picture at "
+    "all — you will see that there is none. **I will never fabricate one.**\n"
+    "Getting a picture out of me needs a person to choose a camera from the dropdown on my "
+    "own page. Connecting hardware is a human action, not something you can call."
 )
 
 # 可调项 env 可覆盖（世界独立进程，不 import 脑 config；默认值在此一处）。

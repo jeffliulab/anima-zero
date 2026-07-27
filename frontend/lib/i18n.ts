@@ -22,6 +22,29 @@ const STORAGE_KEY = "anima-lang";
 // ─────────────────────────────────────────────────────────────── 词条（中 → 英）
 // 没收录的串按原文显示(中文)。加新文案时:先写中文,再来这里补一条英文。
 const EN: Record<string, string> = {
+  // ---- 世界信任审批（v1.1）----
+  // ⚠️ 加了新的 t("…") 就必须同时加这里的英文条目：查不到会**静默回退中文**，
+  //    于是英文界面里冒出一段中文，而没有任何东西会报错。
+  "(没有描述)": "(no description)",
+  "(没有说明书)": "(no guidance)",
+  "⚠ 这个世界和你上次批准时不一样了": "⚠ This world is not what you approved last time",
+  "⚠ 这个世界还没有被批准": "⚠ This world has not been approved",
+  "会改变世界": "changes the world",
+  "会被拼进大脑的系统提示词": "goes into the brain’s system prompt",
+  "变了什么": "What changed",
+  "只批准你信任的世界": "Only approve worlds you trust",
+  "只读": "read-only",
+  "在你批准之前，它的工具和说明书不会进入大脑——所以现在它列得出来，但驱动不了。": "Until you approve it, its tools and guidance do not reach the brain — so it lists here, but nothing can drive it.",
+  "处理中…": "Working…",
+  "字": "characters",
+  "它声明的动作": "The actions it declares",
+  "它的能力清单变了。改动内容在下面；确认无误再重新批准。": "Its manifest has changed. What changed is below; approve again once you are satisfied.",
+  "它的说明书": "Its guidance",
+  "我看过了，批准它": "I have read it — approve",
+  "我看过了，重新批准": "I have read it — approve again",
+  "收起": "Collapse",
+  "看看它声明了什么": "See what it declares",
+  "读取中…": "Loading…",
   // ── 侧栏 ──
   "新建会话": "New session",
   "主页": "Home",
@@ -223,11 +246,17 @@ const EN: Record<string, string> = {
 // ─────────────────────────────────────────────────────── 极简语言 store（无第三方库）
 // 为什么自己写:整个应用只有一个全局标量(当前语言),用 useSyncExternalStore 订阅足够了。
 // 引一个 i18n 框架反而要装 provider、配 namespace、处理 SSR 水合——不值当。
-let current: Lang = "zh";
+// 预渲染阶段（SSR / 静态导出）拿不到 localStorage 和 navigator，只能先按一个值渲染。
+// v1.1 起这个值是 en 而不是 zh：静态导出的 HTML 是随 wheel 分发、也是别人截图会看到的那一份，
+// 面向全球社区它该是英文。中文用户会在水合前看到极短一瞬的英文——两边总有一边要闪，
+// 而**默认那一边**应该是受众更广的那个。用户自己选过语言之后就再也不闪（走 localStorage）。
+// 预渲染与首帧的默认语言，两处共用这一个常量（见 useI18n 里那条注释）。
+const INITIAL_LANG: Lang = "en";
+let current: Lang = INITIAL_LANG;
 const listeners = new Set<() => void>();
 
 function read(): Lang {
-  if (typeof window === "undefined") return "zh";
+  if (typeof window === "undefined") return INITIAL_LANG;
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved === "en" || saved === "zh") return saved;   // 用户自己选过 → 听他的
@@ -285,7 +314,11 @@ export function tt(zh: string, vars?: Record<string, string | number>): string {
 /** 组件里这样用：`const { t, lang, setLang } = useI18n();` 然后 `t("新建会话")`。
  *  语言一变,所有用到这个 hook 的组件自动重渲染。 */
 export function useI18n() {
-  const lang = useSyncExternalStore(subscribe, getLang, () => "zh" as Lang);
+  // ⚠️ 第三个参数是**服务端快照**，预渲染（SSR / 静态导出）用的就是它。
+  //    它必须和文件上方那个 `current` 的初值一致——两处都是"还不知道用户偏好时用什么"。
+  //    v1.1 改默认语言时只改了上面那一处、漏了这里，结果静态导出的 HTML 仍是中文：
+  //    一个默认值散在两个地方，就一定会有人只改一个。
+  const lang = useSyncExternalStore(subscribe, getLang, () => INITIAL_LANG);
   return {
     lang,
     setLang,
