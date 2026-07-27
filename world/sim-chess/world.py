@@ -1,11 +1,11 @@
 """sim-chess 世界本体 —— 一张能托管 chess / 五子棋 / 围棋 的「棋桌」。
 
-它握**唯一真值**（python-chess Board / GomokuBoard / GoBoard）；负责判命令成败、推进棋局、判终局、渲染、跑内置电脑。
+它握**唯一真值**（anima-chess Board / GomokuBoard / GoBoard）；负责判命令成败、推进棋局、判终局、渲染、跑内置电脑。
 
 **v0.4 简化**：对大脑（ANIMA）**只暴露一个动作 `move`**，且 perceive 的 state 为空 `{}`——棋盘真值/轮次/胜负
 一概不给，ANIMA 全靠**看画面**。旧的「选边就座 / 配对手 / 点开始 / phase 三阶段 / controllers」整套开局仪式
 **已撤**：那是把简单事搞复杂了，也是通用大脑"绕过下棋技能、乱点仪式工具"的诱因。现在——
-- **ANIMA 走子**：直接 `move`（查合法 → 落子）；轮到谁走由 python-chess 的走子合法性天然管（白手只能白走），
+- **ANIMA 走子**：直接 `move`（查合法 → 落子）；轮到谁走由走子合法性天然管（白手只能白走），
   ANIMA 靠自己的信念盘判断该不该出手，世界不替它把关。
 - **对手（人 / 内置电脑）= 世界自己网页上的事**：网页配「内置电脑走哪方（bot_side ∈ 白/黑/无）」、人点子走、开新局。
   用一个内部小状态 `bot_side` 替掉旧的 controllers/phase。人点子 / 内置电脑走子都走同一条「查合法 → 落子」。
@@ -21,7 +21,11 @@ import threading
 import time
 from pathlib import Path
 
-import chess
+# anima-chess: this repository's own MIT rules library. Its public API mirrors the
+# subset of python-chess this file used, so the alias leaves every call below untouched.
+# anima-chess：本仓自带的 MIT 规则库。公开 API 与本文件原先用到的那部分 python-chess 一致，
+# 起个别名就够了，下面的调用一行都不用改。
+import anima_chess as chess
 
 import chess_bot
 import go

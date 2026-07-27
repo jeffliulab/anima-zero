@@ -5,7 +5,11 @@
 
 ## 跑
 ```bash
-# 需要 python-chess（主 .venv 已有）+ 一个 UCI 引擎做基准（Stockfish）
+# ⚠️ 这个分析器需要你**自己另外装**两样东西，它们**不是本项目的依赖**：
+#     pip install chess          # python-chess（GPL-3.0）：读 PGN + 跟 UCI 引擎通信
+#     apt install stockfish      # 或别的 UCI 引擎，用来做评分基准
+# 为什么不像别处那样用本仓的 anima-chess：它有意不实现 PGN 解析和 UCI 通信，
+# 而这两样正是事后分析要用的。运行时（大脑/世界/引擎 service）零 GPL，这个离线工具是你自己的选择。
 ./.venv/bin/python eval/eval_chess.py
 # 或评一份标准 PGN：
 ./.venv/bin/python eval/eval_chess.py --pgn some_games.pgn

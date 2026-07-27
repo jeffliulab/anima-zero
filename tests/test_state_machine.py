@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-import chess
+import anima_chess as chess
 
 from world import SimChessWorld
 

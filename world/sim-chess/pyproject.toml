@@ -13,7 +13,7 @@ dependencies = [
     "uvicorn>=0.32",
     "pillow>=10",
     "pydantic>=2.6",
-    "chess>=1.10",
+    "anima-chess>=0.1",   # 棋规则（本仓 packages/anima-chess，MIT；不再用 GPL 的 python-chess）
     "mcp>=1.2",         # 世界作 MCP server 暴露 AWI(tools/resources/prompts);挂在 /mcp
 ]
 

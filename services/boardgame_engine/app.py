@@ -18,7 +18,11 @@ from __future__ import annotations
 
 import os
 
-import chess
+# anima-chess: this repository's own MIT rules library. Its public API mirrors the
+# subset of python-chess this file used, so the alias leaves every call below untouched.
+# anima-chess：本仓自带的 MIT 规则库。公开 API 与本文件原先用到的那部分 python-chess 一致，
+# 起个别名就够了，下面的调用一行都不用改。
+import anima_chess as chess
 from mcp.server.fastmcp import FastMCP
 
 from . import chess_engine

@@ -33,11 +33,22 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      # anima-chess lives in this repository and is not on PyPI yet, so it has to be
+      # installed from the working tree before the dependency can resolve. Remove this step
+      # once it is published alongside anima.
+      # anima-chess 就在本仓里、暂时不在 PyPI 上，所以要先从工作区装上，那条依赖才解析得到。
+      # 等它跟 anima 一起发布之后，这一步就可以删掉。
+      - name: Install the local rules library / 先装本仓的规则库
+        run: pip install -e ./packages/anima-chess
+
       - name: Install / 安装
         run: pip install -e ".[dev]"
 
       - name: Lint (ruff) / 代码风格
         run: ruff check .
+
+      - name: Rules library tests / 规则库自己的测试
+        run: pytest -q packages/anima-chess/tests
 
       - name: Tests / 测试
         run: pytest -q

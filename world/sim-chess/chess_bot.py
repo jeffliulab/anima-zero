@@ -13,12 +13,17 @@
   * 静止搜索 (quiescence search)：只在吃子序列稳定处才停手估分，避免“地平线效应”。
   * 移动排序 (MVV-LVA + 历史最优着) 让剪枝更狠。
 
-规则部分全部交给 python-chess 库处理（合法走子、将军/将死、和棋、
-吃过路兵、王车易位、升变……），本文件只负责“怎么挑一步好棋”。
+规则部分全部交给 anima-chess 处理（合法走子、将军/将死、和棋、吃过路兵、王车易位、升变……），
+本文件只负责“怎么挑一步好棋”。⭐ 这个分工要记牢：**搜索算法是自己写的**，规则库是可换的——
+v1.1 就把规则库从 GPL 的 python-chess 换成了本仓自带的 MIT 库，而本文件一行没动。
 """
 
 import time
-import chess
+# anima-chess: this repository's own MIT rules library. Its public API mirrors the
+# subset of python-chess this file used, so the alias leaves every call below untouched.
+# anima-chess：本仓自带的 MIT 规则库。公开 API 与本文件原先用到的那部分 python-chess 一致，
+# 起个别名就够了，下面的调用一行都不用改。
+import anima_chess as chess
 
 # ---------- 子力价值（厘兵 centipawn，1 兵 = 100） ----------
 PIECE_VALUE = {

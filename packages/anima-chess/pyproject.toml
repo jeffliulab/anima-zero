@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "anima-chess"
+dynamic = ["version"]
+description = "Chess rules for ANIMA — legal moves, check, checkmate and draws. Rules only, no engine."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{ name = "Jeff Liu Lab", email = "contact@jeffliulab.com" }]
+keywords = ["chess", "move-generation", "bitboard", "perft"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Games/Entertainment :: Board Games",
+]
+# No runtime dependencies, on purpose: this package exists to remove a dependency, so
+# adding any would be self-defeating. / 有意零运行时依赖：这个包的存在就是为了**去掉**一个依赖，
+# 再引入新的就本末倒置了。
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.4"]
+
+[tool.setuptools.dynamic]
+version = { attr = "anima_chess._version.__version__" }
+
+[tool.setuptools]
+packages = ["anima_chess"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

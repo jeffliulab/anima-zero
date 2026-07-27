@@ -13,7 +13,11 @@ from __future__ import annotations
 import io
 import os
 
-import chess
+# anima-chess: this repository's own MIT rules library. Its public API mirrors the
+# subset of python-chess this file used, so the alias leaves every call below untouched.
+# anima-chess：本仓自带的 MIT 规则库。公开 API 与本文件原先用到的那部分 python-chess 一致，
+# 起个别名就够了，下面的调用一行都不用改。
+import anima_chess as chess
 from PIL import Image, ImageDraw, ImageFont
 
 # ---- 共享外观规格（命名常量，两边逐像素一致；非可调）----
@@ -109,7 +113,7 @@ def square_to_screen(sq: int) -> tuple[int, int]:
 
 
 def render_board(board: chess.Board, selected_sq: str | None = None) -> Image.Image:
-    """把一个 python-chess Board 画成 512x512 俯视图。
+    """把一个棋盘（anima-chess Board）画成 512x512 俯视图。
 
     selected_sq：人类当前选中的格（如 "e2"），给它画个高亮圈；None=没人选子→不画
     （默认 None 保证渲染↔视觉 round-trip 一致，不影响视觉识别）。这张图同时喂 /stream 和 perceive，

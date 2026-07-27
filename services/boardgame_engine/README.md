@@ -20,7 +20,7 @@
 
 | 引擎内核 | 算法 | 状态 |
 |---|---|---|
-| `chess_engine.py` | Alpha-Beta 负极大 + 迭代加深 + 静止搜索（规则交 python-chess） | ✅ **活**：暴露 `best_move` / `evaluate` / `legal_moves`（输入 FEN，非法 FEN 报可读错误） |
+| `chess_engine.py` | Alpha-Beta 负极大 + 迭代加深 + 静止搜索（规则交 anima-chess） | ✅ **活**：暴露 `best_move` / `evaluate` / `legal_moves`（输入 FEN，非法 FEN 报可读错误） |
 | `gomoku_engine.py` | Alpha-Beta + 棋型模式表（纯标准库） | ⏸ **就位待接** |
 | `go_engine.py` | Naive MCTS，19×19 中国规则（纯标准库） | ⏸ **就位待接** |
 

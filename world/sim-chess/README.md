@@ -7,6 +7,8 @@ ANIMA 的一个独立「世界」(AWI)：一套**仿真棋盘 + 内置棋手**�
 三个角色任意两个对弈：每一方控制者 ∈ `human / anima / bot`。
 
 ```
+# 棋规则来自本仓的 anima-chess（MIT）；它还没上 PyPI，所以先从工作区装一次。
+pip install -e ../../packages/anima-chess
 cd world/sim-chess && pip install -e . && uvicorn server:app --port 8102
 ```
 打开 `localhost:8102`：选双方控制者 → 开始；轮到"人"那方点起子格→点目标格走子。
