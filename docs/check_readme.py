@@ -82,6 +82,29 @@ def main() -> int:
                 print(f"❌ {md}: 目录锚点 #{a} 跳不到任何标题")
                 bad += 1
 
+    # 文体门槛：上一版写成了规格表（541 行 / 58 行表格 / 140 处加粗），这几条是防复发的护栏。
+    # 标杆是本机上的 Isaac Lab（141 行 / 7 / 5）与 Unitree RL Lab（150 行 / 3 / 3）。
+    LIMITS = {"行": 200, "表格行": 16, "加粗": 20, "符号": 0}
+    for md in READMES:
+        s = read(md, args.ref) or ""
+        got = {
+            "行": len(s.splitlines()),
+            "表格行": len(re.findall(r"^\|", s, re.M)),
+            "加粗": len(re.findall(r"\*\*", s)) // 2,
+            "符号": len(re.findall(r"⛔|⚠️|⭐", s)),
+        }
+        for k, cap in LIMITS.items():
+            if got[k] > cap:
+                print(f"❌ {md}: {k} {got[k]}，超过上限 {cap}")
+                bad += 1
+        # ⚠️ 只看**开头**那道反引号：闭合行天生不带语言标记，把它也算进来会误报。
+        fences = re.findall(r"^```.*$", s, re.M)
+        bare_open = [f for i, f in enumerate(fences) if i % 2 == 0 and f.strip() == "```"]
+        # 目录树这类纯文本块本来就不该有语言标记，允许一个
+        if len(bare_open) > 1:
+            print(f"❌ {md}: 有 {len(bare_open)} 个无语言标记的代码块（ASCII 框图？）")
+            bad += 1
+
     # 两份结构对齐
     counts = [len(re.findall(r"^## ", read(md, args.ref) or "", re.M)) for md in READMES]
     if len(set(counts)) > 1:

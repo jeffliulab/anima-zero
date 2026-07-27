@@ -121,7 +121,12 @@ def main() -> None:
     qs[0].save(gif, save_all=True, append_images=qs[1:],
                duration=int(1000 / FPS * GIF_STRIDE), loop=0, optimize=True)
     still = os.path.join(OUT, f"nav-{robot}.png")
-    frames[-FPS - 1].save(still)   # 取收尾那一帧：走到位、画面最能说明问题
+    last = frames[-FPS - 1]        # 取收尾那一帧：走到位、画面最能说明问题
+    last.save(still)
+    # 再单独存一份**只有第一视角**的：README 里「两副身体对照」要的是 1 对 1 的比较,
+    # 直接并排两张左右分屏的合成图会变成四格、和图注对不上（2026-07-27 踩过）。
+    eye = os.path.join(OUT, f"eye-{robot}.png")
+    last.crop((0, LABEL_H, TILE_W, last.height)).save(eye, optimize=True)
     print(f"{gif}  {len(qs)} 帧(原 {len(frames)})  {os.path.getsize(gif) / 1e6:.1f} MB")
     print(f"{still}  {os.path.getsize(still) / 1e3:.0f} KB")
 
