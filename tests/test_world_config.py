@@ -11,7 +11,7 @@
 """
 from __future__ import annotations
 
-from anima import messages
+from anima import prompts
 from anima.clients.registry import WorldRegistry
 from anima.core.awi import ActionResult, Capabilities, Observation, ToolSpec
 from anima.core.orchestrator import Orchestrator, _config_value_label
@@ -87,14 +87,14 @@ def test_prompt_does_not_invite_the_brain_to_change_it(tmp_path):
     """⛔ 大脑没有改配置的工具。提示里要是暗示"你可以改"，它就会去调一个不存在的东西。"""
     w = _World(BODY_CONFIG)
     sysmsg = _orch(tmp_path, w)._system(w)
-    assert "你改不了" in sysmsg
+    assert "you cannot\nchange it" in sysmsg or "cannot change it" in sysmsg.replace("\n", " ")
 
 
 def test_world_without_config_injects_nothing(tmp_path):
     """旧世界（没声明配置）零影响——这条通道是可选的。"""
     w = _World({})
     sysmsg = _orch(tmp_path, w)._system(w)
-    assert messages.WORLD_CONFIG_BLOCK.split("{")[0].strip() not in sysmsg
+    assert prompts.WORLD_CONFIG_BLOCK.split("{")[0].strip() not in sysmsg
 
 
 def test_capabilities_carries_config(tmp_path):

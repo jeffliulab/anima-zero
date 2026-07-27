@@ -88,7 +88,7 @@ services/      棋类引擎顾问       frontend/  网页    eval/  记分卡
 ## 安装
 
 ```bash
-pip install anima-zero
+uv tool install anima-zero     # 或者 pipx install，或者普通 pip
 anima demo
 ```
 

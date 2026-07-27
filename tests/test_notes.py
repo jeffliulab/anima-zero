@@ -80,7 +80,7 @@ def test_add_note_persists_and_injects(tmp_path):
     assert world.invoked == [], "元工具不该打扰世界"
     # 记完的下一步，system 里带编号的常驻块
     assert "1. 北边那扇门后面是个有床的房间" in llm.systems[-1]
-    assert "笔记本" in llm.systems[-1]
+    assert "notebook" in llm.systems[-1]
     # 回执落会话历史（role=tool）
     msgs = orch.store.get(session.id).messages
     assert any(m.get("role") == "tool" and m.get("name") == "add_note" for m in msgs)
@@ -176,4 +176,4 @@ def test_no_notes_no_block(tmp_path):
     orch, session = _orch(tmp_path, _World())
     llm = _SeqLLM([LLMReply(text="hi")])
     orch.handle(session, "在吗", llm)
-    assert "笔记本（你自己记的" not in llm.systems[0]
+    assert "Your notebook" not in llm.systems[0]

@@ -12,7 +12,7 @@
 """
 from __future__ import annotations
 
-from .. import config, messages
+from .. import config, prompts
 from ..llm import ToolCall
 
 
@@ -86,7 +86,7 @@ def _sanitize_pairs(kept: list[dict]) -> list[dict]:
             for tid, name in want:                    # ② 无果的调用补诚实占位
                 if tid not in got:
                     out.append({"role": "tool", "id": tid, "name": name,
-                                "content": messages.ORPHAN_TOOL_RESULT})
+                                "content": prompts.ORPHAN_TOOL_RESULT})
             i = j
         else:
             i += 1

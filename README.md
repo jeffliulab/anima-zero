@@ -98,7 +98,7 @@ services/      board-game engine   frontend/  web app   eval/  scoring
 ## Installation
 
 ```bash
-pip install anima-zero
+uv tool install anima-zero     # or: pipx install anima-zero, or plain pip
 anima demo
 ```
 

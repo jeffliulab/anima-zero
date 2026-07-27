@@ -39,14 +39,14 @@ def _orch(tmp_path, world):
 def test_system_prompt_includes_world_guidance(tmp_path):
     w = _World(guidance="我是玩具世界，想干活就用 ping，别乱来。")
     sys = _orch(tmp_path, w)._system(w)
-    assert "说明书" in sys                 # 有"说明书"这个块
+    assert "description of itself" in sys   # 有「世界自述」这个块
     assert "我是玩具世界，想干活就用 ping" in sys  # 世界的原话被拼进去了
 
 
 def test_system_prompt_omits_block_when_no_guidance(tmp_path):
     w = _World(guidance="")               # 世界没提供说明书
     sys = _orch(tmp_path, w)._system(w)
-    assert "说明书" not in sys             # 不凭空造一个块
+    assert "description of itself" not in sys   # 不凭空造一个块
 
 
 # ---- sim-house-nav 的说明书不许泄题（v1.0 红线，Jeff 定）----
@@ -54,11 +54,19 @@ def test_system_prompt_omits_block_when_no_guidance(tmp_path):
 # 而且答案喂到那个份上，四个目标房间它还是错了三个。这个世界要考的就是「自己看画面认出这是
 # 哪间屋」，所以说明书里只许写「怎么跟我打交道」，不许写「屋子里有什么」。
 # 这条规矩全靠自觉很容易在下次改文案时破功，所以钉一个测试。
+# ⚠️ 中英**都要列**。v1.1 把说明书正文改成了英文，而这张表当时只有中文——
+#    那一刻这条守卫就**形同虚设**了：它一个词都不会命中，测试照绿，红线其实没人守。
+#    「守卫因为被守的东西换了形态而静默失效」是本项目反复踩到的同一类坑（v0.9 漏登记 awi_mcp
+#    副本、v1.1 死配置豁免写错对象），所以这里把两种语言一起钉住。
 _ANSWER_KEY_WORDS = (
     # 房间名
     "玄关", "客厅", "餐厅", "中厨", "主卧", "衣帽间", "主卫", "次卧", "客卫", "小孩房", "洗衣房",
+    "hallway", "living room", "dining", "kitchen", "bedroom", "wardrobe", "bathroom",
+    "nursery", "laundry", "en-suite",
     # 标志家具/家电
     "沙发", "灶眼", "抽油烟机", "烤箱", "洗碗机", "冰箱", "浴缸", "马桶", "床头柜", "衣柜", "餐桌",
+    "sofa", "couch", "hob", "stove", "range hood", "extractor", "oven", "dishwasher",
+    "fridge", "refrigerator", "bathtub", "toilet", "nightstand", "bedside", "dining table",
 )
 
 
@@ -99,7 +107,10 @@ def test_house_nav_guidance_still_explains_how_to_interact():
     g = _house_nav_guidance()
     # ⚠️ 这里**不列环视**：它是可开关的能力（v1.0 默认关），在不在说明书里由开关决定，
     #    由下面那条 test_..._action_count_matches_switch 管。这里只列"永远该有"的。
-    for must in ("前视相机", "往前走", "左转", "笔记本", "看见就算到", "clearance_m"):
+    # 说明书正文自 v1.1 起是英文（模型读的东西只有一个版本，见大脑仓 src/prompts.py），
+    # 所以这里断言的是**同样这几件事的英文说法**——守的东西一个没变。
+    for must in ("forward-facing camera", "walk forward", "turn left", "notebook",
+                 "seeing it is enough", "clearance_m"):
         assert must in g, f"说明书缺了「{must}」——这属于「怎么跟我打交道」，不该被瘦身砍掉"
 
 
@@ -112,7 +123,7 @@ def test_house_nav_guidance_action_count_matches_switch():
     g = _house_nav_guidance()
     cfg = _house_nav_module("config")
     if cfg.LOOK_AROUND:
-        assert "四个动作" in g and "环视" in g
+        assert "Four actions" in g and "look around" in g
     else:
-        assert "三个动作" in g, "环视关着，说明书就该说三个动作"
-        assert "环视" not in g, "环视关着，说明书里不该再提它——大脑会去调一个不存在的工具"
+        assert "Three actions" in g, "环视关着，说明书就该说三个动作"
+        assert "look around" not in g, "环视关着，说明书里不该再提它——大脑会去调一个不存在的工具"

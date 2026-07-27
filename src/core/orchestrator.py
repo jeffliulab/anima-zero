@@ -37,7 +37,7 @@ from typing import Any, TypedDict
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 
-from .. import config, messages
+from .. import config, messages, prompts
 from ..session import context
 from . import interrupt, trust
 from .awi import ActionResult, ToolSpec
@@ -296,18 +296,18 @@ class Orchestrator:
         """内建元工具：操作大脑自己的会话状态（两个寄存器）。通用机制，与任务无关——
         「当前在执行什么任务」和「一路上发现了什么」都是状态而非聊天记录，由 LLM 亲自增删改，
         常驻注入系统提示（见 _system），不随上下文滑窗被遗忘。"""
-        if tc.name == messages.CORE_TASK_SET_TOOL["name"]:
+        if tc.name == prompts.CORE_TASK_SET_TOOL["name"]:
             task = str(tc.arguments.get("task", "")).strip()
             if not task:
-                result = ActionResult(False, messages.CORE_TASK_EMPTY_REPLY)
+                result = ActionResult(False, prompts.CORE_TASK_EMPTY_REPLY)
             else:
                 self.store.set_core_task(session.id, task)
                 session.core_task = task
-                result = ActionResult(True, messages.CORE_TASK_SET_REPLY.format(task=task))
-        elif tc.name == messages.CORE_TASK_CLEAR_TOOL["name"]:
+                result = ActionResult(True, prompts.CORE_TASK_SET_REPLY.format(task=task))
+        elif tc.name == prompts.CORE_TASK_CLEAR_TOOL["name"]:
             self.store.set_core_task(session.id, "")
             session.core_task = ""
-            result = ActionResult(True, messages.CORE_TASK_CLEAR_REPLY)
+            result = ActionResult(True, prompts.CORE_TASK_CLEAR_REPLY)
         else:                                        # add_note / drop_note
             result = self._run_note_tool(session, tc)
         self.store.append(session.id, {"role": "tool", "id": tc.id, "name": tc.name,
@@ -320,37 +320,37 @@ class Orchestrator:
         ⛔ 三种拒绝都**明确告诉 LLM 为什么**，绝不静默截断或丢弃：截一半的笔记比没有更糟，
         而被悄悄丢掉的笔记会让它以为自己记住了。"""
         notes = list(self.store.get(session.id).notes)
-        if tc.name == messages.NOTE_ADD_TOOL["name"]:
+        if tc.name == prompts.NOTE_ADD_TOOL["name"]:
             note = str(tc.arguments.get("note", "")).strip()
             if not note:
-                return ActionResult(False, messages.NOTE_EMPTY_REPLY)
+                return ActionResult(False, prompts.NOTE_EMPTY_REPLY)
             if len(note) > config.NOTE_MAX_CHARS:
-                return ActionResult(False, messages.NOTE_TOO_LONG_REPLY.format(
+                return ActionResult(False, prompts.NOTE_TOO_LONG_REPLY.format(
                     n=len(note), limit=config.NOTE_MAX_CHARS))
             if len(notes) >= config.NOTES_MAX:
-                return ActionResult(False, messages.NOTE_FULL_REPLY.format(limit=config.NOTES_MAX))
+                return ActionResult(False, prompts.NOTE_FULL_REPLY.format(limit=config.NOTES_MAX))
             notes.append(note)
             self.store.set_notes(session.id, notes)
             session.notes = notes
-            return ActionResult(True, messages.NOTE_ADD_REPLY.format(n=len(notes), note=note))
+            return ActionResult(True, prompts.NOTE_ADD_REPLY.format(n=len(notes), note=note))
         # drop_note：编号是给人/LLM 看的 1 起编号，越界就报清楚现在一共几条
         try:
             n = int(tc.arguments.get("number", 0))
         except (TypeError, ValueError):
             n = 0
         if not 1 <= n <= len(notes):
-            return ActionResult(False, messages.NOTE_DROP_BAD_REPLY.format(n=n, total=len(notes)))
+            return ActionResult(False, prompts.NOTE_DROP_BAD_REPLY.format(n=n, total=len(notes)))
         dropped = notes.pop(n - 1)
         self.store.set_notes(session.id, notes)
         session.notes = notes
-        return ActionResult(True, messages.NOTE_DROP_REPLY.format(n=n, note=dropped))
+        return ActionResult(True, prompts.NOTE_DROP_REPLY.format(n=n, note=dropped))
 
     def _meta_toolbox(self, taken_names: set[str]) -> list[ToolSpec]:
         """内建元工具单（核心任务两件 + 笔记本两件）。与世界/服务同名冲突时**元工具让位**并记警告
         （对外保持「world 赢」的一致惯例；正常情况下不会撞名）。kind=read：不改世界。"""
         out: list[ToolSpec] = []
-        for spec in (messages.CORE_TASK_SET_TOOL, messages.CORE_TASK_CLEAR_TOOL,
-                     messages.NOTE_ADD_TOOL, messages.NOTE_DROP_TOOL):
+        for spec in (prompts.CORE_TASK_SET_TOOL, prompts.CORE_TASK_CLEAR_TOOL,
+                     prompts.NOTE_ADD_TOOL, prompts.NOTE_DROP_TOOL):
             if spec["name"] in taken_names:
                 _log.warning("内建元工具与世界/服务工具同名，元工具让位：%s", spec["name"])
                 continue
@@ -398,15 +398,15 @@ class Orchestrator:
         先说「我在干什么」，再说「我发现了什么」。"""
         s = ""
         if core_task:
-            s += messages.CORE_TASK_BLOCK.format(task=core_task)
+            s += prompts.CORE_TASK_BLOCK.format(task=core_task)
         if notes:
             listed = "\n".join(f"{i}. {n}" for i, n in enumerate(notes, 1))
-            s += messages.NOTES_BLOCK.format(notes=listed)
+            s += prompts.NOTES_BLOCK.format(notes=listed)
         return s
 
     def _system(self, world, has_services: bool = False, core_task: str = "",
                 notes: list | None = None) -> str:
-        base = messages.system_prompt()
+        base = prompts.system_prompt()
         if world is None:
             s = base + "\n\n当前:未连接任何世界(纯聊天)。"
             return s + self._registers_block(core_task, notes)
@@ -430,7 +430,7 @@ class Orchestrator:
         # ⛔ v1.1 起它**必须**经过 trust.fence()：这是远端写的文本要进系统提示词，得先声明身份、
         #    包上世界自己突破不了的围栏、并限长。直接拼接是它原来的样子，别改回去。
         if guidance:
-            s += messages.WORLD_GUIDANCE_BLOCK.format(
+            s += prompts.WORLD_GUIDANCE_BLOCK.format(
                 fenced=trust.fence(guidance, config.WORLD_GUIDANCE_MAX_CHARS))
         # 世界当前的配置（v1.0）：只告诉它「现在是什么样」，**不告诉它能怎么改**——
         # 改配置是人的动作，大脑没有对应的工具，说了只会让它去调一个不存在的东西。
@@ -438,9 +438,9 @@ class Orchestrator:
         lines = [f"· {o.get('label') or o.get('key')}：{_config_value_label(o)}"
                  for o in (world_config.get("options") or []) if o.get("key")]
         if lines:
-            s += messages.WORLD_CONFIG_BLOCK.format(items="\n".join(lines))
+            s += prompts.WORLD_CONFIG_BLOCK.format(items="\n".join(lines))
         if has_services:
-            s += messages.SERVICES_HINT
+            s += prompts.SERVICES_HINT
         # 两个寄存器：状态通道常驻注入，不占历史窗口、无「滑出」概念
         return s + self._registers_block(core_task, notes)
 

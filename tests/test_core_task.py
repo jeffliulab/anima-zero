@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import os
 
-from anima import messages
+from anima import prompts
 from anima.core.awi import ActionResult, Capabilities, Observation, ToolSpec
 from anima.llm import LLMReply, ToolCall
 from anima.core.orchestrator import Orchestrator
@@ -75,7 +75,7 @@ def test_set_core_task_persists_and_injects(tmp_path):
     assert orch.store.get(session.id).core_task == "把桌子整理完"
     assert world.invoked == [], "元工具不该打扰世界"
     # 登记后的下一步，system 里有常驻块
-    assert "把桌子整理完" in llm.systems[-1] and "核心任务" in llm.systems[-1]
+    assert "把桌子整理完" in llm.systems[-1] and "Core task" in llm.systems[-1]
     # 回执落会话历史（role=tool）
     msgs = orch.store.get(session.id).messages
     assert any(m.get("role") == "tool" and m.get("name") == "set_core_task"
@@ -151,16 +151,15 @@ def test_meta_tools_on_toolsheet(tmp_path):
     orch.handle(session, "在吗", llm)
     # _SeqLLM 只记了 system；改从消息面验证：直接构建一次工具单
     tools = orch._meta_toolbox(set())
-    assert {t.name for t in tools} == {messages.CORE_TASK_SET_TOOL["name"],
-                                       messages.CORE_TASK_CLEAR_TOOL["name"],
-                                       messages.NOTE_ADD_TOOL["name"],
-                                       messages.NOTE_DROP_TOOL["name"]}
+    assert {t.name for t in tools} == {prompts.CORE_TASK_SET_TOOL["name"],
+                                       prompts.CORE_TASK_CLEAR_TOOL["name"],
+                                       prompts.NOTE_ADD_TOOL["name"],
+                                       prompts.NOTE_DROP_TOOL["name"]}
 
 
 def test_context_sanitizes_orphan_tool_calls():
     """结对完整性（v0.7）：孤儿 tool_call 补占位结果；窗口开头无主 tool 结果被丢弃。
     背景：进程在「调用落档、结果未落」间被杀 → 此后每轮 provider 400、会话报废（2026-07-06 实锤）。"""
-    from anima import messages as msgs
     from anima.session import context
     history = [
         {"role": "tool", "id": "t0", "name": "x", "content": "无主结果（assistant 已滑出）"},
@@ -173,7 +172,7 @@ def test_context_sanitizes_orphan_tool_calls():
     assert out[0]["role"] == "user", "开头无主 tool 结果应被丢弃"
     tools = [m for m in out if m["role"] == "tool"]
     assert len(tools) == 1 and tools[0]["id"] == "t1"
-    assert tools[0]["content"] == msgs.ORPHAN_TOOL_RESULT
+    assert tools[0]["content"] == prompts.ORPHAN_TOOL_RESULT
     # 有配对结果时不多补
     history2 = [
         {"role": "assistant", "text": "", "tool_calls": [{"id": "a", "name": "move", "arguments": {}}]},

@@ -90,7 +90,7 @@ def test_overflow_pause_then_continue_resumes_with_core_task(tmp_path):
     ])
     out2 = orch.handle(session, "继续", llm2)   # 默认 max_steps 充裕
     # 跨越 overflow 边界：续轮**第一步**的 system 就带核心任务（「继续」这种短句靠它驱动接上）
-    assert "找到厨房" in llm2.systems[0] and "核心任务" in llm2.systems[0], "续轮首步即注入核心任务"
+    assert "找到厨房" in llm2.systems[0] and "Core task" in llm2.systems[0], "续轮首步即注入核心任务"
     assert out2["reply"] == "到厨房了", "overflow 是停顿：下一轮能接着做并收尾（未漏带步数计数致又立刻停）"
     assert world.n_perceive > perceived_turn1, "续轮重新感知（step 归零、世界重新看）"
 

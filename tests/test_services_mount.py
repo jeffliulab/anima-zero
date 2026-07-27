@@ -124,7 +124,7 @@ def test_service_tools_merged_and_routed_to_service(tmp_path):
     assert svc.invoked == [("best_move", {"fen": "xx"})], "服务工具应路由给服务"
     assert world.invoked == [], "服务工具绝不发给世界"
     assert r["reply"] == "好了"
-    assert "顾问工具" in llm.system_seen, "挂了服务应追加 SERVICES_HINT"
+    assert "Advisory tools" in llm.system_seen, "挂了服务应追加 SERVICES_HINT"
 
 
 def test_name_collision_world_wins(tmp_path):
