@@ -181,6 +181,10 @@
   （ANIMA 下一次感知就会看到世界变了——这就证明了世界是独立的）
 ```
 
+<div align="center">
+<img src="docs/images/arch-overview.svg" alt="人 · ANIMA · 世界，中间是 AWI" width="880">
+</div>
+
 ⛔ **脑和身绝不互相 import**，只经契约对话。所以脑可换、身可换、各自能对 mock 单测。
 
 这套 **System 1 / System 2** 分工是当下机器人大脑的主流共识（π0.5、GR00T N1、Figure Helix）：
@@ -192,6 +196,13 @@
 
 这是整个项目最值得看的一节：**你说的一句话，是怎么变成关节力矩的。**
 下面用**人形**走一遍全栈，每层都标了真实代码位置和实测数字。
+
+<div align="center">
+<img src="docs/images/command-journey.svg" alt="从一句话到关节力矩" width="880">
+</div>
+
+右边那条对数轴才是重点：大脑**每步想一次**、步态策略跑 **50 Hz**、物理 **500 Hz**——
+中间差了约三个半数量级。**这道速率鸿沟就是 System 2 / System 1 分工的物理含义**，不是比喻。
 
 ```
   你说「去客厅」                                          （只说这一次）

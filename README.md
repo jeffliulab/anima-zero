@@ -198,6 +198,10 @@ you deal with the real world.
   (ANIMA's next perception simply shows a changed world — proving the world is independent)
 ```
 
+<div align="center">
+<img src="docs/images/arch-overview.svg" alt="Human · ANIMA · world, with AWI in between" width="880">
+</div>
+
 ⛔ **Brain and body never import each other**; they only talk through the contract. Either side can
 be replaced, and each can be unit-tested against a mock.
 
@@ -212,6 +216,14 @@ the body is **System 1** — fast, reflexive, high-frequency closed loop.
 This is the section worth reading: **how a sentence you type becomes joint torques.**
 The walk-through below uses the **humanoid**, with the real code location and measured numbers at
 each layer.
+
+<div align="center">
+<img src="docs/images/command-journey.svg" alt="From one sentence to joint torques" width="880">
+</div>
+
+The rates on the right are the point: the brain thinks **once per step**, the gait policy runs at
+**50 Hz**, physics at **500 Hz** — roughly three and a half orders of magnitude apart. That gap
+*is* what System 2 / System 1 means here; it is not a metaphor.
 
 ```
   you say “go to the living room”                          (said exactly once)
