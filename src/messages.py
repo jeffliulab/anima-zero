@@ -64,7 +64,22 @@ STOP_REPLIES = {
 # report these two failures. Kept here so a fix to one wording cannot leave the other behind.
 # 后端到同一个回复有两条路径（同步与流式），这两种失败两边都要报。放在这里收口，
 # 免得改了一处措辞、另一处被落下。
-UNKNOWN_BRAIN_REPLY = "(Unknown brain: {brain})"
-BRAIN_NOT_CONFIGURED_REPLY = ("(The brain {brain} is not configured. Set it up in .env and "
-                              "restart the backend.)")
-BRAIN_CALL_FAILED_REPLY = "(The brain call failed: {error})"
+#
+# ⛔ These two carry no interpolation, on purpose. The interface translates a framework message
+# by looking the whole string up in its catalogue, so a string with a value spliced into it can
+# never match and would arrive in English inside an otherwise translated interface — which is
+# the exact complaint that started this work. Which brain is selected is already on screen; it
+# does not need repeating here.
+# ⛔ 这两句**有意不带插值**。界面翻译框架文案的办法是拿整句去词条表里查，
+#    一句里插了变量就永远查不中，于是在一个其余都翻好的界面里蹦出一句英文
+#    ——而那正是这件事的起因。是哪个大脑，界面上本来就选着，不必在这句里重复一遍。
+UNKNOWN_BRAIN_REPLY = "(That brain is not one this backend knows about.)"
+BRAIN_NOT_CONFIGURED_REPLY = ("(That brain is not configured. Set it up in .env and restart "
+                              "the backend.)")
+# ⚠️ This one keeps its variable: the error text is the diagnosis, and dropping it to gain a
+# translation would be trading the useful half for the polite half. The sentence before it is
+# in the catalogue, so what a reader sees is a translated lead-in and the raw error.
+# ⚠️ 这一句保留变量：错误原文就是诊断本身，为了能翻译而丢掉它，等于拿有用的那半换客气的那半。
+#    前半句进词条表，所以读者看到的是"译好的引子 + 原始错误"。
+BRAIN_CALL_FAILED_LEAD = "(The brain call failed.)"
+BRAIN_CALL_FAILED_REPLY = BRAIN_CALL_FAILED_LEAD + " {error}"

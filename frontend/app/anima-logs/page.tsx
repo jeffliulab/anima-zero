@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+import { useI18n } from "@/lib/i18n";
+
 /**
  * The old address for what is now Session Logs (renamed in v0.6).
  *
@@ -18,6 +20,7 @@ import { useRouter } from "next/navigation";
  * 行为差异；那种差异，往往要等发布之后才有人发现。
  */
 export default function AnimaLogsRedirect() {
+  const { t } = useI18n();
   const router = useRouter();
   useEffect(() => {
     router.replace("/session-logs");
@@ -25,7 +28,7 @@ export default function AnimaLogsRedirect() {
 
   return (
     <main style={{ padding: "2rem", opacity: 0.7 }}>
-      正在跳转到 <a href="/session-logs">Session Logs</a>…
+      {t("Redirecting to")} <a href="/session-logs">Session Logs</a>…
     </main>
   );
 }

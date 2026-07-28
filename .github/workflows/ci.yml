@@ -87,6 +87,19 @@ jobs:
       - name: Install / 安装
         run: npm ci
 
+      # ⛔ Runs before typecheck on purpose: `lib/locales.generated.ts` is committed, and this
+      # is what catches it being out of date with `locales/`. Stale generated code would
+      # otherwise typecheck and build perfectly while shipping the wrong strings — the same
+      # silent-stale-artefact failure this repository has hit twice before.
+      # It also holds the claim this whole design rests on: dropping a JSON into `locales/`
+      # adds a language without touching any logic.
+      # ⛔ 有意排在 typecheck 之前：`lib/locales.generated.ts` 是**入库**的，而这一步就是抓它
+      # 与 `locales/` 对不上的那道闸。生成物过时的话，类型检查和构建都会**完美通过**，
+      # 只是发出去的词条是错的——这个仓已经吃过两次这种"静默用旧产物"的亏。
+      # 它同时守着整套设计赖以成立的那个主张：往 `locales/` 丢一个 JSON 就能加一门语言、不碰任何逻辑。
+      - name: Locale catalogues / 词条守卫
+        run: npm run check:locales
+
       - name: Typecheck / 类型检查
         run: npm run typecheck
 

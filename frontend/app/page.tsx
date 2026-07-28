@@ -5,6 +5,7 @@ import SensingArea from "@/components/SensingArea";
 import ChatPanel from "@/components/ChatPanel";
 import AwiDashboard from "@/components/AwiDashboard";
 import SessionLogsView from "@/components/SessionLogsView";
+import { useI18n } from "@/lib/i18n";
 import {
   getBrains,
   getWorlds,
@@ -21,6 +22,7 @@ export default function Home() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [currentId, setCurrentId] = useState("");
   // 中间区当前看什么：会话视图(默认) / 留白主页 / 内嵌 AWI / 内嵌 Session Logs
+  const { t } = useI18n();
   const [view, setView] = useState<"session" | "home" | "awi" | "logs">("session");
 
   const refreshSessions = useCallback(async () => {
@@ -83,7 +85,7 @@ export default function Home() {
         <SessionLogsView embedded sessionId={currentId} />
       ) : view === "home" ? (
         <div className="flex min-w-0 items-center justify-center overflow-hidden bg-neutral-950 p-8 text-center text-sm text-neutral-600">
-          ANIMA · 在左侧选择或新建一个会话开始；左下角可查看 AWI 仪表盘 / Session Logs。
+          {t("ANIMA · pick a session on the left or start a new one. The AWI dashboard and Session Logs are at the bottom left.")}
         </div>
       ) : (
         <SensingArea worldUrl={worldUrl} worldName={current?.world ?? null} online={worldOnline} />

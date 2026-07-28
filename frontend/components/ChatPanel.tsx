@@ -83,13 +83,13 @@ function TurnView({ turn, open, live = false }: { turn: Turn; open: boolean; liv
         <div className="space-y-1 text-left">
           {turn.inputs.length > 0 && (
             <details open={open} className="rounded-lg bg-neutral-800/50 text-xs">
-              <summary className="cursor-pointer px-3 py-1.5 text-neutral-400">{t("👁 看到的画面 + ground truth")}</summary>
+              <summary className="cursor-pointer px-3 py-1.5 text-neutral-400">{t("👁 Frame seen + ground truth")}</summary>
               <div className="space-y-2 px-3 pb-2">
                 {turn.inputs.map((inp, j) => (
                   <div key={j}>
                     {inp.imageSrc && (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={inp.imageSrc} alt={t("感知画面")} className="max-h-40 rounded" />
+                      <img src={inp.imageSrc} alt={t("perception frame")} className="max-h-40 rounded" />
                     )}
                     <pre className="mt-1 overflow-x-auto text-[10px] text-neutral-500">{JSON.stringify(inp.state)}</pre>
                   </div>
@@ -100,7 +100,7 @@ function TurnView({ turn, open, live = false }: { turn: Turn; open: boolean; liv
           {turn.thinking.length > 0 && (
             <details open={open} className="rounded-lg bg-neutral-800/50 text-xs">
               <summary className="cursor-pointer px-3 py-1.5 text-neutral-400">
-                {t("💭 思考过程")} · {turn.thinking.length} {t("步")}
+                {t("💭 Reasoning")} · {turn.thinking.length} {t("steps")}
               </summary>
               <div ref={thinkRef} className={`space-y-1 overflow-y-auto px-3 pb-2 text-neutral-400 ${THINKING_MAX_H}`}>
                 {turn.thinking.map((th, j) => (
@@ -111,11 +111,11 @@ function TurnView({ turn, open, live = false }: { turn: Turn; open: boolean; liv
                       {th.text && <div className="text-neutral-300">{th.text}</div>}
                       {th.tool_calls.map((tc, k) => (
                         <div key={k} className="text-[11px]">
-                          {t("→ 调用")} <code>{tc.name}</code>({JSON.stringify(tc.args)})
+                          {t("→ calls")} <code>{tc.name}</code>({JSON.stringify(tc.args)})
                         </div>
                       ))}
                       {th.tool_results.map((tr, k) => (
-                        <div key={k} className="text-[11px] text-neutral-500">　{t("结果:")}{tr}</div>
+                        <div key={k} className="text-[11px] text-neutral-500">　{t("result: ")}{tr}</div>
                       ))}
                     </div>
                   </div>
@@ -125,7 +125,12 @@ function TurnView({ turn, open, live = false }: { turn: Turn; open: boolean; liv
           )}
           {turn.reply && (
             <div className={REPLY_CLASS}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{turn.reply}</ReactMarkdown>
+              {/* ⭐ 回复过一次 t()：**命中词条 = 这句是框架自己吐的**（撞步数/时间上限、被叫停、
+                  大脑没配好），显示译文；**没命中 = 模型的回复**，原样输出。
+                  模型的回复不需要翻译——它本来就跟着用户的语言走（见 src/prompts.py 的 [Language]）。
+                  这样后端一行都不用改：不需要给消息加标记位来区分"谁说的"，
+                  key 就是英文原文，查得到查不到本身就是那个判据。 */}
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{t(turn.reply)}</ReactMarkdown>
             </div>
           )}
         </div>
@@ -182,16 +187,16 @@ function Notebook({ session }: { session: SessionSummary | null }) {
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-1.5 text-left text-neutral-500 hover:text-neutral-300"
-        title={t("ANIMA 自己记的，不随对话变长被遗忘；网页只读。点击展开/折叠")}
+        title={t("ANIMA writes these itself; they survive a long conversation. Read-only here — click to expand/collapse.")}
       >
         <span className={`transition-transform ${open ? "rotate-90" : ""}`}>›</span>
         {task ? (
           <span className="min-w-0 flex-1 truncate">
-            <span className="text-neutral-600">{t("正在做")} </span>
+            <span className="text-neutral-600">{t("Doing")} </span>
             <span className="text-neutral-300">{task}</span>
           </span>
         ) : (
-          <span className="flex-1 text-neutral-600">{t("笔记本")}</span>
+          <span className="flex-1 text-neutral-600">{t("Notebook")}</span>
         )}
         {!!notes.length && (
           <span className="shrink-0 tabular-nums text-neutral-600">📓 {notes.length}</span>
@@ -201,11 +206,11 @@ function Notebook({ session }: { session: SessionSummary | null }) {
         <div className={`mt-1.5 space-y-1 overflow-y-auto ${NOTES_MAX_H}`}>
           {task && (
             <div className="rounded bg-neutral-800/60 px-2 py-1 leading-snug text-neutral-300">
-              <span className="text-neutral-600">{t("核心任务")} </span>
+              <span className="text-neutral-600">{t("Core task")} </span>
               {task}
             </div>
           )}
-          {!notes.length && <div className="text-neutral-600">{t("（还没记笔记）")}</div>}
+          {!notes.length && <div className="text-neutral-600">{t("(no notes yet)")}</div>}
           {notes.map((n, i) => (
             <div key={i} className="flex gap-1.5 leading-snug">
               <span className="shrink-0 tabular-nums text-neutral-600">{i + 1}.</span>
@@ -324,7 +329,7 @@ export default function ChatPanel({
         else if (e.type === "reply") upd((t) => ({ ...t, reply: e.text }));
       });
     } catch {
-      upd((turn) => ({ ...turn, reply: t("(连不上后端)") }));
+      upd((turn) => ({ ...turn, reply: t("(cannot reach the backend)") }));
     } finally {
       await reload(); // 用记录里的完整回合替换 live(此后折叠收起)
       setLive(null);
@@ -349,8 +354,8 @@ export default function ChatPanel({
   const seps = turns.map((turn) => {
     if (turn.brain && turn.brain !== _lastBrain) {
       const txt = _lastBrain === undefined
-        ? t("使用 {brain} 开启会话", { brain: brainLabel(turn.brain) })
-        : t("切换为 {brain}", { brain: brainLabel(turn.brain) });
+        ? t("Session started with {brain}", { brain: brainLabel(turn.brain) })
+        : t("Switched to {brain}", { brain: brainLabel(turn.brain) });
       _lastBrain = turn.brain;
       return txt;
     }
@@ -361,19 +366,19 @@ export default function ChatPanel({
     <aside className="flex h-screen flex-col border-l border-neutral-800 bg-neutral-900">
       <header className="border-b border-neutral-800 p-3">
         <div className="mb-2 flex items-center justify-between text-xs">
-          <span className="font-medium text-neutral-200">{t("和 ANIMA 对话")}</span>
+          <span className="font-medium text-neutral-200">{t("Talk to ANIMA")}</span>
           <span className="flex items-center gap-2">
             {/* 长回合的思考很长——给一个总开关，一下把全部回合的思考区收起或摊开 */}
             {(turns.length > 0 || live) && (
               <button
                 onClick={() => setExpand(expand === "all" ? "none" : "all")}
-                title={t("一键展开 / 折叠所有回合的思考过程")}
+                title={t("Expand / collapse the reasoning of every turn")}
                 className="rounded border border-neutral-700 px-1.5 py-0.5 text-[10px] text-neutral-400 hover:border-neutral-500"
               >
-                {expand === "all" ? t("折叠思考") : t("展开思考")}
+                {expand === "all" ? t("Collapse reasoning") : t("Expand reasoning")}
               </button>
             )}
-            <span className="text-neutral-400">🌐 {session?.world ?? (session ? t("纯聊天") : t("无会话"))}</span>
+            <span className="text-neutral-400">🌐 {session?.world ?? (session ? t("Chat only") : t("no session"))}</span>
           </span>
         </div>
         {session && (
@@ -389,14 +394,14 @@ export default function ChatPanel({
                     : "border-neutral-700 text-neutral-300 hover:border-neutral-500"
                 } ${b.available ? "" : "opacity-50"}`}
               >
-                {b.label}
+                {t(b.label)}
               </button>
             ))}
           </div>
         )}
         {curBrain && (
           <div className="mt-1.5 text-[10px] text-neutral-500">
-            {t("当前大脑")}:{curBrain.vendor} · {curBrain.label}（{curBrain.model}）
+            {t("Brain")}:{t(curBrain.vendor)} · {t(curBrain.label)}（{curBrain.model}）
           </div>
         )}
       </header>
@@ -405,7 +410,7 @@ export default function ChatPanel({
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
         {!session && !paused && (
-          <div className="p-4 text-center text-xs text-neutral-500">{t("请在左边新建或选择一个会话")}</div>
+          <div className="p-4 text-center text-xs text-neutral-500">{t("Create or pick a session on the left")}</div>
         )}
         {turns.map((t, i) => (
           <Fragment key={i}>
@@ -416,7 +421,7 @@ export default function ChatPanel({
         {live && <TurnView turn={live} open={openFor(true)} live />}
         {busy && !live?.reply && (
           <div className="text-xs text-neutral-500">
-            {stopping ? t("正在收尾——当前这一步做完就停…") : t("ANIMA 思考中…")}
+            {stopping ? t("Wrapping up — it will stop once this step finishes…") : t("ANIMA is thinking…")}
           </div>
         )}
         <div ref={bottomRef} />
@@ -424,13 +429,13 @@ export default function ChatPanel({
 
       {paused ? (
         <div className="border-t border-neutral-800 p-4 text-center text-xs text-neutral-500">
-          {t("查看子页面中 · 对话暂不可用（后续开放）")}
+          {t("Viewing a sub-page — chat is unavailable here")}
         </div>
       ) : (
         session &&
         (frozen ? (
           <div className="border-t border-neutral-800 p-4 text-center text-xs text-neutral-500">
-            {t("🔒 这个会话已冻结、只读。新建会话可继续。")}
+            {t("🔒 This session is frozen and read-only. Create a new one to continue.")}
             <span className="group relative ml-1 cursor-help text-neutral-400">
               ❓
               <span
@@ -438,7 +443,7 @@ export default function ChatPanel({
                            rounded-lg bg-neutral-800 p-2 text-left text-[11px] leading-relaxed text-neutral-300
                            opacity-0 shadow-lg transition-opacity group-hover:visible group-hover:opacity-100"
               >
-                {t("为保护物理设备的安全:同一个世界一旦开了新会话,原来的会话会立刻被锁定、变成只读——你仍可以翻看它的历史轨迹,但它不再接入实时感知系统,也不能再向世界下达动作。")}
+                {t("A safety rule for physical hardware: opening a new session on a world immediately locks the previous one. You can still read its history, but it no longer receives live perception and cannot command the world.")}
               </span>
             </span>
           </div>
@@ -449,7 +454,7 @@ export default function ChatPanel({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && send()}
-              placeholder={busy ? t("这一轮跑完再发下一句…") : t("给 ANIMA 下达一个指令…")}
+              placeholder={busy ? t("Wait for this turn to finish…") : t("Give ANIMA an instruction…")}
               className="flex-1 rounded-xl bg-neutral-800 px-3 py-2 text-sm outline-none placeholder:text-neutral-500"
             />
             {/* 同一个位置两种状态：闲着=发送，跑着=停止。长回合里这是用户唯一的刹车。 */}
@@ -457,15 +462,15 @@ export default function ChatPanel({
               <button
                 onClick={stop}
                 disabled={stopping}
-                title={t("停止这一轮（当前这一步做完就停，说「继续」可接着来）")}
+                title={t("Stop this turn (it finishes the current step; say “continue” to resume)")}
                 className="flex items-center gap-1.5 rounded-xl bg-neutral-700 px-4 py-2 text-sm font-medium disabled:opacity-60"
               >
                 <StopIcon />
-                {stopping ? t("停止中…") : t("停止")}
+                {stopping ? t("Stopping…") : t("Stop")}
               </button>
             ) : (
               <button onClick={send} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium">
-                {t("发送")}
+                {t("Send")}
               </button>
             )}
           </div>

@@ -75,8 +75,8 @@ export default function SensingArea({
     <section className="flex min-w-0 flex-col gap-3 overflow-hidden p-6">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-sm font-medium text-neutral-400">
-          {t("传感区")}
-          {worldName ? `（${worldName} · ${t("实时")}）` : ""}
+          {t("Sensors")}
+          {worldName ? `（${worldName} · ${t("live")}）` : ""}
         </h2>
         {multi && (
           <div className="ml-auto flex items-center gap-1">
@@ -84,7 +84,7 @@ export default function SensingArea({
               onClick={() => setSelected(ALL)}
               className={`rounded-md border px-2 py-1 text-[11px] ${selected === ALL ? "border-blue-500 bg-blue-600/20 text-blue-300" : "border-neutral-700 bg-neutral-800 text-neutral-300 hover:bg-neutral-700"}`}
             >
-              {t("全部")}
+              {t("All")}
             </button>
             {cams.map((c) => (
               <button
@@ -92,7 +92,7 @@ export default function SensingArea({
                 onClick={() => setSelected(c.name)}
                 className={`rounded-md border px-2 py-1 font-mono text-[11px] ${selected === c.name ? "border-blue-500 bg-blue-600/20 text-blue-300" : "border-neutral-700 bg-neutral-800 text-neutral-300 hover:bg-neutral-700"}`}
               >
-                {c.name || t("默认")}
+                {c.name || t("default")}
               </button>
             ))}
           </div>
@@ -101,13 +101,13 @@ export default function SensingArea({
       <div className="relative flex-1 overflow-hidden">
         {!worldUrl ? (
           <div className="flex h-full items-center justify-center rounded-2xl border border-neutral-800 bg-neutral-900">
-            <span className="text-sm text-neutral-500">{t("纯聊天 / 未连接世界")}</span>
+            <span className="text-sm text-neutral-500">{t("Chat only / no world connected")}</span>
           </div>
         ) : (
           <>
             <div className="flex h-full min-h-0 flex-col gap-2">
               <CamGroup
-                title={t("👁 ANIMA 看到的画面")}
+                title={t("👁 What ANIMA sees")}
                 cams={brainCams}
                 nonce={nonce}
                 disconnected={disconnected}
@@ -115,7 +115,7 @@ export default function SensingArea({
               />
               {humanCams.length > 0 && (
                 <CamGroup
-                  title={t("🎥 第三视角 · 只有你看得到，ANIMA 看不到")}
+                  title={t("🎥 Third-person — for you only, ANIMA cannot see this")}
                   cams={humanCams}
                   nonce={nonce}
                   disconnected={disconnected}
@@ -126,17 +126,17 @@ export default function SensingArea({
             {disconnected && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-2xl bg-neutral-950/70 p-6 text-center">
                 <div className="text-3xl">🔌</div>
-                <div className="text-sm font-medium text-amber-400">{t("未连接到世界「{name}」", { name: worldName ?? "" })}</div>
+                <div className="text-sm font-medium text-amber-400">{t("Not connected to world “{name}”", { name: worldName ?? "" })}</div>
                 <div className="max-w-xs text-xs leading-relaxed text-neutral-400">
-                  {t("收不到这个世界的画面。请确认它的进程已启动(见项目根目录的")}{" "}
-                  <code className="rounded bg-neutral-800 px-1">{t("运行命令.md")}</code>
-                  {t("),起好后点下面重试。")}
+                  {t("No video from this world. Make sure its process is running (see")}{" "}
+                  <code className="rounded bg-neutral-800 px-1">{t("the run-commands doc")}</code>
+                  {t(") and then retry below.")}
                 </div>
                 <button
                   onClick={() => setNonce((n) => n + 1)}
                   className="mt-1 rounded-lg bg-amber-600/80 px-3 py-1.5 text-xs text-white hover:bg-amber-600"
                 >
-                  {t("重试连接")}
+                  {t("Retry connection")}
                 </button>
               </div>
             )}
@@ -179,7 +179,7 @@ function CamGroup({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={c.url}
-              alt={c.name || t("世界实时画面")}
+              alt={c.name || t("Live view from the world")}
               onLoad={onFirstLoad && i === 0 ? () => onFirstLoad(false) : undefined}
               onError={onFirstLoad && i === 0 ? () => onFirstLoad(true) : undefined}
               className={`max-h-full max-w-full rounded-xl transition-opacity ${disconnected ? "opacity-10" : muted ? "opacity-80" : "opacity-100"}`}

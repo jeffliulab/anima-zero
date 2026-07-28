@@ -51,7 +51,7 @@ function CapCard({ name, kind, desc, schema, accent }: {
       {desc && <div className="mt-0.5 text-[12px] text-neutral-400">{desc}</div>}
       {schema !== undefined && (
         <details className="mt-0.5">
-          <summary className="cursor-pointer text-[10px] text-neutral-500">{t("schema / 内容")}</summary>
+          <summary className="cursor-pointer text-[10px] text-neutral-500">{t("schema / content")}</summary>
           <Json value={schema} />
         </details>
       )}
@@ -78,20 +78,20 @@ function Region({ title, color, sub, children }: {
 function fmtResp(method: string, resp?: Resp): { text: string; warn: boolean } {
   if (!resp) return { text: "(none)", warn: false };
   if (method === "capabilities")
-    return { text: `${resp.n_tools ?? 0} 个能力 [${(resp.tools ?? []).join(", ")}]`, warn: false };
+    return { text: `${resp.n_tools ?? 0} ${tt("capabilities")} [${(resp.tools ?? []).join(", ")}]`, warn: false };
   if (method === "perceive") {
     const st = resp.state ?? {};
     const blob = JSON.stringify(st);
     // 启发式：含 fen/board/pieces/legal 或 FEN 样式(行间 '/') → 疑似棋盘真值
     const looksLikeTruth = /fen|"board"|pieces|legal|[pnbrqkPNBRQK1-8]+\/[pnbrqkPNBRQK1-8]+/.test(blob);
     return {
-      text: `图片 ${resp.img_bytes ?? 0} 字节 · 回程 state: ${blob}${looksLikeTruth ? tt("(⚠ 疑似夹带棋盘真值)") : tt("(未见棋盘真值 ✓)")}`,
+      text: `图片 ${resp.img_bytes ?? 0} 字节 · 回程 state: ${blob}${looksLikeTruth ? tt("(⚠ looks like it leaked ground truth)") : tt("(no ground truth found ✓)")}`,
       warn: looksLikeTruth,
     };
   }
   if (method === "invoke")
     return {
-      text: `${resp.ok ? "ok ✓" : "FAIL ✗"} · ${resp.message ?? ""}${resp.has_data ? tt("· 带 data") : ""}`,
+      text: `${resp.ok ? "ok ✓" : "FAIL ✗"} · ${resp.message ?? ""}${resp.has_data ? tt(" · with data") : ""}`,
       warn: false,
     };
   return { text: JSON.stringify(resp), warn: false };
@@ -120,11 +120,11 @@ function WorldCard({ w }: { w: AwiWorld }) {
       <div className="flex items-center justify-between">
         <span className="font-medium">
           🌍 {w.name}{" "}
-          <span className="text-xs text-neutral-500">{t("World Server · ANIMA 栖身的现实")}{w.version ? ` v${w.version}` : ""}</span>
+          <span className="text-xs text-neutral-500">{t("World Server · the reality ANIMA inhabits")}{w.version ? ` v${w.version}` : ""}</span>
         </span>
         <div className="flex items-center gap-2">
           <RefreshTools name={w.name} online={online} />
-          <span className={`text-xs ${online ? "text-green-400" : "text-red-400"}`}>● {online ? t("在线") : t("离线")}</span>
+          <span className={`text-xs ${online ? "text-green-400" : "text-red-400"}`}>● {online ? t("online") : t("offline")}</span>
         </div>
       </div>
       <div className="mt-1 text-[11px] text-neutral-500">{w.url}</div>
@@ -136,52 +136,51 @@ function WorldCard({ w }: { w: AwiWorld }) {
       <div className="mt-3 space-y-3">
         {online && (w.config?.options?.length ?? 0) > 0 && (
           <Region title="Config" color="#a78bfa"
-            sub={t("这个世界的场地配置（世界经 AWI 声明；⚠️ 由你来改，ANIMA 只被告知现状、改不了）")}>
+            sub={t("How this world is set up (declared over AWI; ⚠️ you change it — ANIMA is only told the current state and cannot change it)")}>
             {w.config!.options!.map((o) => (
               <ConfigOption key={o.key} world={w.name} opt={o} />
             ))}
           </Region>
         )}
-        <Region title="Tools" color="#3fb950" sub={t("ANIMA 可调用的工具（会改世界的过安全闸）")}>
+        <Region title="Tools" color="#3fb950" sub={t("Tools ANIMA can call (world-changing ones pass the safety gate)")}>
           {w.tools.map((t) => (
             <CapCard key={t.name} name={t.name} kind={(t as AwiTool).kind} desc={t.description}
               schema={t.parameters} accent="text-green-300" />
           ))}
           {w.tools.length === 0 && (
-            <div className="text-xs text-neutral-500">{online ? t("(无动作，只能看)") : t("(离线，拿不到)")}</div>
+            <div className="text-xs text-neutral-500">{online ? t("(no actions — observation only)") : t("(offline — unavailable)")}</div>
           )}
         </Region>
 
-        <Region title="Resources" color="#58a6ff" sub={t("ANIMA 的感知：画面快照 + 结构 state")}>
+        <Region title="Resources" color="#58a6ff" sub={t("What ANIMA perceives: a frame snapshot + structured state")}>
           {!online ? (
-            <div className="text-xs text-neutral-500">(离线，拿不到)</div>
+            <div className="text-xs text-neutral-500">{t("(offline — cannot fetch)")}</div>
           ) : (
             <CapCard name="anima://observation" kind="读一次给一份" accent="text-sky-300"
-              desc={t("世界给大脑看的东西：画面快照(png) + 结构 state（下面是 state 里有什么；绝不含棋盘真值）。")}
+              desc={t("What the world shows the brain: a frame snapshot (png) plus structured state (listed below — never ground truth).")}
               schema={stateSchema && Object.keys(stateSchema).length ? stateSchema : (w.state ?? {})} />
           )}
         </Region>
 
-        <Region title="Prompts" color="#f59e0b" sub={t("世界的说明书：写给大脑的自我介绍（读进系统提示）")}>
+        <Region title="Prompts" color="#f59e0b" sub={t("The world's guidance: how it introduces itself to the brain (read into the system prompt)")}>
           {!online ? (
-            <div className="text-xs text-neutral-500">(离线，拿不到)</div>
+            <div className="text-xs text-neutral-500">{t("(offline — cannot fetch)")}</div>
           ) : guidance ? (
             <div className="whitespace-pre-wrap rounded-md border border-neutral-800 bg-neutral-950/50 p-2 text-[12px] leading-relaxed text-[var(--text-accent-amber)]">
               {guidance}
             </div>
           ) : (
-            <div className="text-xs text-neutral-500">(此世界没提供说明书)</div>
+            <div className="text-xs text-neutral-500">{t("(this world offers no guidance)")}</div>
           )}
         </Region>
 
-        <Region title="Status" color="#f85149" sub={t("world 的场外信息，anima 看不到（仅人看，不走 MCP）")}>
+        <Region title="Status" color="#f85149" sub={t("Out-of-band world info ANIMA cannot see (for humans only, not over MCP)")}>
           <div className="text-[12px] text-neutral-400">
-            {t("🔒 调试真值（人的上帝视角，如 FEN/棋子真实位置）：")}
-            {hasStatus ? <Json value={w.status} /> : <span className="text-neutral-500"> {t("(这个世界没有 /status)")}</span>}
+            {t("🔒 Ground truth for debugging (the human's god view):")}
+            {hasStatus ? <Json value={w.status} /> : <span className="text-neutral-500"> {t("(this world has no /status)")}</span>}
           </div>
           <div className="text-[11px] leading-relaxed text-neutral-500">
-            同属场外：🎬 /stream 视频流（给人看的连续画面，≠ 大脑的离散快照）· 🔌 /health 探活
-            （右上角在线点，每约 {OVERVIEW_POLL_MS / 1000} 秒一次、不计入流量）。
+            {t("Also out of band: \ud83c\udfac /stream video — continuous pictures for people, not the brain\u2019s discrete snapshots \u00b7 \ud83d\udd0c /health liveness — the dot at the top right, about every {sec}s, not counted as traffic.", { sec: OVERVIEW_POLL_MS / 1000 })}
           </div>
         </Region>
       </div>
@@ -200,9 +199,9 @@ function ConfigOption({ world, opt }: { world: string; opt: WorldConfigOption })
   const { t } = useI18n();
     if (v === opt.value || busy) return;
     setBusy(true);
-    setMsg(t("正在切换…（世界要重建，可能要几秒）"));
-    const r = await setWorldConfig(world, opt.key, v).catch(() => ({ ok: false, message: t("连不上后端") }));
-    setMsg(r.message ?? (r.ok ? t("已切换") : t("没成功")));
+    setMsg(t("Switching… (the world is being rebuilt, this takes a few seconds)"));
+    const r = await setWorldConfig(world, opt.key, v).catch(() => ({ ok: false, message: t("Cannot reach the backend") }));
+    setMsg(r.message ?? (r.ok ? t("Switched") : t("Failed")));
     setBusy(false);
   }
   return (
@@ -243,17 +242,17 @@ function RefreshTools({ name, online }: { name: string; online: boolean }) {
       {msg && <span className="text-[11px] text-neutral-400">{msg}</span>}
       <button
         disabled={busy}
-        title={t("世界那边改了工具或重启了，点这个让大脑重新问一遍（能力清单是握手时缓存的）")}
+        title={t("If the world changed its tools or restarted, click this to make the brain ask again (the capability list is cached at handshake)")}
         onClick={async () => {
           setBusy(true);
-          setMsg(t("重新握手中…"));
-          const r = await refreshWorld(name).catch(() => ({ ok: false, message: t("连不上后端") }));
+          setMsg(t("Re-handshaking…"));
+          const r = await refreshWorld(name).catch(() => ({ ok: false, message: t("Cannot reach the backend") }));
           setMsg(r.message ?? "");
           setBusy(false);
         }}
         className="rounded border border-neutral-700 bg-neutral-800 px-2 py-0.5 text-[11px] text-neutral-300 hover:bg-neutral-700 disabled:opacity-50"
       >
-        {t("重新握手")}
+        {t("Re-handshake")}
       </button>
     </span>
   );
@@ -267,22 +266,22 @@ function ServiceCard({ s }: { s: AwiService }) {
     <div className="rounded-xl border border-emerald-900/60 bg-neutral-900 p-4">
       <div className="flex items-center justify-between">
         <span className="font-medium">
-          🧠 {s.name} <span className="text-xs text-neutral-500">{t("Engine Server · ANIMA 请教的引擎顾问（纯计算）")}</span>
+          🧠 {s.name} <span className="text-xs text-neutral-500">{t("Engine Server · a pure-computation advisor ANIMA consults")}</span>
         </span>
-        <span className={`text-xs ${s.online ? "text-green-400" : "text-red-400"}`}>● {s.online ? t("在线") : t("离线")}</span>
+        <span className={`text-xs ${s.online ? "text-green-400" : "text-red-400"}`}>● {s.online ? t("online") : t("offline")}</span>
       </div>
       <div className="mt-1 text-[11px] text-neutral-500">
         {s.url}
-        <span>{t(" · 由 ANIMA 按配置挂载（Host 组装）")}</span>
+        <span>{t(" · mounted by ANIMA from its own config (standard MCP host assembly)")}</span>
       </div>
       <div className="mt-3">
-        <Region title="Tools" color="#34d399" sub={t("问答拿反馈：给它编码好的问题，它回答案")}>
+        <Region title="Tools" color="#34d399" sub={t("Ask and get an answer: give it a well-formed question, it replies")}>
           {s.tools.map((t) => (
             <CapCard key={t.name} name={t.name} kind={(t as AwiTool).kind} desc={t.description}
               schema={t.parameters} accent="text-emerald-300" />
           ))}
           {s.tools.length === 0 && (
-            <div className="text-xs text-neutral-500">{s.online ? t("(没有声明工具)") : t("(离线，拿不到工具清单)")}</div>
+            <div className="text-xs text-neutral-500">{s.online ? t("(no tools declared)") : t("(offline — tool list unavailable)")}</div>
           )}
         </Region>
       </div>
@@ -327,20 +326,20 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
     <main className={`${embedded ? "h-full min-w-0 overflow-y-auto" : "min-h-screen"} bg-neutral-950 p-6 text-neutral-200`}>
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold">{t("AWI 仪表盘 · Anima World Interface")}</h1>
+          <h1 className="text-xl font-semibold">{t("AWI dashboard · Anima World Interface")}</h1>
           {!embedded && (
             <div className="space-x-3 text-sm">
-              <a href="/session-logs" className="text-blue-400 hover:underline">{t("Session Logs（行为流水）")}</a>
-              <a href="/" className="text-blue-400 hover:underline">{t("← 回主界面")}</a>
+              <a href="/session-logs" className="text-blue-400 hover:underline">{t("Session Logs (activity trace)")}</a>
+              <a href="/" className="text-blue-400 hover:underline">{t("← Back to the app")}</a>
             </div>
           )}
         </div>
 
         {/* 一句人话说明 + 细节全部折叠（想深究再点开） */}
         <p className="text-sm leading-relaxed text-neutral-400">
-          {t("ANIMA（Host）连接两类 MCP server：")}<b className="text-neutral-200">🌍 World Server</b>{t("——它栖身的现实（有画面，动作会改变现实）；")}
-          <b className="text-neutral-200">🧠 Engine Server</b>{t("——它请教的引擎顾问（纯计算，问答拿反馈，由 ANIMA 按配置挂载）。")}
-          {t("这页展示这些连接的契约与实时流量；要看「ANIMA 看到什么→想了什么→调了什么」的完整链，去")}{" "}
+          {t("ANIMA (the host) connects to two kinds of MCP server: ")}<b className="text-neutral-200">🌍 World Server</b>{t(" — the reality it inhabits (it has a camera; actions change that reality); ")}
+          <b className="text-neutral-200">🧠 Engine Server</b>{t(" — advisors it consults (pure computation, question in / answer out, mounted by ANIMA from its own config).")}
+          {t("This page shows the contract and live traffic of those connections. For the full chain of what ANIMA saw, thought and called, see")}{" "}
           {embedded && onOpenLogs ? (
             <button onClick={onOpenLogs} className="text-blue-400 hover:underline">Session Logs</button>
           ) : (
@@ -349,19 +348,13 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
           。
         </p>
         <details className="text-xs leading-relaxed text-neutral-500">
-          <summary className="cursor-pointer text-neutral-400">{t("这页怎么读（MCP 细节，点开看）")}</summary>
+          <summary className="cursor-pointer text-neutral-400">{t("How to read this page (MCP details — click to open)")}</summary>
           <div className="mt-2 space-y-2">
             <p>
-              接口走标准 <b className="text-neutral-300">MCP</b>：ANIMA 是发起方（Host），server 统一两类——World Server 与 Engine Server，全程脑发起、server 应答
-              （Host 给每个 server 各开一条专线，即代码里的 RemoteWorld / RemoteService，MCP 的 Client 层）。
-              每个 server 用 MCP 三原语自我描述：<b className="text-green-300">Tools</b>（<code className="mx-1 rounded bg-neutral-800 px-1">tools/call</code>，动作或问答）、
-              <b className="text-sky-300">Resources</b>（<code className="mx-1 rounded bg-neutral-800 px-1">resources/read anima://observation</code>，画面快照 + 结构 state），
-              <b className="text-amber-300">Prompts</b>（<code className="mx-1 rounded bg-neutral-800 px-1">prompts/get guidance</code>，说明书）。
-              World Server 三样齐全；Engine Server 只有工具（顾问不感知世界）。连哪些 server 由 ANIMA（Host）按自己的配置组装（<code className="mx-1 rounded bg-neutral-800 px-1">config.worlds() / config.services()</code>）——server 之间互不相识，World Server 不声明 Engine Server。
+              {t("The interface is standard MCP. ANIMA is the initiator (the host), and servers come in two kinds \u2014 World Server and Engine Server. The brain always initiates and the server answers; the host opens one dedicated line per server (RemoteWorld / RemoteService in the code, MCP\u2019s client layer). Each server describes itself with MCP\u2019s three primitives: Tools (tools/call \u2014 actions or questions), Resources (resources/read anima://observation \u2014 a snapshot and structured state) and Prompts (prompts/get guidance \u2014 the guidance). A World Server has all three; an Engine Server has only tools, since an adviser does not perceive the world. Which servers to connect is assembled by ANIMA (the host) from its own configuration \u2014 config.worlds() / config.services() \u2014 so servers do not know one another, and a World Server never declares an Engine Server.")}
             </p>
             <p>
-              每张 World Server 卡还折叠着几个不走 MCP、仅人看的旁路：/status（调试真值，上帝视角）、/stream（连续视频）、/health（探活，
-              每约 {OVERVIEW_POLL_MS / 1000} 秒一次；不计入下面的实时流量，免得刷屏——流量里只有真正的脑↔server 调用）。
+              {t("Each World Server card also folds away a few side channels that never travel over MCP and exist for people only: /status (ground truth for debugging, the god\u2019s-eye view), /stream (continuous video) and /health (liveness, about every {sec}s; not counted in the live traffic below, which would otherwise be nothing else — that traffic is only real brain-to-server calls).", { sec: OVERVIEW_POLL_MS / 1000 })}
             </p>
           </div>
         </details>
@@ -370,42 +363,42 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label="World Server" value={data.worlds.length} />
             <Stat label="Engine Server" value={services.length} />
-            <Stat label={t("在线")} value={data.worlds.filter((w) => w.online).length + services.filter((s) => s.online).length} />
-            <Stat label={t("调用总数")} value={data.stats.total} />
+            <Stat label={t("online")} value={data.worlds.filter((w) => w.online).length + services.filter((s) => s.online).length} />
+            <Stat label={t("Total calls")} value={data.stats.total} />
           </div>
         )}
 
         <section>
-          <h2 className="mb-2 text-sm font-medium text-neutral-400">🌍 World Server <span className="text-xs font-normal text-neutral-600">{t("· ANIMA 栖身的现实，每个会话连一个")}</span></h2>
+          <h2 className="mb-2 text-sm font-medium text-neutral-400">🌍 World Server <span className="text-xs font-normal text-neutral-600">{t("· the reality ANIMA inhabits — one per session")}</span></h2>
           <div className="space-y-3">
             {data?.worlds.map((w) => <WorldCard key={`w:${w.name}`} w={w} />)}
           </div>
         </section>
 
         <section>
-          <h2 className="mb-2 text-sm font-medium text-neutral-400">🧠 Engine Server <span className="text-xs font-normal text-neutral-600">{t("· ANIMA 请教的引擎顾问，由 ANIMA 按配置挂载（Host 组装）")}</span></h2>
+          <h2 className="mb-2 text-sm font-medium text-neutral-400">🧠 Engine Server <span className="text-xs font-normal text-neutral-600">{t("· advisors ANIMA consults, mounted from its own config (host assembly)")}</span></h2>
           <div className="space-y-3">
             {services.map((s) => <ServiceCard key={`s:${s.url}`} s={s} />)}
             {services.length === 0 && (
               <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 text-xs text-neutral-500">
-                {t("(暂无——ANIMA 的服务清单 config.services() 为空)")}
+                {t("(none — ANIMA's service list config.services() is empty)")}
               </div>
             )}
           </div>
         </section>
 
         <section>
-          <h2 className="mb-2 text-sm font-medium text-neutral-400">{t("实时流量")} <span className="text-xs font-normal text-neutral-600">{t("· ANIMA ↔ World/Engine Server 的每次调用（走 MCP）")}</span></h2>
+          <h2 className="mb-2 text-sm font-medium text-neutral-400">{t("Live traffic")} <span className="text-xs font-normal text-neutral-600">{t("· every call between ANIMA and a World/Engine Server (over MCP)")}</span></h2>
           <p className="mb-2 text-xs leading-relaxed text-neutral-500">
-            {t("每条两半：")}<span className="text-neutral-300">{t("→ 发出")}</span>{t("（命令+参数）、")}<span className="text-neutral-300">{t("← 返回")}</span>{t("（图片字节数、成败、回程 state、答案）。")}
-            审计点：<code className="rounded bg-neutral-800 px-1">perceive</code> 的回程 state <b>绝不许夹带棋盘真值</b>（FEN/局面/着法）——疑似含真值会标 <span className="text-amber-400">⚠</span>。
+            {t("Two halves per line: ")}<span className="text-neutral-300">{t("→ sent")}</span>{t(" (command + arguments), ")}<span className="text-neutral-300">{t("← returned")}</span>{t(" (image bytes, success/failure, returned state, answer).")}
+            {t("Audit point: the state returned by perceive must never smuggle in the world\u2019s ground truth (a FEN, the position, the moves) \u2014 anything that looks like ground truth is flagged \u26a0.")}
           </p>
           <div
             ref={termRef}
             className="h-80 overflow-y-auto rounded-xl border border-neutral-800 bg-black p-3 font-mono text-xs leading-relaxed"
           >
             {events.length === 0 && (
-              <div className="text-neutral-600">{t("(暂无流量;去主界面发条消息,或在世界自己的界面里操作一下)")}</div>
+              <div className="text-neutral-600">{t("(no traffic yet — send a message in the app, or poke the world in its own UI)")}</div>
             )}
             {events.map((e) => {
               const inb = fmtResp(e.method, e.resp);
@@ -432,7 +425,7 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
 
         <div className="grid gap-4 md:grid-cols-2">
           <section>
-            <h2 className="mb-2 text-sm font-medium text-neutral-400">{t("大脑接口(LLM)")}</h2>
+            <h2 className="mb-2 text-sm font-medium text-neutral-400">{t("Brain interface (LLM)")}</h2>
             <div className="space-y-1.5">
               {data?.brains.map((b) => (
                 <div
@@ -440,29 +433,29 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
                   className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs"
                 >
                   <span>
-                    {b.vendor} · <b>{b.label}</b> <span className="text-neutral-500">({b.model})</span>
+                    {t(b.vendor)} · <b>{t(b.label)}</b> <span className="text-neutral-500">({b.model})</span>
                   </span>
                   <span className={b.available ? "text-green-400" : "text-neutral-500"}>
-                    {b.available ? "已配置" : "未配置"}
+                    {b.available ? t("configured") : t("not configured")}
                   </span>
                 </div>
               ))}
             </div>
           </section>
           <section>
-            <h2 className="mb-2 text-sm font-medium text-neutral-400">{t("会话")}</h2>
+            <h2 className="mb-2 text-sm font-medium text-neutral-400">{t("Sessions")}</h2>
             <div className="space-y-1.5">
-              {data?.sessions.length === 0 && <div className="text-xs text-neutral-500">(暂无会话)</div>}
+              {data?.sessions.length === 0 && <div className="text-xs text-neutral-500">{t("(no sessions yet)")}</div>}
               {data?.sessions.map((s) => (
                 <div
                   key={s.id}
                   className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs"
                 >
                   <span className="truncate">
-                    {s.title}　<span className="text-neutral-500">{s.world ?? "纯聊天"} · {s.brain}</span>
+                    {s.title}　<span className="text-neutral-500">{s.world ?? t("Chat only")} · {s.brain}</span>
                   </span>
                   <span className={s.status === "active" ? "text-green-400" : "text-amber-500"}>
-                    {s.status === "active" ? "进行中" : "🔒只读"}
+                    {s.status === "active" ? t("running") : t("🔒 read-only")}
                   </span>
                 </div>
               ))}

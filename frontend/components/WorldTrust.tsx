@@ -58,19 +58,19 @@ export function WorldTrust({ name, state, onApproved }: {
     <div className="mt-3 rounded-lg border border-amber-700/60 bg-amber-950/30 p-3">
       <div className="text-sm font-medium text-amber-300">
         {changed
-          ? t("⚠ 这个世界和你上次批准时不一样了")
-          : t("⚠ 这个世界还没有被批准")}
+          ? t("⚠ This world is not what you approved last time")
+          : t("⚠ This world has not been approved")}
       </div>
       <p className="mt-1 text-xs leading-relaxed text-neutral-400">
         {changed
-          ? t("它的能力清单变了。改动内容在下面；确认无误再重新批准。")
-          : t("在你批准之前，它的工具和说明书不会进入大脑——所以现在它列得出来，但驱动不了。")}
+          ? t("Its manifest has changed. What changed is below; approve again once you are satisfied.")
+          : t("Until you approve it, its tools and guidance do not reach the brain — so it lists here, but nothing can drive it.")}
       </p>
 
       {manifest === null ? (
         <button onClick={open} disabled={busy}
           className="mt-2 rounded border border-amber-600 px-2 py-1 text-xs text-amber-200 hover:bg-amber-900/40 disabled:opacity-50">
-          {busy ? t("读取中…") : t("看看它声明了什么")}
+          {busy ? t("Loading…") : t("See what it declares")}
         </button>
       ) : (
         <div className="mt-3 space-y-3">
@@ -78,7 +78,7 @@ export function WorldTrust({ name, state, onApproved }: {
 
           {manifest.changes.length > 0 && (
             <div>
-              <div className="text-xs font-medium text-amber-300">{t("变了什么")}</div>
+              <div className="text-xs font-medium text-amber-300">{t("What changed")}</div>
               <ul className="mt-1 space-y-0.5">
                 {manifest.changes.map((c, i) => (
                   <li key={i} className="text-xs text-neutral-300">· {c}</li>
@@ -89,7 +89,7 @@ export function WorldTrust({ name, state, onApproved }: {
 
           <div>
             <div className="text-xs font-medium text-neutral-300">
-              {t("它声明的动作")}（{manifest.tools.length}）
+              {t("The actions it declares")}（{manifest.tools.length}）
             </div>
             <div className="mt-1 space-y-2">
               {manifest.tools.map((tool) => (
@@ -99,12 +99,12 @@ export function WorldTrust({ name, state, onApproved }: {
                     <span className={tool.kind === "read" || tool.kind === "judge"
                       ? "text-neutral-500" : "text-amber-400"}>
                       [{tool.kind}] {tool.kind === "read" || tool.kind === "judge"
-                        ? t("只读") : t("会改变世界")}
+                        ? t("read-only") : t("changes the world")}
                     </span>
                   </div>
                   {/* 描述原样显示、不截断：它会原样进模型的工具单，那就该原样给人看。 */}
                   <p className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed text-neutral-400">
-                    {tool.description || t("(没有描述)")}
+                    {tool.description || t("(no description)")}
                   </p>
                 </div>
               ))}
@@ -113,25 +113,25 @@ export function WorldTrust({ name, state, onApproved }: {
 
           <div>
             <div className="text-xs font-medium text-neutral-300">
-              {t("它的说明书")}（{t("会被拼进大脑的系统提示词")}，{manifest.guidance.length} {t("字")}）
+              {t("Its guidance")}（{t("goes into the brain’s system prompt")}，{manifest.guidance.length} {t("characters")}）
             </div>
             {/* 全文，不折叠、不摘要——见本文件顶部的说明。 */}
             <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded border border-neutral-800 bg-neutral-950 p-2 text-[11px] leading-relaxed text-neutral-400">
-              {manifest.guidance || t("(没有说明书)")}
+              {manifest.guidance || t("(no guidance)")}
             </pre>
           </div>
 
           <div className="flex items-center gap-2">
             <button onClick={approve} disabled={busy || !manifest.ok}
               className="rounded bg-amber-700 px-3 py-1 text-xs text-white hover:bg-amber-600 disabled:opacity-50">
-              {busy ? t("处理中…") : changed ? t("我看过了，重新批准") : t("我看过了，批准它")}
+              {busy ? t("Working…") : changed ? t("I have read it — approve again") : t("I have read it — approve")}
             </button>
             <button onClick={() => setManifest(null)} disabled={busy}
               className="rounded border border-neutral-700 px-2 py-1 text-xs text-neutral-400 hover:bg-neutral-800">
-              {t("收起")}
+              {t("Collapse")}
             </button>
             <span className="text-[11px] text-neutral-500">
-              {t("只批准你信任的世界")}
+              {t("Only approve worlds you trust")}
             </span>
           </div>
         </div>

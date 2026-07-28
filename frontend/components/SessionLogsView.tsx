@@ -12,31 +12,37 @@ import {
 
 // 三类流水的标签与色点（色点区分类别，文字保持中性色、深浅主题都可读）：
 // LLM=大脑↔大模型；世界=大脑↔世界(MCP)；服务=大脑↔挂载服务(顾问，如引擎)。
+// ⛔ 返回的是**英文原文**（= 词条 key），显示的地方再过一次 t()——这个函数是模块级的，
+//    调不了 hook，所以翻译发生在渲染处，而不是在这里。
 function kindTag(kind: string): { tag: string; dot: string } {
   if (kind === "llm_call") return { tag: "LLM", dot: "bg-purple-400" };
-  if (kind === "world_call") return { tag: "世界", dot: "bg-sky-400" };
-  if (kind === "service_call") return { tag: "服务", dot: "bg-emerald-400" };
-  return { tag: kind || "其它", dot: "bg-neutral-500" };
+  if (kind === "world_call") return { tag: "World", dot: "bg-sky-400" };
+  if (kind === "service_call") return { tag: "Service", dot: "bg-emerald-400" };
+  return { tag: kind || "Other", dot: "bg-neutral-500" };
 }
 
 // 把一条流水拍平成"带每一个信息要素"的可读文本（一键复制用）——存了什么字段就带什么。
+//
+// ⛔ 这一份**有意保持英文正典、不跟界面语言走**。它不是界面，是**要被复制出去**的诊断文本：
+//    贴进 issue、发给别人看、和后端日志对照。那种场合下"跟着我的界面语言变"是负担而不是便利。
+//    界面上看到的同样内容照常翻译（见下面 JSX 里的 t(...)），复制出去的这份保持一种语言。
 function fmtEntry(e: SessionLogEntry): string {
   const head = `#${e.id}  ${e.ts}  [${kindTag(e.kind).tag}]`;
-  const sess = `会话：${e.session || "（无会话）"}`;
+  const sess = `session: ${e.session || "(none)"}`;
   if (e.kind === "llm_call") {
     const tok = e.tokens
-      ? `输入 ${e.tokens.input} / 输出 ${e.tokens.output} / 合计 ${e.tokens.total}`
-      : "（无）";
+      ? `in ${e.tokens.input} / out ${e.tokens.output} / total ${e.tokens.total}`
+      : "(none)";
     return [
       `${head}  ${e.model}`,
       sess,
-      `上下文 ${e.n_history} 条 · 可用工具 ${e.n_tools} 个 · ${e.has_image ? "含截图" : "无截图"} · 耗时 ${e.ms}ms`,
-      `tokens：${tok}`,
-      `用户：${e.last_user || "（无）"}`,
-      `回复：${e.reply || "（无）"}`,
-      `工具调用：${e.tool_calls.length ? e.tool_calls.join(", ") : "（无）"}`,
-      e.error ? `错误：${e.error}` : "",
-      `system 提示：\n${e.system}`,
+      `context ${e.n_history} · tools ${e.n_tools} · ${e.has_image ? "with image" : "no image"} · ${e.ms}ms`,
+      `tokens: ${tok}`,
+      `user: ${e.last_user || "(none)"}`,
+      `reply: ${e.reply || "(none)"}`,
+      `tool calls: ${e.tool_calls.length ? e.tool_calls.join(", ") : "(none)"}`,
+      e.error ? `error: ${e.error}` : "",
+      `system prompt:\n${e.system}`,
     ]
       .filter(Boolean)
       .join("\n");
@@ -45,8 +51,8 @@ function fmtEntry(e: SessionLogEntry): string {
   return [
     `${head}  ${peer} · ${e.method} · ${e.ms}ms`,
     sess,
-    `发出：${e.summary}`,
-    `返回：${JSON.stringify(e.resp)}`,
+    `sent: ${e.summary}`,
+    `returned: ${JSON.stringify(e.resp)}`,
   ].join("\n");
 }
 
@@ -124,7 +130,7 @@ export default function SessionLogsView({
       {/* 顶部：会话下拉 + 标题/计数（固定，不随日志滚动） */}
       <div className="shrink-0 border-b border-neutral-800 p-3">
         <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-neutral-500">Session Logs · {t("会话：")}</span>
+          <span className="text-neutral-500">Session Logs · {t("Session: ")}</span>
           <select
             value={selected}
             onChange={(e) => {
@@ -140,36 +146,36 @@ export default function SessionLogsView({
             ))}
             {orphanLogged.map((id) => (
               <option key={id} value={id}>
-                {t("已删除")} {id.slice(0, 12)}…
+                {t("deleted")} {id.slice(0, 12)}…
               </option>
             ))}
-            <option value={ALL}>{t("全部（合并所有会话）")}</option>
+            <option value={ALL}>{t("All (every session merged)")}</option>
           </select>
           <span className="text-[11px] text-neutral-500">
             {selected === ALL
-              ? `${entries.length} ${t("条")}`
-              : (cur ? (cur.world ?? t("纯聊天")) + " · " + cur.brain + " · " : "") + `${entries.length} ${t("条")}`}
+              ? `${entries.length} ${t("entries")}`
+              : (cur ? (cur.world ?? t("Chat only")) + " · " + cur.brain + " · " : "") + `${entries.length} ${t("entries")}`}
           </span>
           <button
             onClick={copyAll}
             disabled={entries.length === 0}
-            title={t("把当前所列的全部日志（含每个信息要素）复制到剪贴板")}
+            title={t("Copy every listed log entry (all fields) to the clipboard")}
             className="ml-auto rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-[11px] text-neutral-200 hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {copied ? t("已复制 ✓") : t("复制全部日志")}
+            {copied ? t("Copied ✓") : t("Copy all logs")}
           </button>
         </div>
         <div className="flex items-baseline gap-2">
           <h1 className="truncate text-sm font-semibold">
-            {selected === ALL ? t("全部行为流水（合并所有会话）") : cur ? cur.title : selected ? `${t("会话：")}${selected.slice(0, 12)}…` : t("（未选会话）")}
+            {selected === ALL ? t("All activity (every session merged)") : cur ? cur.title : selected ? `${t("Session: ")}${selected.slice(0, 12)}…` : t("(no session selected)")}
           </h1>
         </div>
         <p className="mt-1 text-[11px] leading-relaxed text-neutral-500">
-          {t("本会话的全部行为流水，按时间合并：")}
-          <span className="mx-1 inline-block h-2 w-2 rounded-full bg-purple-400" />{t("LLM 调用（想）")}·
-          <span className="mx-1 inline-block h-2 w-2 rounded-full bg-sky-400" />{t("世界往返（看/动，MCP）")}·
-          <span className="mx-1 inline-block h-2 w-2 rounded-full bg-emerald-400" />{t("服务调用（问顾问，如引擎）")}
-          {t("——「ANIMA 看到什么、想了什么、调了什么」一条链看全。")}
+          {t("Everything this session did, merged by time:")}
+          <span className="mx-1 inline-block h-2 w-2 rounded-full bg-purple-400" />{t("LLM calls (thinking)")}·
+          <span className="mx-1 inline-block h-2 w-2 rounded-full bg-sky-400" />{t("world round-trips (see / act, MCP)")}·
+          <span className="mx-1 inline-block h-2 w-2 rounded-full bg-emerald-400" />{t("service calls (asking an advisor, e.g. the engine)")}
+          {t("— one chain showing what ANIMA saw, thought, and called.")}
         </p>
       </div>
 
@@ -178,8 +184,8 @@ export default function SessionLogsView({
         {entries.length === 0 ? (
           <div className="text-xs text-neutral-600">
             {selected === ALL
-              ? "(暂无流水；去主界面发条消息，这里就会出现完整的行为链)"
-              : "(这个会话还没有流水)"}
+              ? t("(No traffic yet. Send a message on the main screen and the whole chain shows up here.)")
+              : t("(This session has no traffic yet.)")}
           </div>
         ) : (
           entries.map((e) => {
@@ -191,7 +197,7 @@ export default function SessionLogsView({
                 <div key={`${e.kind}-${e.id}-${e.t ?? e.ts}`} className="mb-1.5 rounded-md border border-neutral-800/70 bg-neutral-900/30 px-2.5 py-1.5">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
                     <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${src.dot}`} />
-                    <span className="font-medium text-neutral-300">{src.tag}</span>
+                    <span className="font-medium text-neutral-300">{t(src.tag)}</span>
                     <span className="text-neutral-600">#{e.id}</span>
                     <span className="text-neutral-500">{e.ts}</span>
                     <span className="text-neutral-400">{peer}</span>
@@ -202,7 +208,7 @@ export default function SessionLogsView({
                     <span className="ml-auto text-neutral-600">{e.ms}ms</span>
                   </div>
                   <details className="mt-0.5">
-                    <summary className="cursor-pointer text-[10px] text-neutral-600">返回</summary>
+                    <summary className="cursor-pointer text-[10px] text-neutral-600">{t("returned")}</summary>
                     <pre className="mt-1 overflow-x-auto whitespace-pre-wrap rounded border border-neutral-800 bg-neutral-950 p-2 font-mono text-[10px] leading-relaxed text-neutral-500">
                       {JSON.stringify(e.resp, null, 2)}
                     </pre>
@@ -222,35 +228,35 @@ export default function SessionLogsView({
                     <span className="text-neutral-600">·{e.session.slice(0, 8)}</span>
                   )}
                   <span className="ml-auto text-neutral-600">
-                    上下文 {e.n_history} 条 · 可用工具 {e.n_tools} 个{e.has_image ? " · 含截图" : ""} · 耗时 {e.ms}ms
+                    {t("context")} {e.n_history} · {t("tools")} {e.n_tools}{e.has_image ? ` · ${t("with image")}` : ""} · {e.ms}ms
                   </span>
                   {e.error && <span className="w-full text-rose-500">✗ {e.error}</span>}
                 </div>
                 {e.last_user && (
                   <div className="mt-1.5 whitespace-pre-wrap text-xs leading-relaxed">
-                    <span className="text-neutral-500">用户：</span>
+                    <span className="text-neutral-500">{t("user:")}</span>
                     <span className="text-neutral-300">{e.last_user}</span>
                   </div>
                 )}
                 {e.reply && (
                   <div className="mt-1 whitespace-pre-wrap text-xs leading-relaxed">
-                    <span className="text-neutral-500">回复：</span>
+                    <span className="text-neutral-500">{t("reply:")}</span>
                     <span className="text-neutral-100">{e.reply}</span>
                   </div>
                 )}
                 {e.tool_calls.length > 0 && (
                   <div className="mt-1 text-xs leading-relaxed">
-                    <span className="text-neutral-500">工具调用：</span>
+                    <span className="text-neutral-500">{t("tool calls:")}</span>
                     <span className="font-mono text-neutral-200">{e.tool_calls.join(", ")}</span>
                   </div>
                 )}
                 {e.tokens && (
                   <div className="mt-1 text-[11px] text-neutral-500">
-                    tokens：输入 {e.tokens.input} · 输出 {e.tokens.output} · 合计 {e.tokens.total}
+                    tokens: {t("in")} {e.tokens.input} · {t("out")} {e.tokens.output} · {t("total")} {e.tokens.total}
                   </div>
                 )}
                 <details className="mt-1.5">
-                  <summary className="cursor-pointer text-[10px] text-neutral-500">system 提示（完整）</summary>
+                  <summary className="cursor-pointer text-[10px] text-neutral-500">{t("system prompt (full)")}</summary>
                   <pre className="mt-1 overflow-x-auto whitespace-pre-wrap rounded border border-neutral-800 bg-neutral-950 p-2 font-mono text-[10px] leading-relaxed text-neutral-500">
                     {e.system}
                   </pre>

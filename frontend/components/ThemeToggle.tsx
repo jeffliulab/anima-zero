@@ -35,8 +35,8 @@ export default function ThemeToggle() {
   return (
     <button
       onClick={toggle}
-      title={isDark ? t("切换到浅色主题") : t("切换到深色主题")}
-      aria-label={t("切换深色 / 浅色主题")}
+      title={isDark ? t("Switch to light theme") : t("Switch to dark theme")}
+      aria-label={t("Toggle dark / light theme")}
       className="flex h-7 w-7 items-center justify-center rounded-md border border-neutral-700 text-neutral-400 transition-colors hover:border-neutral-500 hover:text-neutral-100"
     >
       <span className="transition-transform duration-200">

@@ -63,6 +63,10 @@ def test_frontend_splits_by_awi_flag():
     """③ 网页按 awi 分两块，且旁观那块的标题写明 ANIMA 看不到。"""
     tsx = FRONTEND.read_text(encoding="utf-8")
     assert "c.awi" in tsx, "前端要按 awi 字段分组"
-    assert "ANIMA 看不到" in tsx, "旁观那一块的标题必须写明 ANIMA 看不到"
+    # ⛔ 断言的是**实质**：旁观那一块的标题必须自己说明大脑看不见它。
+    #    盯的是英文原文，因为 v1.2 起词条 key 就是英文原文——中文是词条表里的译文，
+    #    盯译文等于把这条守卫拴在某一门语言上（上一次英文化时正是这样让一批守卫集体变红的）。
+    assert "ANIMA cannot see this" in tsx, (
+        "旁观那一块的标题必须写明大脑看不见——把它摆在「ANIMA 看到的画面」标题下就是撒谎")
     # 向后兼容：老世界的 /streams 没有 awi 字段，得按"大脑看得见"处理
     assert "c.awi !== false" in tsx, "awi 没写时要默认 true（老世界零改动）"

@@ -312,9 +312,9 @@ def chat(inp: ChatIn) -> dict:
     # 进入/退出/暂停对弈的判断都已收口到 orchestrator（元控制器），这里不再拦截。
     info = {b["name"]: b for b in list_brains()}.get(session.brain)
     if info is None:
-        return {"reply": messages.UNKNOWN_BRAIN_REPLY.format(brain=session.brain), "trace": None}
+        return {"reply": messages.UNKNOWN_BRAIN_REPLY, "trace": None}
     if not info["available"]:  # 没配置好就别调,直接说清楚
-        return {"reply": messages.BRAIN_NOT_CONFIGURED_REPLY.format(brain=info["label"]),
+        return {"reply": messages.BRAIN_NOT_CONFIGURED_REPLY,
                 "trace": None}
     try:
         with session_scope(inp.session_id):   # 这次请求的全部留痕（LLM/世界/服务）都标上 session（Session Logs 可筛）
@@ -341,8 +341,7 @@ def chat_stream(inp: ChatIn) -> StreamingResponse:
             return
         info = {b["name"]: b for b in list_brains()}.get(session.brain)
         if info is None or not info["available"]:
-            label = info["label"] if info else session.brain
-            yield _sse({"type": "reply", "text": messages.BRAIN_NOT_CONFIGURED_REPLY.format(brain=label)})
+            yield _sse({"type": "reply", "text": messages.BRAIN_NOT_CONFIGURED_REPLY})
             yield _sse({"type": "done"})
             return
         try:
