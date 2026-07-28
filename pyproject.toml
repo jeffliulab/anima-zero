@@ -66,7 +66,12 @@ anima = "anima.cli:main"
 
 [project.optional-dependencies]
 dev = [
-    "ruff>=0.4",
+    # Upper bound on purpose: an unpinned linter means the rule set is whatever the tool
+    # ships today, and CI turns red without a code change. Dependabot raises this, and the
+    # raise is reviewed like any other change.
+    # 有意加上界：linter 不钉版本，等于规则集是"工具今天发的那个"，CI 会在代码没动的情况下变红。
+    # 由 dependabot 来提升，而提升本身像任何改动一样要过审。
+    "ruff>=0.15,<0.17",
     "pytest>=8.0",      # 自动化回归测试(主循环/挂载/统一日志/链路)
 ]
 # Chess rules, needed only to run the board-game engine service (services/boardgame_engine,
@@ -121,3 +126,25 @@ cache-dir = ".cache/ruff"         # 把 .ruff_cache 收进 .cache/
 # Submodules are separate repositories with their own lint setup — you don't lint
 # someone else's repo from yours. / 子模块是独立的仓、有自己的 lint；不从本仓去管别人的仓。
 exclude = ["world/sim-desk"]
+
+[tool.ruff.lint]
+# ⛔ State the rule set instead of inheriting the tool's default-of-the-day.
+#
+# This was implicit until ruff 0.16.0, which widened its defaults — 205 findings appeared in
+# code nobody had touched, and CI went red on main because a linter released a new version.
+# A build that breaks on somebody else's release schedule is not telling you about your code.
+#
+# These four are ruff's historical defaults, which is what this project has in fact been held
+# to all along. Widening the set is a decision to take deliberately, in its own commit, with
+# the findings actually addressed — not something to inherit by upgrading.
+#
+# ⛔ 把规则集**写出来**，而不是继承工具"今天的默认值"。
+#
+# 在 ruff 0.16.0 之前这是隐式的；0.16.0 放宽了默认集——**没人碰过的代码里冒出 205 个问题**，
+# main 上的 CI 因为"一个 linter 发了新版"而变红。一个会随别人发版节奏而挂掉的构建，
+# 报的不是你代码的事。
+#
+# 下面这四个就是 ruff 的历史默认集，也正是这个项目一直以来实际被要求达到的标准。
+# 要放宽规则集，那是一个**要专门去做的决定**：单独一个 commit、把问题真正改掉——
+# 而不是靠升级顺带继承过来。
+select = ["E4", "E7", "E9", "F"]
