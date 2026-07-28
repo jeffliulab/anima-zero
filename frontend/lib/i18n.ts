@@ -269,7 +269,7 @@ function read(): Lang {
   return nav.toLowerCase().startsWith("zh") ? "zh" : "en";
 }
 
-// 首次在浏览器里加载时对齐一次真实偏好（SSR 阶段拿不到 localStorage，先按 zh 渲染）
+// 首次在浏览器里加载时对齐一次真实偏好（SSR 阶段拿不到 localStorage，先按 INITIAL_LANG 渲染）
 if (typeof window !== "undefined") current = read();
 
 export function getLang(): Lang {
