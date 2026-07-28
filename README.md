@@ -82,9 +82,9 @@ here, and it is why the brain can only ever issue intent, never joint angles.
 <img src="docs/images/command-journey.svg" alt="From one sentence to joint torques" width="860">
 </div>
 
-The world reports back truthfully rather than conveniently. A humanoid cannot pivot on the spot, so
-its turn carries a little forward speed and ends up 0.64 m further along; the world says so, and the
-brain corrects its own sense of position from that.
+The world reports back truthfully rather than conveniently. A learned gait does not track a velocity
+command exactly — a turn drifts, a walk falls short — so the world measures what actually happened and
+says so, and the brain corrects its own sense of position from that rather than from what it asked for.
 
 ```text
 src/core/      orchestrator, AWI contract, trust store, safety gate

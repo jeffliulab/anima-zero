@@ -43,10 +43,13 @@ is, whether it has been found — all of that is the brain's judgement.
 since v1.0 it is **off by default for both bodies**. Two reasons. First, it has **never once
 been measured** — through v0.9 it was hidden behind the brain's capability cache for seven
 experiments and never reached the tool sheet, so leaving it listed would be claiming
-something that was never verified. Second, **the humanoid cannot turn on the spot** (measured:
-a turn command at 0.2 rad/s for 8 seconds produced 2.8°), so "turn full circle and take
-frames" does not mean anything for it. Neither body gets it for now — the question is whether
-a model can find rooms on turning and ranging alone.
+something that was never verified. Second, the humanoid could not turn on the spot, so "turn
+full circle and take frames" meant nothing for it.
+
+⚠️ **The second reason expired on 2026-07-27**: with the new policy from the asset library the
+humanoid does turn in place (90° in 2.30 s, 40°/s, 0.06 m of drift), and `turn_vx` is 0 for
+both bodies. Only the first reason still stands, and it is the one that decides. Turning it
+back on is a decision to take with a measurement, not by default.
 
 ⚠️ Changing the actions means changing **three places together**: this table, `capabilities()`
 in `world.py`, and the guidance in `guidance.py`. The phrase in the guidance saying how many
