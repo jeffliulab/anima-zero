@@ -135,6 +135,30 @@ way to change it. Reached from the main app, which is the normal path, they are 
 Not fixed because the honest options are both larger than the problem: put the switcher in a
 layout both routes share, or accept that those two routes are secondary surfaces.
 
+### R10 · Nine dependencies are unbounded, and one of them will break CI again
+
+Twice in one week a green repository turned red without anybody changing a line: ruff 0.16.0
+widened its default rule set (205 findings in untouched code), and mcp 2.0.0 moved
+`mcp.server.fastmcp`, which `services/boardgame_engine/app.py` imports directly. Both are now
+capped. Nine runtime dependencies are not.
+
+**This is deliberate, not an oversight.** anima-zero is a library people install, and an upper
+bound in a published library becomes the *user's* dependency-resolution problem — one they
+cannot route around. The rule here is to cap only what has been shown to break, and what broke
+had a common shape: both depended on something deeper than the public, documented surface (an
+internal submodule; a tool's default configuration). By that test none of the remaining nine
+qualifies.
+
+So the plan is to cap the third one when it breaks. A red CI plus a two-line change costs
+about ten minutes; a speculative cap costs every future user. And the red run carries
+information — it is how you learn the upstream API moved.
+
+If the interruptions ever outweigh that, the fix is a CI-only constraints file, not more caps
+in `pyproject.toml`: CI installs fixed versions while the published package stays permissive.
+It has its own price — something to maintain, and it *delays* the moment you find out
+upstream changed. The reasoning is written at the top of the dependency list, which is where
+somebody is standing when they are tempted to add a cap.
+
 ## Not planned
 
 Saying no is part of a roadmap.

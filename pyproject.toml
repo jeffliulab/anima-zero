@@ -45,6 +45,31 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
+# ⛔ 上界政策（2026-07-29 定，被咬两次之后）——**在你想给下面某一行加 `<N` 之前先读这段。**
+#
+# anima-zero 是发在 PyPI 上给别人装的**库**，不是自己部署的应用。这两者的规矩是**反的**：
+#   · 应用 → 锁得越死越好（锁文件钉到具体版本号）
+#   · 库   → 上界会变成**别人的**问题。你写 `pydantic<3`，而用户的项目需要 pydantic 3，
+#            pip 就解不出来，他装不上你的包，而且**没法绕过，只能等你改**。
+#
+# 所以这里的规矩是：**只钉已经证明会坏的，不加投机性上界。**
+#
+# 已钉的两个不是破例，它们恰好符合这条：
+#   · mcp  —— 代码 `from mcp.server.fastmcp import FastMCP`，import 的是**内部子模块**，
+#             不是公开 API。mcp 2.0.0 把它挪走了。
+#   · ruff —— 依赖它的**默认规则集**，而默认值是工具方随时会改的东西。0.16.0 放宽了默认集，
+#             没人碰过的代码冒出 205 个问题。（在下面 optional-dependencies 的 dev 里）
+#
+# 两者的共同点**不是「框架大」，是「依赖了比公开契约更深的东西」**。这才是能预测会不会坏的信号。
+# 按这个标准，下面九个（anthropic/openai/fastapi/uvicorn/pillow/pydantic/pydantic-settings/
+# python-dotenv/httpx/langgraph）用的都是公开稳定的 API，**一个都不该钉**。
+#
+# 下次再红怎么办：就下次再钉。一次 CI 红 + 两行改动 ≈ 10 分钟，比给未来每个用户设一道墙便宜。
+# ⚠️ 而且那次红是**有信息量的**——它告诉你上游改了接口。提前压掉这个信号，你只会更晚知道。
+#
+# 如果哪天觉得被打断得太烦：正确做法**不是往这里加上界**，而是给 CI 单独加一个约束文件
+# （CI 装固定版本、发布出去的包照样宽松）。代价是要维护它，且会**推迟**你发现上游变化。
+# 见 ROADMAP R10。
 dependencies = [
     "anthropic>=0.69",
     "openai>=1.0",
