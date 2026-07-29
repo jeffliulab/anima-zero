@@ -115,6 +115,26 @@ ships was verified by reading the page itself, not by trusting the timestamp.
 Found by installing 1.1.0 from PyPI and noticing it claimed a build time six hours after the
 actual build.
 
+### R8 · The Japanese catalogue has not been read by a native speaker
+
+231 entries, translated by the maintainer with the help of an independent review that found
+22 real defects — collapsed terminology, an invented compound, two sentences that lost a noun
+in translation, and four sidebar labels long enough to be truncated. Those are fixed.
+
+What is not fixed is that **nobody who speaks Japanese has read it**. The review was another
+model, not a person. Terminology is at least consistent (world = ワールド, guidance = ガイダンス,
+ground truth = 真値, approve = 承認) and every placeholder is intact, which is what makes it
+usable as a first draft — but "usable as a first draft" is the claim, not "correct".
+
+### R9 · Two pages have no language switcher
+
+`/awi` and `/session-logs` render as full pages without the sidebar, and the switcher lives in
+the sidebar. Opened directly, they inherit whatever language is in `localStorage` and offer no
+way to change it. Reached from the main app, which is the normal path, they are fine.
+
+Not fixed because the honest options are both larger than the problem: put the switcher in a
+layout both routes share, or accept that those two routes are secondary surfaces.
+
 ## Not planned
 
 Saying no is part of a roadmap.
