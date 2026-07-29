@@ -128,9 +128,10 @@ export default function SensingArea({
                 <div className="text-3xl">🔌</div>
                 <div className="text-sm font-medium text-amber-400">{t("Not connected to world “{name}”", { name: worldName ?? "" })}</div>
                 <div className="max-w-xs text-xs leading-relaxed text-neutral-400">
-                  {t("No video from this world. Make sure its process is running (see")}{" "}
-                  <code className="rounded bg-neutral-800 px-1">{t("the run-commands doc")}</code>
-                  {t(") and then retry below.")}
+                  {/* ⛔ 整句一个 key。上一版把它切成三段（"…(see" + <code> + ") and then retry below."），
+                      日语拼出来是病句：句子已经结束又接了半句，还读成"启动那份文档"。
+                      各语言语序不同，碎片拼不回去——代价是失去 <code> 排版，换它真的能被翻译。 */}
+                  {t("No video from this world. Make sure the world process is running (see the run-commands doc), then press retry below.")}
                 </div>
                 <button
                   onClick={() => setNonce((n) => n + 1)}

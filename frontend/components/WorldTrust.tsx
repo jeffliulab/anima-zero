@@ -113,7 +113,9 @@ export function WorldTrust({ name, state, onApproved }: {
 
           <div>
             <div className="text-xs font-medium text-neutral-300">
-              {t("Its guidance")}（{t("goes into the brain’s system prompt")}，{manifest.guidance.length} {t("characters")}）
+              {t("Its guidance")}{" "}
+              {/* ⚠️ 标点也别写死：上一版这里是中文全角的「（」「，」「）」，于是英文和日文界面里也照样冒出中文标点。 */}
+              {t("(goes into the brain’s system prompt, {n} characters)", { n: manifest.guidance.length })}
             </div>
             {/* 全文，不折叠、不摘要——见本文件顶部的说明。 */}
             <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded border border-neutral-800 bg-neutral-950 p-2 text-[11px] leading-relaxed text-neutral-400">
