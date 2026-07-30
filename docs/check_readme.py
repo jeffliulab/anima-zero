@@ -30,6 +30,8 @@ LANG_DIRS = {
     "en": "",  # 英文版留在仓根：GitHub 靠根目录的 CODE_OF_CONDUCT / CONTRIBUTING / SECURITY 点亮「社区标准」
     "zh": "docs/i18n/zh",
     "ja": "docs/i18n/ja",
+    "fr": "docs/i18n/fr",
+    "es": "docs/i18n/es",
 }
 
 # 每种语言都该有的六份根文档

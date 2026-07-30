@@ -61,6 +61,8 @@ CHANGELOGS = [
     Path("CHANGELOG.md"),
     Path("docs/i18n/zh/CHANGELOG.md"),
     Path("docs/i18n/ja/CHANGELOG.md"),
+    Path("docs/i18n/fr/CHANGELOG.md"),
+    Path("docs/i18n/es/CHANGELOG.md"),
 ]
 
 

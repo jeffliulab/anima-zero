@@ -3,6 +3,8 @@
 <a href="../../../CONTRIBUTING.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
 <a href="../zh/CONTRIBUTING.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
 <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/%E8%A8%80%E8%AA%9E-%E6%97%A5%E6%9C%AC%E8%AA%9E-bf3989?style=flat-square" alt="日本語"></a>
+<a href="../fr/CONTRIBUTING.md"><img src="https://img.shields.io/badge/Langue-Fran%C3%A7ais-8250df?style=flat-square" alt="Français"></a>
+<a href="../es/CONTRIBUTING.md"><img src="https://img.shields.io/badge/Idioma-Espa%C3%B1ol-1a7f37?style=flat-square" alt="Español"></a>
 
 > ANIMA Zero は**公開された研究用プロトタイプ**です。ポートフォリオ兼教材で、MIT ライセンス
 > （[LICENSE](../../../LICENSE) を参照）。基本的にはメンテナーが一人で進めていますが、
@@ -70,7 +72,8 @@ CI が push のたびに実行します。
 | 何を | 言語 |
 |---|---|
 | **モデル**が読むテキスト——システムプロンプト、ツールの説明、ワールドのガイダンス | **英語のみ。** 理由は `src/prompts.py` を参照 |
-| **人**が読むテキスト——UI 文言、ドキュメント、README | 英語・中国語・日本語をそろえて維持 |
+| **人**が読む UI 文言 | 英語・中国語・日本語をそろえて維持 |
+| **人**が読むドキュメント——README、本ファイル、SECURITY、ROADMAP | 上の 3 言語に加えてフランス語・スペイン語。`docs/i18n/` 配下 |
 | 公開 API の docstring——`core/awi.py`、各 `awi_mcp.py`、モジュール冒頭 | 英語と中国語 |
 | なぜそうなっているかを説明する内部コメント | **中国語。そしてそれは意図的** |
 

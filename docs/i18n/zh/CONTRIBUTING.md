@@ -3,6 +3,8 @@
 <a href="../../../CONTRIBUTING.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
 <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
 <a href="../ja/CONTRIBUTING.md"><img src="https://img.shields.io/badge/%E8%A8%80%E8%AA%9E-%E6%97%A5%E6%9C%AC%E8%AA%9E-bf3989?style=flat-square" alt="日本語"></a>
+<a href="../fr/CONTRIBUTING.md"><img src="https://img.shields.io/badge/Langue-Fran%C3%A7ais-8250df?style=flat-square" alt="Français"></a>
+<a href="../es/CONTRIBUTING.md"><img src="https://img.shields.io/badge/Idioma-Espa%C3%B1ol-1a7f37?style=flat-square" alt="Español"></a>
 
 > ANIMA Zero 是一个**开源研究原型**(求职展示 + 教学用,MIT,见 [LICENSE](../../../LICENSE))。它是一份个人作品集项目,主要由维护者推进;
 > 但欢迎你提 issue、给反馈、或提交小的修复 / 文档改进。参与前请先读 [`README.md`](README.md)(顶层架构)和
@@ -54,7 +56,8 @@ clone 时记得 `git clone --recursive` 或事后 `git submodule update --init`�
 | 什么 | 语言 |
 |---|---|
 | **模型**读的——系统提示词、工具描述、世界说明书 | **只有英文。**理由见 `src/prompts.py` |
-| **人**读的——界面文案、文档、README | 中英日三份，保持同步 |
+| **人**读的界面文案 | 中英日三份，保持同步 |
+| **人**读的文档——README、本文件、SECURITY、ROADMAP | 上面三种再加法语、西班牙语，都在 `docs/i18n/` 下 |
 | 公开 API 的 docstring——`core/awi.py`、各 `awi_mcp.py`、模块头 | 中英两份 |
 | 解释「为什么这么写」的内部注释 | **中文，而且这是有意的** |
 

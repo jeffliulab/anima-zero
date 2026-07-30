@@ -3,6 +3,8 @@
 <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
 <a href="docs/i18n/zh/CONTRIBUTING.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
 <a href="docs/i18n/ja/CONTRIBUTING.md"><img src="https://img.shields.io/badge/%E8%A8%80%E8%AA%9E-%E6%97%A5%E6%9C%AC%E8%AA%9E-bf3989?style=flat-square" alt="日本語"></a>
+<a href="docs/i18n/fr/CONTRIBUTING.md"><img src="https://img.shields.io/badge/Langue-Fran%C3%A7ais-8250df?style=flat-square" alt="Français"></a>
+<a href="docs/i18n/es/CONTRIBUTING.md"><img src="https://img.shields.io/badge/Idioma-Espa%C3%B1ol-1a7f37?style=flat-square" alt="Español"></a>
 
 > ANIMA Zero is an **open research prototype** — a portfolio and teaching project, MIT
 > licensed (see [LICENSE](LICENSE)). It is mostly moved forward by its maintainer, but
@@ -71,7 +73,8 @@ The split is by **audience**, and it is deliberate:
 | What | Language |
 |---|---|
 | Text a **model** reads — system prompt, tool descriptions, a world's guidance | **English only.** See `src/prompts.py` for why |
-| Text a **person** reads — UI strings, docs, README | English, Chinese and Japanese, kept in step |
+| UI strings a **person** reads | English, Chinese and Japanese, kept in step |
+| Documents a **person** reads — README, this file, SECURITY, ROADMAP | Those three plus French and Spanish, in `docs/i18n/` |
 | Public API docstrings — `core/awi.py`, each `awi_mcp.py`, module headers | English and Chinese |
 | Internal comments explaining why something is the way it is | **Chinese, and that is on purpose** |
 
