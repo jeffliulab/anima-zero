@@ -42,7 +42,7 @@ SHOTS = {
 }
 
 # 语言 → (Chrome 的 --lang, 文件名后缀)。界面首次访问跟随浏览器语言,所以用它就能切。
-LANGS = {"en": ("en-US", "-en"), "zh": ("zh-CN", "-zh")}
+LANGS = {"en": ("en-US", "-en"), "zh": ("zh-CN", "-zh"), "ja": ("ja-JP", "-ja")}
 
 LIVE_SAY = "去客厅"          # 跑一轮真对话用的指令(短、稳定、画面有内容)
 LIVE_BRAIN = "gpt-5.5"

@@ -1,11 +1,8 @@
-<div align="center">
-
-<a href="CODE_OF_CONDUCT.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
-<a href="CODE_OF_CONDUCT_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
-
-</div>
-
 # 行为准则 / Code of Conduct
+
+<a href="../../../CODE_OF_CONDUCT.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
+<a href="CODE_OF_CONDUCT.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
+<a href="../ja/CODE_OF_CONDUCT.md"><img src="https://img.shields.io/badge/%E8%A8%80%E8%AA%9E-%E6%97%A5%E6%9C%AC%E8%AA%9E-bf3989?style=flat-square" alt="日本語"></a>
 
 > 本准则改编自 [Contributor Covenant](https://www.contributor-covenant.org) v2.1。
 
@@ -38,7 +35,7 @@
 ## 举报
 
 如遇辱骂、骚扰或其他不可接受的行为,请通过 GitHub issue 联系项目维护者,或邮件联系(邮箱见
-[`pyproject.toml`](pyproject.toml) 的 `authors`)。所有投诉都会被及时、公正地审阅与处理;维护者有义务为
+[`pyproject.toml`](../../../pyproject.toml) 的 `authors`)。所有投诉都会被及时、公正地审阅与处理;维护者有义务为
 举报者保密。
 
 ---

@@ -1,11 +1,7 @@
-<div align="center">
+# 怎么给 ANIMA 接一个新世界
 
 <a href="README.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
 <a href="README_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
-
-</div>
-
-# 怎么给 ANIMA 接一个新世界
 
 一个「世界」是一个**独立进程**，自己起一个 HTTP 服务。它和 ANIMA 之间有**两条完全不同的线**，
 接世界时最容易出错的地方就是**把东西挂错了线**。

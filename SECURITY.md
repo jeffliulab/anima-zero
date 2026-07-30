@@ -1,11 +1,8 @@
-<div align="center">
+# Security
 
 <a href="SECURITY.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
-<a href="SECURITY_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
-
-</div>
-
-# Security
+<a href="docs/i18n/zh/SECURITY.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
+<a href="docs/i18n/ja/SECURITY.md"><img src="https://img.shields.io/badge/%E8%A8%80%E8%AA%9E-%E6%97%A5%E6%9C%AC%E8%AA%9E-bf3989?style=flat-square" alt="日本語"></a>
 
 > ANIMA Zero is an **open research prototype**, built as a portfolio and teaching project.
 > What follows is an honest account of what it does and does not protect against.

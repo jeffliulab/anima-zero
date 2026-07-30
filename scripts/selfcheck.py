@@ -57,7 +57,11 @@ VERSION_FILE = Path("src/_version.py")
 # how a guard stops guarding while staying green.
 # ⛔ 这是一个「全集」：**每一份** CHANGELOG，不是只有英文那份。加出第二份文件的那一刻，
 # 一个只读第一份的守卫就会让另一份静默漂移——守卫正是这样一边失效一边保持绿色的。
-CHANGELOGS = [Path("CHANGELOG.md"), Path("CHANGELOG_zh.md")]
+CHANGELOGS = [
+    Path("CHANGELOG.md"),
+    Path("docs/i18n/zh/CHANGELOG.md"),
+    Path("docs/i18n/ja/CHANGELOG.md"),
+]
 
 
 def _fail(check: str, detail: str) -> str:

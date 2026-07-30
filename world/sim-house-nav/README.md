@@ -1,11 +1,7 @@
-<div align="center">
+# sim-house-nav — a robot finding its way around a house by sight
 
 <a href="README.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
 <a href="README_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
-
-</div>
-
-# sim-house-nav — a robot finding its way around a house by sight
 
 A robot stands in a house — a **Go2 quadruped** or a **G1 humanoid**, switchable — with one
 forward-facing camera on its head. ANIMA sees the world through that camera, works out for

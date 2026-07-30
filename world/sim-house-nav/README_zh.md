@@ -1,11 +1,7 @@
-<div align="center">
+# sim-house-nav —— 机器人在住宅里靠视觉导航
 
 <a href="README.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
 <a href="README_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
-
-</div>
-
-# sim-house-nav —— 机器人在住宅里靠视觉导航
 
 一套住宅里站着一台机器人（**四足机器狗 Go2** 或**人形 G1**，可切换），头上一只前视相机。
 ANIMA 通过这只相机看世界，自己判断身处哪个房间、往哪走，用三个原语指挥它。

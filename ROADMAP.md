@@ -1,11 +1,8 @@
-<div align="center">
+# Roadmap
 
 <a href="ROADMAP.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
-<a href="ROADMAP_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
-
-</div>
-
-# Roadmap
+<a href="docs/i18n/zh/ROADMAP.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
+<a href="docs/i18n/ja/ROADMAP.md"><img src="https://img.shields.io/badge/%E8%A8%80%E8%AA%9E-%E6%97%A5%E6%9C%AC%E8%AA%9E-bf3989?style=flat-square" alt="日本語"></a>
 
 This is not a wish list. It is the mirror of what the CHANGELOG already admits does not
 work, plus the debts taken on deliberately, each with a number so it can be pointed at.
@@ -115,13 +112,15 @@ ships was verified by reading the page itself, not by trusting the timestamp.
 Found by installing 1.1.0 from PyPI and noticing it claimed a build time six hours after the
 actual build.
 
-### R8 · The Japanese catalogue has not been read by a native speaker
+### R8 · The Japanese has not been read by a native speaker
 
-231 entries, translated by the maintainer with the help of an independent review that found
-22 real defects — collapsed terminology, an invented compound, two sentences that lost a noun
-in translation, and four sidebar labels long enough to be truncated. Those are fixed.
+231 interface entries, translated by the maintainer with the help of an independent review that
+found 22 real defects — collapsed terminology, an invented compound, two sentences that lost a
+noun in translation, and four sidebar labels long enough to be truncated. Those are fixed. The
+six root documents under `docs/i18n/ja/` came afterwards, from the same glossary and by the same
+method, and carry the same caveat.
 
-What is not fixed is that **nobody who speaks Japanese has read it**. The review was another
+What is not fixed is that **nobody who speaks Japanese has read any of it**. The review was another
 model, not a person. Terminology is at least consistent (world = ワールド, guidance = ガイダンス,
 ground truth = 真値, approve = 承認) and every placeholder is intact, which is what makes it
 usable as a first draft — but "usable as a first draft" is the claim, not "correct".

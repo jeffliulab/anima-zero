@@ -1,10 +1,3 @@
-<div align="center">
-
-<a href="README.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
-<a href="README_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
-
-</div>
-
 # ANIMA Zero
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org)
@@ -12,6 +5,10 @@
 [![MuJoCo](https://img.shields.io/badge/sim-MuJoCo-orange.svg)](https://mujoco.org)
 [![Version](https://img.shields.io/github/v/tag/jeffliulab/anima-zero?label=version&color=lightgrey)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+<a href="README.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
+<a href="docs/i18n/zh/README.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
+<a href="docs/i18n/ja/README.md"><img src="https://img.shields.io/badge/%E8%A8%80%E8%AA%9E-%E6%97%A5%E6%9C%AC%E8%AA%9E-bf3989?style=flat-square" alt="日本語"></a>
 
 ## Overview
 
@@ -24,9 +21,12 @@ walking until it sees the room you asked for. The robot walks with a learned gai
 really step; nothing teleports.
 
 <div align="center">
+<img src="docs/images/nav-g1.gif" alt="ANIMA driving a humanoid through a house" width="820">
+<br>
 <img src="docs/images/nav-go2.gif" alt="ANIMA driving a quadruped through a house" width="820">
 <br>
-<sub>Left: the only input ANIMA gets. Right: what actually happens, which ANIMA never sees.</sub>
+<sub>One brain, two bodies: a G1 humanoid above, a Go2 quadruped below.
+In each clip the left half is the only input ANIMA gets; the right half is what actually happens, which it never sees.</sub>
 </div>
 
 ### Why "Zero"?

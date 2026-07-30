@@ -1,11 +1,8 @@
-<div align="center">
-
-<a href="ROADMAP.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
-<a href="ROADMAP_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
-
-</div>
-
 # 路线图
+
+<a href="../../../ROADMAP.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
+<a href="ROADMAP.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
+<a href="../ja/ROADMAP.md"><img src="https://img.shields.io/badge/%E8%A8%80%E8%AA%9E-%E6%97%A5%E6%9C%AC%E8%AA%9E-bf3989?style=flat-square" alt="日本語"></a>
 
 这不是愿望清单。它是 **CHANGELOG 里已经承认「不工作」的那些东西的镜像**，加上有意欠下的账，
 每一条都有编号，好让人能指着它说话。
@@ -96,12 +93,13 @@ v1.1 的语言收口把**模型读的一切**、以及 CLI 与网页显示的一
 
 是从 PyPI 装了 1.1.0、注意到它报出的构建时间比真实构建晚六小时，才发现的。
 
-### R8 · 日语词条没有母语者读过
+### R8 · 日语部分没有母语者读过
 
-231 条，维护者翻译，并经一次独立审阅——那次审阅挑出 22 个真缺陷：术语被并成一个词、一个生造词、
-两句在翻译中把名词译丢了、以及四个长到会被截断的侧栏标签。这些都修了。
+界面词条 231 条，维护者翻译，并经一次独立审阅——那次审阅挑出 22 个真缺陷：术语被并成一个词、
+一个生造词、两句在翻译中把名词译丢了、以及四个长到会被截断的侧栏标签。这些都修了。
+`docs/i18n/ja/` 下那六份根文档是之后补的，用的是同一份术语表、同一套做法，也带着同一条免责。
 
-**没修的是：没有任何一个会日语的人读过它。** 那次审阅是另一个模型，不是人。术语至少是一致的
+**没修的是：没有任何一个会日语的人读过其中任何一部分。** 那次审阅是另一个模型，不是人。术语至少是一致的
 （world = ワールド、guidance = ガイダンス、ground truth = 真値、approve = 承認），占位符一个不缺，
 这让它**够格当初版**——但"够格当初版"才是这里的主张，不是"它是对的"。
 

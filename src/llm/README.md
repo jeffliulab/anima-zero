@@ -1,11 +1,7 @@
-<div align="center">
+# Adding a language brain to ANIMA
 
 <a href="README.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
 <a href="README_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
-
-</div>
-
-# Adding a language brain to ANIMA
 
 This directory (`src/llm/`) is ANIMA's **brain layer**: it keeps *which LLM* away from the
 orchestrator. The orchestrator knows one interface — the `LLM` protocol — and not whether

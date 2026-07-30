@@ -1,15 +1,12 @@
-<div align="center">
-
-<a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
-<a href="CONTRIBUTING_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
-
-</div>
-
 # 参与贡献 / Contributing
 
-> ANIMA Zero 是一个**开源研究原型**(求职展示 + 教学用,MIT,见 [LICENSE](LICENSE))。它是一份个人作品集项目,主要由维护者推进;
+<a href="../../../CONTRIBUTING.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
+<a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
+<a href="../ja/CONTRIBUTING.md"><img src="https://img.shields.io/badge/%E8%A8%80%E8%AA%9E-%E6%97%A5%E6%9C%AC%E8%AA%9E-bf3989?style=flat-square" alt="日本語"></a>
+
+> ANIMA Zero 是一个**开源研究原型**(求职展示 + 教学用,MIT,见 [LICENSE](../../../LICENSE))。它是一份个人作品集项目,主要由维护者推进;
 > 但欢迎你提 issue、给反馈、或提交小的修复 / 文档改进。参与前请先读 [`README.md`](README.md)(顶层架构)和
-> [行为准则](CODE_OF_CONDUCT_zh.md)。
+> [行为准则](CODE_OF_CONDUCT.md)。
 
 ## 先搞清楚这是什么
 
@@ -20,16 +17,16 @@ ANIMA = 具身机器人的「大脑」(System 2,只想不动);它隔着一套 **
 ## 本地跑起来
 
 按 README「快速上手」即可,三件一起跑:**世界(`world/sim-desk`)· ANIMA 后端 · 网页**。配置(API key /
-本地 Ollama 地址 / 世界清单)见 [`.env.example`](.env.example)。注意 `world/sim-desk` 是 **git 子模块**,
+本地 Ollama 地址 / 世界清单)见 [`.env.example`](../../../.env.example)。注意 `world/sim-desk` 是 **git 子模块**,
 clone 时记得 `git clone --recursive` 或事后 `git submodule update --init`。
 
 ## 想加点东西?
 
 - **加一个新世界**:世界就是一个标准 **MCP server**(挂在 `/mcp`),用三类原语说话——**Tools**(能力)、
   **Resources**(感知,`anima://observation`)、**Prompts**(说明书 `guidance`);在 `.env` 的
-  `ANIMA_WORLDS` 里加一行 URL 即可被 ANIMA 连上。框架一行都不用改。参考 [`world/sim-desk`](world/sim-desk)
+  `ANIMA_WORLDS` 里加一行 URL 即可被 ANIMA 连上。框架一行都不用改。参考 [`world/sim-desk`](../../../world/sim-desk)
   与 README「怎么接入一个世界」一节。
-- **加一个新大脑(LLM)**:见 [`src/llm/README_zh.md`](src/llm/README_zh.md);多数模型走 OpenAI 兼容口,登记到
+- **加一个新大脑(LLM)**:见 [`src/llm/README_zh.md`](../../../src/llm/README_zh.md);多数模型走 OpenAI 兼容口,登记到
   `src/llm/factory.py` 那张表即可。
 - **工具(tool)怎么写**:工具是世界在 MCP `tools/list` 里声明的(名字 + 3~4 句描述写清「何时调 / 何时别调」+
   JSON Schema 参数 + kind),框架以**原生 function-calling** 转给大脑——不要在提示词里手写 JSON。
@@ -47,7 +44,7 @@ clone 时记得 `git clone --recursive` 或事后 `git submodule update --init`�
 - **占位要登记，不许埋。** 非留不可的话，在 PR 里说出来。
 - **声称有的测试和能力必须真有。** 注释说"这个有测试守着"而其实没有，和造假数据是同一种谎。
 - 代码风格跟着周围现有代码走；改动尽量小而聚焦，一个 PR 只做一件事。
-- 改了行为请顺手更新对应的 README / **两份 CHANGELOG**（`CHANGELOG.md` 与 `CHANGELOG_zh.md`）。
+- 改了行为请顺手更新对应的 README / **每一份 CHANGELOG**（英文那份在仓根，中日两份在 `docs/i18n/` 下）。
 - **不要**提交密钥、`.env`、本地记忆（`memory/`）、日志（`logs/`）——它们都在 `.gitignore` 里。
 
 ### 语言
@@ -57,12 +54,12 @@ clone 时记得 `git clone --recursive` 或事后 `git submodule update --init`�
 | 什么 | 语言 |
 |---|---|
 | **模型**读的——系统提示词、工具描述、世界说明书 | **只有英文。**理由见 `src/prompts.py` |
-| **人**读的——界面文案、文档、README | 两份，保持同步 |
-| 公开 API 的 docstring——`core/awi.py`、各 `awi_mcp.py`、模块头 | 两份 |
+| **人**读的——界面文案、文档、README | 中英日三份，保持同步 |
+| 公开 API 的 docstring——`core/awi.py`、各 `awi_mcp.py`、模块头 | 中英两份 |
 | 解释「为什么这么写」的内部注释 | **中文，而且这是有意的** |
 
 最后一行是一个**决定**，不是遗漏。那些注释是维护者的思考痕迹，翻译会把它们身上有价值的东西抹平。
-它们不妨碍任何人**使用**这个项目；而**扩展**它所需要的东西——契约、说明书、文档——都是双语的。
+它们不妨碍任何人**使用**这个项目；而**扩展**它所需要的东西——契约、说明书、文档——都有多语版本。
 
 ### 提交信息
 
@@ -87,20 +84,20 @@ type: 英文摘要行
 - [ ] `ruff check .` 过
 - [ ] `python scripts/selfcheck.py` 过
 - [ ] 动过 README 的话 `python docs/check_readme.py` 过
-- [ ] 行为有变 → **两份** `CHANGELOG` 与相关 README 都更新了
+- [ ] 行为有变 → **每一份** `CHANGELOG`（英文在仓根，中日在 `docs/i18n/` 下）与相关 README 都更新了
 - [ ] **你加的守卫，亲眼看它红一次。** 故意把东西弄坏、看着测试变红、再放回去。
       一条没人见过它失败的守卫，就是一条没人知道它有没有用的守卫——这个项目已经抓到过**四条**
       悄悄停止守卫的守卫。
 
 ## 真机
 
-⚠️ 涉及真机的代码和命令有物理风险，**跑它的人必须在机器现场**。见 [`SECURITY_zh.md`](SECURITY_zh.md)。
+⚠️ 涉及真机的代码和命令有物理风险，**跑它的人必须在机器现场**。见 [`SECURITY.md`](SECURITY.md)。
 
 ## 提问 / 报告问题
 
-开一个 issue 即可；安全 / 风险相关见 [`SECURITY_zh.md`](SECURITY_zh.md)，尤其是第 2 节「接一个世界是一次信任决定」。也可邮件联系维护者(邮箱见
-[`pyproject.toml`](pyproject.toml) 的 `authors`)。
+开一个 issue 即可；安全 / 风险相关见 [`SECURITY.md`](SECURITY.md)，尤其是第 2 节「接一个世界是一次信任决定」。也可邮件联系维护者(邮箱见
+[`pyproject.toml`](../../../pyproject.toml) 的 `authors`)。
 
-许可证:本项目以 [MIT](LICENSE) 发布。提交贡献即表示你同意你的贡献同样以 MIT 提供。
+许可证:本项目以 [MIT](../../../LICENSE) 发布。提交贡献即表示你同意你的贡献同样以 MIT 提供。
 MIT 本身就允许闭源商用,所以不需要额外的贡献者协议,也没有商业双授权那一套。
-许可证沿革(哪个版本受哪套条款约束)见 [NOTICE](NOTICE)。
+许可证沿革(哪个版本受哪套条款约束)见 [NOTICE](../../../NOTICE)。

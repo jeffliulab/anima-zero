@@ -1,11 +1,7 @@
-<div align="center">
+# AWI v1 —— Anima World Interface（大脑↔世界接口标准）
 
 <a href="awi-spec-v1.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
 <a href="awi-spec-v1_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
-
-</div>
-
-# AWI v1 —— Anima World Interface（大脑↔世界接口标准）
 
 **状态**：稳定。**版本**：1。**自查命令**：`anima conformance <地址>`。
 
@@ -258,5 +254,5 @@ anima conformance http://localhost:8100
 ---
 
 **另见**：[`world/README_zh.md`](../world/README_zh.md) 一步步搭一个世界 ·
-[`SECURITY_zh.md`](../SECURITY_zh.md) 第 2 节从操作者一侧看信任模型 ·
-[`ROADMAP_zh.md`](../ROADMAP_zh.md) 已知不工作的东西。
+[`SECURITY.md`](i18n/zh/SECURITY.md) 第 2 节从操作者一侧看信任模型 ·
+[`ROADMAP.md`](i18n/zh/ROADMAP.md) 已知不工作的东西。

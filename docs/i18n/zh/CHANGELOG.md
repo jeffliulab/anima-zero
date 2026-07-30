@@ -1,11 +1,8 @@
-<div align="center">
-
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
-<a href="CHANGELOG_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
-
-</div>
-
 # Anima Zero Changelog
+
+<a href="../../../CHANGELOG.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
+<a href="../ja/CHANGELOG.md"><img src="https://img.shields.io/badge/%E8%A8%80%E8%AA%9E-%E6%97%A5%E6%9C%AC%E8%AA%9E-bf3989?style=flat-square" alt="日本語"></a>
 
 ANIMA Zero 版本记录。**版本记录要点：保持简洁，每版只说重点，比如具体改了什么。**（格式参考 [Keep a Changelog](https://keepachangelog.com)）
 
@@ -81,7 +78,7 @@ Features:
 4. **协议变更**：全仓由 Apache-2.0 改为 **AGPL-3.0 + 商业双授权**。AGPL-3.0 的关键在于**通过网络提供服务**给他人使用时也须按 AGPL 开放对应源码；不愿承担此义务的闭源商业集成可联系维护者（jeff.pang.liu@gmail.com）另购商业许可。与 GPL-3 的 python-chess 兼容；≤v0.6.0 的历史版本仍按原 Apache-2.0 可用。
    > ⚠️ **本条已被 v1.1 取代**：全仓自 v1.1 起改为 **MIT**，商业双授权随之取消（MIT 本身就允许闭源商用）。
    > 促成这次改动的是把 python-chess 换成了自带的 MIT 规则库。v0.7.0–v1.0.1 这些版本仍按发布时的
-   > AGPL-3.0 条款。完整的许可证沿革见 [NOTICE](NOTICE)。
+   > AGPL-3.0 条款。完整的许可证沿革见 [NOTICE](../../../NOTICE)。
 
 ## [0.6.0] — 2026-07-03
 

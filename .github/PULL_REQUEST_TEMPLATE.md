@@ -19,8 +19,8 @@ English first, then Chinese — that is the convention for commits and PRs in th
 - [ ] `pytest -q` passes. / 测试通过。
 - [ ] `ruff check .` passes. / 代码风格通过。
 - [ ] `python scripts/selfcheck.py` passes. / 项目自检通过。
-- [ ] If behaviour changed, both `CHANGELOG.md` and `CHANGELOG_zh.md` and the relevant README are updated.
-      / 行为有变则更新了 CHANGELOG 和相应 README。
+- [ ] If behaviour changed, every CHANGELOG (English + `docs/i18n/*/`) and the relevant README are updated.
+      / 行为有变则更新了每一份 CHANGELOG 和相应 README。
 
 ### If you touched the orchestrator / 如果你动了主循环
 

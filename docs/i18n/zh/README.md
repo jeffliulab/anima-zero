@@ -1,17 +1,14 @@
-<div align="center">
-
-<a href="README.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
-<a href="README_zh.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
-
-</div>
-
 # ANIMA Zero
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org)
 [![MCP](https://img.shields.io/badge/protocol-MCP-6f42c1.svg)](https://modelcontextprotocol.io)
 [![MuJoCo](https://img.shields.io/badge/sim-MuJoCo-orange.svg)](https://mujoco.org)
-[![Version](https://img.shields.io/github/v/tag/jeffliulab/anima-zero?label=version&color=lightgrey)](CHANGELOG_zh.md)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Version](https://img.shields.io/github/v/tag/jeffliulab/anima-zero?label=version&color=lightgrey)](CHANGELOG.md)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](../../../LICENSE)
+
+<a href="../../../README.md"><img src="https://img.shields.io/badge/Language-English-2f81f7?style=flat-square" alt="English"></a>
+<a href="README.md"><img src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-e67e22?style=flat-square" alt="简体中文"></a>
+<a href="../ja/README.md"><img src="https://img.shields.io/badge/%E8%A8%80%E8%AA%9E-%E6%97%A5%E6%9C%AC%E8%AA%9E-bf3989?style=flat-square" alt="日本語"></a>
 
 ## 这是什么
 
@@ -22,9 +19,12 @@ ANIMA Zero 是一台具身机器人的脑。它只想、不动手：它决定做
 机器人是靠学出来的步态真的迈腿走的，没有任何瞬移。
 
 <div align="center">
-<img src="docs/images/nav-go2.gif" alt="ANIMA 指挥机器狗在住宅里导航" width="820">
+<img src="../../images/nav-g1.gif" alt="ANIMA 指挥人形机器人在住宅里导航" width="820">
 <br>
-<sub>左边是 ANIMA 唯一拿得到的输入，右边是实际发生的事，而它看不到右边。</sub>
+<img src="../../images/nav-go2.gif" alt="ANIMA 指挥机器狗在住宅里导航" width="820">
+<br>
+<sub>同一套大脑，两种身体：上面是 G1 人形，下面是 Go2 四足。
+每段片子的左半屏是 ANIMA 唯一拿得到的输入，右半屏是实际发生的事，而它看不到右半屏。</sub>
 </div>
 
 ### 为什么叫「Zero」
@@ -45,8 +45,8 @@ ANIMA Zero 是一台具身机器人的脑。它只想、不动手：它决定做
 - **看得见、叫得停**：每一步的画面、思考和工具调用都留痕，跑到一半也能中断。
 
 <div align="center">
-<img src="docs/images/eye-go2.png" alt="四足视角" width="400">
-<img src="docs/images/eye-g1.png" alt="人形视角" width="400">
+<img src="../../images/eye-go2.png" alt="四足视角" width="400">
+<img src="../../images/eye-g1.png" alt="人形视角" width="400">
 <br>
 <sub>同一间客厅，左边是四足看到的，右边是人形看到的。
 机器人能看见什么，决定了它能想出什么，所以场景是按真实做的，不为某一台机器定制。</sub>
@@ -59,7 +59,7 @@ ANIMA Zero 是一台具身机器人的脑。它只想、不动手：它决定做
 直接在世界自己的界面里拨弄它，这是两者确实分离的最好证明。
 
 <div align="center">
-<img src="docs/images/arch-overview.svg" alt="人、ANIMA 与世界，中间是 AWI" width="860">
+<img src="../../images/arch-overview.svg" alt="人、ANIMA 与世界，中间是 AWI" width="860">
 </div>
 
 底下那三个端点，真值、视频和探活，从不走 MCP，也从不进大脑。这条分离是刻意的：
@@ -70,7 +70,7 @@ ANIMA Zero 是一台具身机器人的脑。它只想、不动手：它决定做
 永远不碰关节角的原因。
 
 <div align="center">
-<img src="docs/images/command-journey.svg" alt="从一句话到关节力矩" width="860">
+<img src="../../images/command-journey.svg" alt="从一句话到关节力矩" width="860">
 </div>
 
 世界的汇报是如实的，不是好听的。学出来的步态并不严格跟住速度指令——转弯会飘、走路会不够，
@@ -144,7 +144,7 @@ anima world add myworld http://localhost:9000   # 先把它声明的东西摊开
 右边那栏是每一步的全过程：看到的画面、思考、调了什么工具、世界回了什么。
 
 <div align="center">
-<img src="docs/images/ui-chat-zh.png" alt="ANIMA 网页界面" width="880">
+<img src="../../images/ui-chat-zh.png" alt="ANIMA 网页界面" width="880">
 </div>
 
 想核实它说的是真的还是听着像真的，直接问世界。这个端点只给人验收，从不进感知：
@@ -160,10 +160,10 @@ curl -s localhost:8112/status
 
 | 世界 | 端口 | 是什么 |
 |---|---|---|
-| [sim-house-nav](world/sim-house-nav) | 8112 | 一套住宅加一台会走路的机器人，四足或人形 |
-| [sim-chess](world/sim-chess) | 8102 | 一副棋具，握着唯一真值，还能跟你对弈 |
-| [sim-desk](world/sim-desk) | 8100 | 一张桌子、一支笔、一块画布 |
-| [camera](world/camera) | 8104 | 真实摄像头，一个工具都没有，只能看不能动 |
+| [sim-house-nav](../../../world/sim-house-nav) | 8112 | 一套住宅加一台会走路的机器人，四足或人形 |
+| [sim-chess](../../../world/sim-chess) | 8102 | 一副棋具，握着唯一真值，还能跟你对弈 |
+| [sim-desk](../../../world/sim-desk) | 8100 | 一张桌子、一支笔、一块画布 |
+| [camera](../../../world/camera) | 8104 | 真实摄像头，一个工具都没有，只能看不能动 |
 
 ### 它到底做得怎么样
 
@@ -183,15 +183,15 @@ curl -s localhost:8112/status
 下一版要动的是判据，不是感知细节。
 
 走通的那些案例，含逐张画面核对，写在
-[world/sim-house-nav/实测记录.md](world/sim-house-nav/实测记录.md)。
+[world/sim-house-nav/实测记录.md](../../../world/sim-house-nav/实测记录.md)。
 
 ## 接你自己的世界
 
 实现一个标准 MCP server，提供上面那四条通道，把地址加进 `ANIMA_WORLDS`，大脑一行不改就能驱动它。
 最小的一份只有三个方法，`capabilities()`、`observe()`、`invoke()`，用每个世界都自带的 `awi_mcp.py`
-适配层包一下即可。照 [sim-desk](world/sim-desk) 抄最简单的，照 [sim-house-nav](world/sim-house-nav)
-抄最完整的，动手前先读 [world/README_zh.md](world/README_zh.md)。契约写在
-[docs/awi-spec-v1_zh.md](docs/awi-spec-v1_zh.md)，`anima conformance <地址>` 照它核一个世界。
+适配层包一下即可。照 [sim-desk](../../../world/sim-desk) 抄最简单的，照 [sim-house-nav](../../../world/sim-house-nav)
+抄最完整的，动手前先读 [world/README_zh.md](../../../world/README_zh.md)。契约写在
+[docs/awi-spec-v1_zh.md](../../awi-spec-v1_zh.md)，`anima conformance <地址>` 照它核一个世界。
 
 ## 致谢
 
