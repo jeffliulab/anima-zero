@@ -12,6 +12,9 @@
 <a href="../fr/README.md"><img src="https://img.shields.io/badge/Langue-Fran%C3%A7ais-8250df?style=flat-square" alt="Français"></a>
 <a href="../es/README.md"><img src="https://img.shields.io/badge/Idioma-Espa%C3%B1ol-1a7f37?style=flat-square" alt="Español"></a>
 
+> 🤖 **AI エージェントの方は、まず [AGENTS.md](../../../AGENTS.md) をお読みください** ——
+> 機械向けの入口です：レイヤの規則、どの事実がどこにあるか、そして各コマンド。
+
 ## 概要
 
 ANIMA Zero は具身ロボットのブレインです。考えるだけで、決して自分では動きません。

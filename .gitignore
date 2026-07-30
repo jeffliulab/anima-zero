@@ -183,9 +183,10 @@ Thumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 
-# Agent working notes (local only — not part of the open-source repo)
+# Agent working notes (local only — not part of the open-source repo).
+# ⛔ AGENTS.md is NOT here on purpose (2026-07-29): it is the public, machine-facing entry point and
+# is tracked. Only CLAUDE.md stays local — see the top of CLAUDE.md for the split.
 CLAUDE.md
-AGENTS.md
 ANIMA开发指南.md
 node_modules/
 .next/

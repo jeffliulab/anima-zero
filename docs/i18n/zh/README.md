@@ -12,6 +12,9 @@
 <a href="../fr/README.md"><img src="https://img.shields.io/badge/Langue-Fran%C3%A7ais-8250df?style=flat-square" alt="Français"></a>
 <a href="../es/README.md"><img src="https://img.shields.io/badge/Idioma-Espa%C3%B1ol-1a7f37?style=flat-square" alt="Español"></a>
 
+> 🤖 **如果你是 AI agent，请先读 [AGENTS.md](../../../AGENTS.md)** —— 那是面向机器的入口：
+> 分层规则、每个事实住在哪、以及各条命令。
+
 ## 这是什么
 
 ANIMA Zero 是一台具身机器人的脑。它只想、不动手：它决定做什么，身体决定怎么动。

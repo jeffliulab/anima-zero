@@ -12,6 +12,9 @@
 <a href="docs/i18n/fr/README.md"><img src="https://img.shields.io/badge/Langue-Fran%C3%A7ais-8250df?style=flat-square" alt="Français"></a>
 <a href="docs/i18n/es/README.md"><img src="https://img.shields.io/badge/Idioma-Espa%C3%B1ol-1a7f37?style=flat-square" alt="Español"></a>
 
+> 🤖 **If you are an AI agent, read [AGENTS.md](AGENTS.md) first** — the machine-facing entry point:
+> the layering rule, where each fact lives, and the commands.
+
 ## Overview
 
 ANIMA Zero is the brain of an embodied robot. It thinks but never moves: it decides *what to do*,

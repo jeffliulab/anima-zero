@@ -12,6 +12,9 @@
 <a href="../fr/README.md"><img src="https://img.shields.io/badge/Langue-Fran%C3%A7ais-8250df?style=flat-square" alt="Français"></a>
 <a href="README.md"><img src="https://img.shields.io/badge/Idioma-Espa%C3%B1ol-1a7f37?style=flat-square" alt="Español"></a>
 
+> 🤖 **Si eres un agente de IA, lee primero [AGENTS.md](../../../AGENTS.md)** — el punto de entrada
+> para máquinas: la regla de capas, dónde vive cada dato y los comandos.
+
 ## Visión general
 
 ANIMA Zero es el cerebro de un robot encarnado. Piensa pero nunca se mueve: decide *qué hacer*,
