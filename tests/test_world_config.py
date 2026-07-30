@@ -107,7 +107,7 @@ def test_awi_mcp_declares_config_resource_only_when_world_has_one():
     """世界侧适配层：实现了 config() 才多一条资源，没实现就整条通道不存在。"""
     import ast
     import pathlib
-    src = (pathlib.Path(__file__).resolve().parents[1] / "world" / "sim-desk" / "awi_mcp.py"
+    src = (pathlib.Path(__file__).resolve().parents[1] / "world" / "sim-chess" / "awi_mcp.py"
            ).read_text(encoding="utf-8")
     ast.parse(src)                       # 语法先过
     assert 'CONFIG_URI = "anima://config"' in src

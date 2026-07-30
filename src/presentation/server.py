@@ -1,7 +1,7 @@
 """ANIMA 展示层后端(通用外壳)。
 
 托管编排器,把前端接到它:给前端「当前世界的感知图」、转发聊天。展示层不认识桌面,只显示世界
-给的图。世界是**独立运行的程序**,anima 通过 URL 连它(sim-desk 默认在 :8100);换世界 = 换 URL。
+给的图。世界是**独立运行的程序**,anima 通过 URL 连它(sim-chess 默认在 :8102);换世界 = 换 URL。
 """
 from __future__ import annotations
 
@@ -421,7 +421,7 @@ def awi_overview() -> dict:
                 info["config"] = caps.config or {}
                 # status = 世界自身的真实状态(仅人看的调试台,走世界本地 /status,人的上帝视角),绝不给 ANIMA。
                 # 这跟 ANIMA 的 perceive 明确分开:sim-chess 的真值(局面/轮次/胜负)藏在 /status、绝不进 perceive。
-                # 没有 /status 的世界(如 sim-desk,它的 perceive 本就是真值)→ 回退到 perceive 的 state。
+                # 没有 /status 的世界(它的 perceive 本就是真值)→ 回退到 perceive 的 state。
                 truth = w.debug_state() if hasattr(w, "debug_state") else None
                 if truth is None:
                     truth = w.last_state() if hasattr(w, "last_state") else None

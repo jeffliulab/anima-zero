@@ -94,15 +94,17 @@ services/      棋类引擎顾问       frontend/  网页    eval/  记分卡
 
 ```bash
 uv tool install anima-zero     # 或者 pipx install，或者普通 pip
-anima demo
 ```
 
-它会起一个世界、接上一个大脑，然后让你直接跟它对话。**不需要 API key，不需要 node，不用再装别的。**
-它用的那个大脑不思考——只调一个工具、把结果报回来——因为 demo 的意义是让你看见那个循环，不是让你惊艳。
-配好 key 之后 `anima demo --brain gpt-5.4`，同一个循环换一个真会想的大脑。
+装上的只有大脑。**世界是独立的程序，wheel 里一个都不带**，所以下一步是去弄一个：
+clone 本仓就能拿到 [`world/`](../../../world/) 下的那几个，或者照
+[AWI 规范](../../awi-spec-v1.md)自己写一个。
+
+最快摸清门道的办法，是把这个仓交给一个 coding agent——Claude Code、Codex，你手边哪个都行——
+让它去读 [AGENTS.md](../../../AGENTS.md)，那份文件就是为这件事写的。它会陪你起一个世界，
+或者给你写一个新的。
 
 ```text
-anima demo                    一条命令，看它跑起来
 anima chat --world W          在终端里对话
 anima run --say "..."         跑一轮就退出，可脚本化
 anima serve                   起后端 API（网页连它）
@@ -142,7 +144,7 @@ anima world add myworld http://localhost:9000   # 先把它声明的东西摊开
 自己开发世界时每改一次都会触发，那时设 `ANIMA_TRUST_ALL=1`。
 这道防线**保护什么、不保护什么**，见 [SECURITY.md](SECURITY.md)。
 
-## 跑一遍 demo
+## 看它跑起来
 
 打开 `localhost:3000`，新建一个连 `sim-house-nav` 的会话，输入「去客厅」。
 中间那栏上面是机器人看到的画面，下面是只有你看得到的第三视角跟拍。
@@ -167,7 +169,6 @@ curl -s localhost:8112/status
 |---|---|---|
 | [sim-house-nav](../../../world/sim-house-nav) | 8112 | 一套住宅加一台会走路的机器人，四足或人形 |
 | [sim-chess](../../../world/sim-chess) | 8102 | 一副棋具，握着唯一真值，还能跟你对弈 |
-| [sim-desk](../../../world/sim-desk) | 8100 | 一张桌子、一支笔、一块画布 |
 | [camera](../../../world/camera) | 8104 | 真实摄像头，一个工具都没有，只能看不能动 |
 
 ### 它到底做得怎么样
@@ -194,8 +195,10 @@ curl -s localhost:8112/status
 
 实现一个标准 MCP server，提供上面那四条通道，把地址加进 `ANIMA_WORLDS`，大脑一行不改就能驱动它。
 最小的一份只有三个方法，`capabilities()`、`observe()`、`invoke()`，用每个世界都自带的 `awi_mcp.py`
-适配层包一下即可。照 [sim-desk](../../../world/sim-desk) 抄最简单的，照 [sim-house-nav](../../../world/sim-house-nav)
-抄最完整的，动手前先读 [world/README_zh.md](../../../world/README_zh.md)。契约写在
+适配层包一下即可。只能看的世界照 [camera](../../../world/camera) 抄，会动手的照
+[sim-chess](../../../world/sim-chess) 抄，最完整的看
+[sim-house-nav](../../../world/sim-house-nav)，动手前先读
+[world/README_zh.md](../../../world/README_zh.md)。契约写在
 [docs/awi-spec-v1_zh.md](../../awi-spec-v1_zh.md)，`anima conformance <地址>` 照它核一个世界。
 
 ## 致谢

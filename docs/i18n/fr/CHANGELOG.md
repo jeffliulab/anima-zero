@@ -9,6 +9,15 @@
 Notes de version d'ANIMA Zero. **À garder courtes : par version, seulement ce qui a réellement
 changé.** (Format inspiré de [Keep a Changelog](https://keepachangelog.com).)
 
+## [1.1.1] — 2026-07-30
+
+Main : le monde desk et `anima demo` ont disparu. Le monde livré dans le wheel existait pour que `pip install` mène quelque part ; il coûtait deux copies identiques au bit près, un sous-module git et un second desk dans chaque liste de mondes — plus qu'il ne valait.
+
+1. **Les deux mondes desk supprimés, et `anima demo` avec eux** : celui qui voyageait dans le wheel et le sous-module `sim-desk` à côté. ⚠️ **`pip install anima-zero` vous donne désormais le cerveau et aucun monde.** Un monde est un programme séparé : clonez ce dépôt pour ceux de `world/`, ou écrivez le vôtre selon la spécification AWI. Le cerveau factice est inchangé et reste sélectionnable.
+2. **Le README vous confie à un agent de code** : là où l'installation exhibait une démo en une commande, elle explique maintenant que l'étape suivante est d'obtenir un monde, et que le plus rapide est de donner le dépôt à Claude Code ou Codex et de le laisser lire `AGENTS.md`.
+3. **La conformité ne teste plus le monde que nous livrons par hasard** : le contrôle de bout en bout démarre désormais un **monde minimal écrit d'après la spécification dans le test lui-même** — huit cases, un outil, un vrai PNG — et décode cette image au lieu de croire le type mime déclaré. ⛔ Il échoue au lieu de se sauter quand la cible ne démarre pas.
+4. **Le dépôt n'a plus aucun sous-module**, `awi_mcp.py` passe de six copies identiques au bit près à quatre, et seule celle de soma-zero est désormais hors de ce dépôt.
+
 ## [1.1.0] — 2026-07-27
 
 L'essentiel : passer d'un dépôt de portfolio à un projet que d'autres peuvent installer,
@@ -38,6 +47,9 @@ Nouveautés :
    couplé à la construction de l'interface (`build_ui.py` avant `python -m build`), et
    `anima serve` affiche la date de construction de l'appli web — parce que **livrer un paquet
    avec une interface périmée est exactement le genre de chose que personne ne remarquerait.**
+
+   > ⚠️ **Remplacé en v1.1.1** : le monde desk intégré et `anima demo` ont été supprimés. La
+   > commande `anima`, l'appli web embarquée dans le wheel et le cerveau factice sont intacts.
 3. **⭐ Un monde est traité comme une partie distante non fiable.** La `guidance` d'un monde est
    jointe au **prompt système** du cerveau et ses descriptions d'outils deviennent la **liste
    d'outils** — le tout écrit par quelqu'un d'autre. Donc : le contenu d'un monde **n'atteint pas

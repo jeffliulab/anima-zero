@@ -140,10 +140,7 @@ version = { attr = "anima._version.__version__" }
 [tool.setuptools]
 package-dir = { "anima" = "src" }
 packages = ["anima", "anima.core", "anima.clients", "anima.session", "anima.llm",
-            "anima.presentation",
-            # 内置的演示世界随 wheel 分发——装完这个包之后得有个去处，
-            # 否则第一条命令就因为"你还没起一个世界"而失败。见 src/worlds/desk/world.py。
-            "anima.worlds", "anima.worlds.desk"]
+            "anima.presentation"]
 
 [tool.pytest.ini_options]
 cache_dir = ".cache/pytest"       # 把 .pytest_cache 收进 .cache/
@@ -154,9 +151,6 @@ pythonpath = ["."]                # 仓库根进 sys.path：services.boardgame_e
 line-length = 100
 target-version = "py311"
 cache-dir = ".cache/ruff"         # 把 .ruff_cache 收进 .cache/
-# Submodules are separate repositories with their own lint setup — you don't lint
-# someone else's repo from yours. / 子模块是独立的仓、有自己的 lint；不从本仓去管别人的仓。
-exclude = ["world/sim-desk"]
 
 [tool.ruff.lint]
 # ⛔ State the rule set instead of inheriting the tool's default-of-the-day.

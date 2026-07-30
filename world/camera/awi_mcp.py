@@ -64,7 +64,7 @@ def build_awi_mcp(world=None, *, guidance: str = "",
                   config_fn=None):
     """返回 (asgi_handler, lifespan)：挂到世界 FastAPI 的 /mcp，并用作 app 的 lifespan。
 
-    默认从 `world` 取 capabilities()/observe()/invoke()；若世界的动作方法名不同（如 sim-desk 是 step），
+    默认从 `world` 取 capabilities()/observe()/invoke()；若世界的动作方法名不同（比如叫 step 而不是 invoke），
     传 `invoke_fn=world.step` 覆盖即可（observe_fn/caps_fn 同理）。
 
     世界只暴露自己的 tools / observation / guidance——**不声明任何服务**：挂载服务（引擎顾问等）

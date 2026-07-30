@@ -22,13 +22,12 @@ any particular world.
 ## Running it locally
 
 ```bash
-uv tool install anima-zero && anima demo     # nothing else needed, no key, no node
+uv tool install anima-zero     # the brain only — a world is a separate program
 ```
 
 For development, three processes: a world, the backend, the web app — see the README.
 Configuration (API keys, a local Ollama address, the world list) is in
-[`.env.example`](.env.example). `world/sim-desk` is a **git submodule**, so clone with
-`--recursive` or run `git submodule update --init` afterwards.
+[`.env.example`](.env.example). There are no submodules; a plain clone gives you everything.
 
 ## Adding something
 
@@ -36,7 +35,8 @@ Configuration (API keys, a local Ollama address, the world list) is in
   primitives: **Tools** (what it can do), **Resources** (perception, `anima://observation`)
   and **Prompts** (its own guidance). Add its address with `anima world add NAME URL` and
   the brain drives it without a line changing. Start from
-  [`world/sim-desk`](world/sim-desk) for the simplest case or
+  [`world/camera`](world/camera) if it is only something to look at,
+  [`world/sim-chess`](world/sim-chess) if it takes actions, or
   [`world/sim-house-nav`](world/sim-house-nav) for the complete one, and read
   [`world/README.md`](world/README.md) first.
 - **A new brain (LLM).** See [`src/llm/README.md`](src/llm/README.md). Most models speak

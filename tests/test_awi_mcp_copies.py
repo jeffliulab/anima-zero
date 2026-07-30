@@ -15,15 +15,12 @@ ROOT = Path(__file__).resolve().parent.parent
 # ⛔ 全集：加了新世界就往这里【追加】。sim-house-nav 于 v0.9 加入时漏登记，
 #    v1.0 补上（当时五份其实没漂，纯属守卫没覆盖到——但那正是守卫会失效的方式）。
 #
-# 路径不再统一是 world/<名字>/：v1.1 起多了一份**在包里**的内置世界
-# （src/worlds/desk，随 wheel 分发，好让 pip 装完有个去处）。它同样是一份逐字节副本、
-# 同样要受这个守卫管——住在哪跟"会不会漂"没关系。
+# ⛔ 别把 tests/test_awi_minimal_world.py 里那个最小世界加进来：它是照规范**独立手写**的
+#    另一种实现，不是这份适配层的副本；登记进来就正好把它变成又一份要同步的副本。
 COPIES = {
-    "world/sim-desk": ROOT / "world" / "sim-desk" / "awi_mcp.py",
     "world/sim-chess": ROOT / "world" / "sim-chess" / "awi_mcp.py",
     "world/camera": ROOT / "world" / "camera" / "awi_mcp.py",
     "world/sim-house-nav": ROOT / "world" / "sim-house-nav" / "awi_mcp.py",
-    "src/worlds/desk（内置）": ROOT / "src" / "worlds" / "desk" / "awi_mcp.py",
 }
 
 

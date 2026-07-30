@@ -239,7 +239,7 @@ v1.1 已把这个权力收回：**每一个世界动作现在都要过闸**，`k
 ## 八、自查你的世界
 
 ```bash
-anima conformance http://localhost:8100
+anima conformance http://localhost:8102
 ```
 
 它会连上去、把每条通道都走一遍，每条检查都标明出自本文档的哪一节。合规退出码 0；建议不会让它失败。

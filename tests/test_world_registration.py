@@ -2,7 +2,8 @@
 
 ⛔ 背景：改「全集」类的东西——世界清单、`.env.example`、防漂移守卫的名单、启动命令——
 **永远是追加，绝不是替换**。2026-06-28 真踩过：加 sim-chess 时那一行写成了只有 sim-chess，
-把 sim-desk 从世界下拉和 AWI 页里整个挤没了；代码本身没坏，是"全集被替换而非追加"。
+把当时已有的那个世界从世界下拉和 AWI 页里整个挤没了；代码本身没坏，
+是"全集被替换而非追加"。
 
 光靠文档和自觉会漏（v0.9 加 sim-house-nav 时就漏登记了防漂移守卫）。这里逐处机器核对：
 一个世界只要进了 `config.worlds()`，它就得在**每一处全集**里都有。
@@ -22,11 +23,6 @@ RUN_DOC = ROOT.parent / "anima-zero-个人用详细开发日志" / "运行命令
 # 不住在本仓的世界（各自独立仓/子模块），本文件只核"清单里有没有它"，不核目录。
 EXTERNAL_WORLDS = {"gazebo-chess"}   # 2026-07-08 迁去 soma-zero/sim/
 
-# 住在**包里**的世界（v1.1 起）：随 wheel 分发，好让 pip 装完有个去处。
-# 它不在 world/ 下，所以下面几条按目录核对的检查对它不适用；但"必须进 .env.example 的全集"
-# 这条对它照样成立——那一行是给人看的清单，缺了它就等于没告诉人这个世界存在。
-BUILTIN_WORLDS = {"desk"}            # src/worlds/desk/
-
 
 def _declared_worlds() -> list[str]:
     return [name for name, _url in config.worlds()]
@@ -35,11 +31,11 @@ def _declared_worlds() -> list[str]:
 def test_every_world_has_a_dir_or_is_external():
     """清单里的世界要么在 world/ 下有目录，要么明确登记为外部世界。"""
     for name in _declared_worlds():
-        if name in EXTERNAL_WORLDS or name in BUILTIN_WORLDS:
+        if name in EXTERNAL_WORLDS:
             continue
         assert (ROOT / "world" / name).is_dir(), (
             f"世界「{name}」在 config.worlds() 里，但 world/{name}/ 不存在。"
-            f"外部世界登记进 EXTERNAL_WORLDS、包内世界登记进 BUILTIN_WORLDS，别让它静默缺席。")
+            f"外部世界登记进 EXTERNAL_WORLDS，别让它静默缺席。")
 
 
 def test_every_world_is_in_env_example():
@@ -67,7 +63,7 @@ def test_every_local_world_is_guarded_against_awi_drift():
     from test_awi_mcp_copies import COPIES
     listed = {path.parent.name for path in COPIES.values()}
     for name in _declared_worlds():
-        if name in EXTERNAL_WORLDS or name in BUILTIN_WORLDS:
+        if name in EXTERNAL_WORLDS:
             continue
         if not (ROOT / "world" / name / "awi_mcp.py").exists():
             continue          # 没有这份副本的世界（如尚未实现的占位）不强求
@@ -79,7 +75,7 @@ def test_every_local_world_is_guarded_against_awi_drift():
 def test_every_world_serves_health():
     """每个本仓世界都得有 /health：网页的在线小圆点靠它，没有就永远显示离线。"""
     for name in _declared_worlds():
-        if name in EXTERNAL_WORLDS or name in BUILTIN_WORLDS:
+        if name in EXTERNAL_WORLDS:
             continue
         server = ROOT / "world" / name / "server.py"
         if not server.exists():
@@ -96,7 +92,7 @@ def test_multi_stream_worlds_mark_awi_visibility():
     （`awi` 不写按 true 处理，所以单路世界零改动；这里只查真的有多路的。）
     """
     for name in _declared_worlds():
-        if name in EXTERNAL_WORLDS or name in BUILTIN_WORLDS:
+        if name in EXTERNAL_WORLDS:
             continue
         server = ROOT / "world" / name / "server.py"
         if not server.exists():

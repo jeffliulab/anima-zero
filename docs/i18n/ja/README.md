@@ -108,16 +108,19 @@ services/      ボードゲームエンジン  frontend/  ウェブアプリ   e
 
 ```bash
 uv tool install anima-zero     # pipx install anima-zero でも、素の pip でも可
-anima demo
 ```
 
-これでワールドが起動し、ブレインが接続され、そのまま会話に入れます。API キーも node も、
-ほかに入れるものもありません。ここで使われるブレインは考えません——ツールを 1 つ呼んで
-結果を返すだけです——デモの目的は、あなたを感心させることではなく、そのループを見せることだからです。
-キーを入れて `anima demo --brain gpt-5.4` とすれば、同じループを本当に考えるブレインで見られます。
+入るのはブレインだけです。ワールドは独立したプログラムで、**wheel には 1 つも同梱されません**。
+そこで次の一歩は、ワールドを手に入れることです。このリポジトリを clone すれば
+[`world/`](../../../world/) にあるものが手に入りますし、[AWI 仕様](../../awi-spec-v1.md)
+に沿って自分で書くこともできます。
+
+いちばん早く全体像をつかむ方法は、このリポジトリをコーディングエージェント——Claude Code、
+Codex、お使いのどれでも——に渡し、[AGENTS.md](../../../AGENTS.md) を読ませることです。
+あのファイルはまさにそのために書かれています。一緒にワールドを起動してくれますし、
+新しいワールドを書いてもくれます。
 
 ```text
-anima demo                    コマンド 1 つ、とにかく何かが起きる
 anima chat --world W          ターミナルでの会話
 anima run --say "..."         1 ターンだけ、スクリプト向け
 anima serve                   ウェブアプリ用のバックエンド API
@@ -147,7 +150,7 @@ cd frontend && npm install && npm run dev
 自分でワールドを開発している間は `ANIMA_TRUST_ALL=1` を設定してください。
 これが何を守り、何を守らないかは [SECURITY.md](SECURITY.md) にあります。
 
-## デモを動かす
+## 動いているところを見る
 
 ウェブアプリを開き、`sim-house-nav` に対してセッションを作り、「リビングに行って」と入力します。
 中央の列にはロボットが見ているものと、あなたにだけ見える追跡カメラが別々に表示されます。
@@ -168,7 +171,6 @@ cd frontend && npm install && npm run dev
 |---|---|---|
 | [sim-house-nav](../../../world/sim-house-nav) | 8112 | 住宅ひとつと歩くロボット。四足でも人形でも |
 | [sim-chess](../../../world/sim-chess) | 8102 | 唯一の真値を握り、指し返してくるチェスセット |
-| [sim-desk](../../../world/sim-desk) | 8100 | 机とペンとキャンバス |
 | [camera](../../../world/camera) | 8104 | 本物のウェブカメラ。ツールはゼロ——見えるが触れない |
 
 ### 実際のところ、どれくらいできるのか
@@ -197,7 +199,8 @@ cd frontend && npm install && npm run dev
 上の 4 チャネルを備えた標準の MCP サーバーを実装し、そのアドレスを `ANIMA_WORLDS` に足せば、
 ブレインは変わらないままそれを動かします。最小の実装はメソッド 3 つ——`capabilities()`、
 `observe()`、`invoke()`——で、どのワールドにも同梱されている `awi_mcp.py` アダプタで包みます。
-いちばん単純な例は [sim-desk](../../../world/sim-desk)、いちばん完全な例は
+見るだけのワールドなら [camera](../../../world/camera)、動くワールドなら
+[sim-chess](../../../world/sim-chess)、いちばん完全な例は
 [sim-house-nav](../../../world/sim-house-nav) を写してください。着手前にまず
 [world/README.md](../../../world/README.md) を。契約は
 [docs/awi-spec-v1.md](../../awi-spec-v1.md) に書かれており、`anima conformance <URL>` が

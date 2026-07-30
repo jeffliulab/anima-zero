@@ -55,8 +55,7 @@ Everything below the first row is where task-specific knowledge is *allowed* to 
 | `src/session/` | session state, context, and the session log every turn is recorded in |
 | `src/llm/` | brain adapters (OpenAI-compatible, Claude, mock) behind one factory |
 | `src/presentation/` | the backend API (`anima serve`) the web app talks to |
-| `src/worlds/desk/` | the one world shipped *inside* the package, so `anima demo` leads somewhere |
-| `world/` | the worlds that ship with the repo as separate processes — `sim-house-nav` (8112), `sim-chess` (8102), `sim-desk` (8100, submodule), `camera` (8104). `world/computer/` is a **reserved idea folder with no code**: not registered anywhere, nothing to start |
+| `world/` | the worlds that ship with the repo as separate processes — `sim-house-nav` (8112), `sim-chess` (8102), `camera` (8104). No world ships inside the wheel: `pip install` gives you the brain only. `world/computer/` is a **reserved idea folder with no code**: not registered anywhere, nothing to start |
 | `services/boardgame_engine/` | the advisory engine service (a "thinks about the game" server, never a controller) |
 | `packages/anima-chess/` | a standalone chess rules library, published separately |
 | `frontend/` | the web app |
@@ -69,7 +68,7 @@ opponent). Do not merge them; the isolation is the point and it is verified by t
 ## How to run it
 
 ```bash
-uv tool install anima-zero && anima demo    # one command, no key, no node
+uv tool install anima-zero   # the brain only — a world is a separate program you start yourself
 
 anima chat --world W        # a conversation in the terminal
 anima serve                # the backend API for the web app
@@ -79,7 +78,7 @@ anima conformance URL      # check a world against the AWI v1 contract
 ```
 
 Full three-process setup (a world, the backend, the web app) is in the README; configuration lives in
-[`.env.example`](.env.example). `world/sim-desk` is a **git submodule** — clone `--recursive`. Scenes
+[`.env.example`](.env.example). There are no submodules; a plain clone gives you everything. Scenes
 and robots for `sim-house-nav` come from
 [alice-house](https://github.com/jeffliulab/alice-house), looked up next to this repo or via
 `HOUSENAV_ASSETS_ROOT`.

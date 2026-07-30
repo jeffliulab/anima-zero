@@ -13,7 +13,7 @@
 不读任何网页/界面的内部结构（不碰 DOM）。世界这边只负责「给画面 + 执行动作」，自己不思考。
 
 - world 名字叫 **computer**，强调「被操作的是一台电脑」（浏览器只是这台电脑里跑的一个窗口）。
-- 这和 `sim-chess` / `sim-desk` 是**同一套世界契约**：world 是独立进程，对外声明 AWI 能力（tool），
+- 这和 `sim-chess` / `sim-house-nav` 是**同一套世界契约**：world 是独立进程，对外声明 AWI 能力（tool），
   `render()` 返回画面，脑调用 tool。区别见下方「和现有世界最大的不同」。
 
 ---
@@ -49,7 +49,7 @@
 
 ## 和现有世界最大的不同（务必记住）
 
-`sim-chess` / `sim-desk` 这种世界**持有唯一真值、能判成败**（棋盘真值、终局判定）。
+`sim-chess` / `sim-house-nav` 这种世界**持有唯一真值、能判成败**（棋盘真值、终局判定）。
 **computer 是「开放世界」，没有内建的「成败 / 唯一真值」裁判**——
 一台电脑/一个浏览器没有天然的输赢 oracle。
 
@@ -114,7 +114,7 @@ world = **一整台（虚拟）桌面**，浏览器只是桌面里跑的一个�
 
 ## 接进 ANIMA world 契约的形态（将来开发时）
 
-不管走 A 还是 B，形态都一样，和 `sim-desk` 同一套：
+不管走 A 还是 B，形态都一样，和 `sim-chess` 同一套：
 
 - `world/computer/` 起一个**独立进程**，对外声明 AWI 能力：
   `screenshot`（其实是 render 自带）、`move / click / double_click / drag / scroll / type / key`。

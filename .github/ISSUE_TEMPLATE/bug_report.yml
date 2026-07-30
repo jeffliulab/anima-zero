@@ -26,7 +26,7 @@ body:
     attributes:
       label: World and brain / 世界与大脑
       description: e.g. `sim-house-nav` + `gpt-5.4`. Say "none" for pure chat.
-      placeholder: sim-desk + claude-opus
+      placeholder: sim-chess + claude-opus
     validations:
       required: true
 

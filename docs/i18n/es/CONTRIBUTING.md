@@ -22,13 +22,12 @@ ningún mundo concreto.
 ## Ejecutarlo en local
 
 ```bash
-uv tool install anima-zero && anima demo     # nada más, sin clave y sin node
+uv tool install anima-zero     # solo el cerebro; un mundo es un programa aparte
 ```
 
 Para desarrollar, tres procesos: un mundo, el backend y la aplicación web; véase el README. La
 configuración (claves de API, la dirección de un Ollama local, la lista de mundos) está en
-[`.env.example`](../../../.env.example). `world/sim-desk` es un **submódulo de git**, así que
-clona con `--recursive` o ejecuta después `git submodule update --init`.
+[`.env.example`](../../../.env.example). No hay submódulos: basta con un clon normal.
 
 ## Añadir algo
 
@@ -36,7 +35,8 @@ clona con `--recursive` o ejecuta después `git submodule update --init`.
   primitivas: **Tools** (lo que sabe hacer), **Resources** (la percepción,
   `anima://observation`) y **Prompts** (su propia `guidance`). Añade su dirección con
   `anima world add NOMBRE URL` y el cerebro lo maneja sin que cambie una línea. Empieza por
-  [`world/sim-desk`](../../../world/sim-desk) para el caso más simple o por
+  [`world/camera`](../../../world/camera) si solo se mira, por
+  [`world/sim-chess`](../../../world/sim-chess) si actúa, o por
   [`world/sim-house-nav`](../../../world/sim-house-nav) para el completo, y lee antes
   [`world/README.md`](../../../world/README.md).
 - **Un cerebro nuevo (LLM).** Véase [`src/llm/README.md`](../../../src/llm/README.md). La mayoría

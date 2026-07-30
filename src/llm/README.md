@@ -163,5 +163,5 @@ thing this system is for: looking at what is in front of it and acting on that.
 - [ ] `GET /api/check?brain=<name>` returns `ok: true` once configured.
 - [ ] The dropdown offers it with its version. Unconfigured, it is marked as such but still
       selectable, and selecting it says so.
-- [ ] Connected to the desk world, "move the pen to the top right" makes it look at the image,
-      call `move_pen`, and the picture on the left changes.
+- [ ] Connected to the sim-chess world, "play a move" makes it look at the image, call `move`,
+      and the picture on the left changes.

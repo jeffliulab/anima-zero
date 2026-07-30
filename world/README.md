@@ -118,10 +118,12 @@ sim-house-nav):
    (`SIMCHESS_`, `HOUSENAV_`, …). ⛔ A world **never imports the brain's config** — brain and
    body not importing each other is a rule of this project.
 5. **Register it.** ⛔ Each of these is a *whole set*, so **append, never replace** (a T0 rule,
-   learned on 2026-06-28: adding sim-chess dropped sim-desk out of the world menu entirely):
+   learned on 2026-06-28: adding sim-chess dropped the world that was there out of the menu
+   entirely — that world, sim-desk, was itself removed in v1.1.1, but the lesson is why this
+   rule exists):
    - the default list in `worlds()` in `src/config.py`
    - `ANIMA_WORLDS` in `.env.example`
-   - `WORLDS` in `tests/test_awi_mcp_copies.py`
+   - `COPIES` in `tests/test_awi_mcp_copies.py`
    - the start-up commands in the maintainer's run-commands notes
 6. **Make the brain shake hands again after starting your world.** The capability list is
    cached at the first handshake, so if you change your tools without restarting the backend
@@ -135,7 +137,6 @@ sim-house-nav):
 
 | World | Port | What it is |
 |---|---|---|
-| `sim-desk` | 8100 | A virtual desk: pen, canvas, eraser (a git submodule) |
 | `sim-chess` | 8102 | A simulated board (chess / gomoku / go) with a built-in computer opponent |
 | `camera` | 8104 | One real camera (zero tools — it can only be looked through) |
 | `sim-house-nav` | 8112 | House navigation: a robot finds rooms by sight; two switchable bodies |

@@ -9,6 +9,29 @@
 Release notes for ANIMA Zero. **Keep them short: per version, only what actually changed.**
 (Format after [Keep a Changelog](https://keepachangelog.com).)
 
+## [1.1.1] — 2026-07-30
+
+Main: the desk world and `anima demo` are gone. The world that shipped inside the wheel existed
+so that `pip install` led somewhere; it cost two byte-identical copies, a git submodule, and a
+second desk in every world list, and that was more than it was worth.
+
+1. **Both desk worlds removed, and `anima demo` with them**: the built-in one that travelled in
+   the wheel and the `sim-desk` submodule alongside it. ⚠️ **`pip install anima-zero` now gives
+   you the brain and no world at all.** A world is a separate program: clone this repository for
+   the ones in `world/`, or write your own against the AWI spec. The mock brain is unaffected and
+   still selectable. `anima doctor` says where to get a world instead of leaving an empty list.
+2. **The README hands you to a coding agent**: where installation used to show off a one-command
+   demo, it now says that the next step is getting a world, and that the fastest way in is to
+   give the repository to Claude Code or Codex and let it read `AGENTS.md`.
+3. **Conformance no longer tests whichever world we happen to ship**: the end-to-end check now
+   starts a **minimal world written from the spec inside the test itself** — eight cells, one
+   tool, one real PNG — and decodes that image rather than trusting the declared mime type. It
+   binds to no world in `world/`, so it holds for someone who installed the brain and wrote their
+   own. ⛔ It fails rather than skipping when the target will not start; the test it replaced
+   skipped, which would have turned "the world no longer exists" into a green run.
+4. **The repository has no submodules**, `awi_mcp.py` is down from six byte-identical copies to
+   four, and only the one in soma-zero is now outside this repository.
+
 ## [1.1.0] — 2026-07-27
 
 Main: from a portfolio repository into a project other people can install, connect to and
@@ -35,6 +58,9 @@ Features:
    tool call, result. ⚠️ Releasing is now coupled to building the UI (`build_ui.py` before
    `python -m build`), and `anima serve` prints the web app's build timestamp — because
    **shipping a package with a stale interface is something nobody would ever notice.**
+
+   > ⚠️ **Superseded by v1.1.1**: the built-in desk world and `anima demo` were removed. The
+   > `anima` command, the wheel-carried web app and the mock brain are all unaffected.
 3. **⭐ A world is treated as an untrusted remote party.** A world's guidance is joined into
    the brain's **system prompt** and its tool descriptions become the **tool sheet** — all of it
    text somebody else wrote. So: a world's content **does not reach the brain until you have

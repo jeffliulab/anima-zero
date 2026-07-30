@@ -113,16 +113,18 @@ services/      motor de juegos de mesa   frontend/  app web   eval/  puntuación
 
 ```bash
 uv tool install anima-zero     # o: pipx install anima-zero, o pip a secas
-anima demo
 ```
 
-Eso arranca un mundo, conecta un cerebro y te deja dentro de una conversación. Sin clave de API,
-sin node, sin nada más que instalar. El cerebro que usa no piensa —llama a una herramienta e
-informa— porque el objetivo de la demo es enseñarte el bucle, no impresionarte. Añade una clave y
-`anima demo --brain gpt-5.4` para ver el mismo bucle con un cerebro que sí piensa.
+Eso instala el cerebro, y solo el cerebro. Un mundo es un programa aparte y **ninguno viaja
+dentro del wheel**, así que el paso siguiente es conseguir uno: clona este repositorio para los
+que viven en [`world/`](../../../world/), o escribe el tuyo siguiendo
+[la especificación AWI](../../awi-spec-v1.md).
+
+La forma más rápida de orientarte es entregarle el repositorio a un agente de código —Claude
+Code, Codex, el que uses— y dejar que lea [AGENTS.md](../../../AGENTS.md), que está escrito
+justo para eso. Arrancará un mundo contigo, o te escribirá uno nuevo.
 
 ```text
-anima demo                    un comando y pasa algo
 anima chat --world W          una conversación en la terminal
 anima run --say "..."         un solo turno, para guiones
 anima serve                   la API del backend, para la app web
@@ -151,7 +153,7 @@ pregunta. La aprobación se ata al contenido, no al nombre: si el mundo vuelve d
 pregunta otra vez, con una nota sobre qué cambió. Mientras desarrollas tu propio mundo, pon
 `ANIMA_TRUST_ALL=1`. [SECURITY.md](SECURITY.md) explica contra qué protege esto y contra qué no.
 
-## Ejecutar la demo
+## Verlo funcionar
 
 Abre la app web, crea una sesión contra `sim-house-nav` y escribe «ve al salón». La columna
 central muestra lo que ve el robot y, por separado, una cámara de seguimiento que solo ves tú. La
@@ -174,7 +176,6 @@ Estos mundos vienen con el repositorio:
 |---|---|---|
 | [sim-house-nav](../../../world/sim-house-nav) | 8112 | Un piso y un robot que camina, cuadrúpedo o humanoide |
 | [sim-chess](../../../world/sim-chess) | 8102 | Un ajedrez que guarda la única verdad y además responde |
-| [sim-desk](../../../world/sim-desk) | 8100 | Un escritorio, un bolígrafo y un lienzo |
 | [camera](../../../world/camera) | 8104 | Una webcam de verdad, sin herramienta alguna: mirar sin tocar |
 
 ### Qué tal funciona en realidad
@@ -204,7 +205,8 @@ Los intentos que sí funcionaron, con verificación imagen a imagen, están reco
 Implementa un servidor MCP estándar con los cuatro canales de arriba, añade su dirección a
 `ANIMA_WORLDS` y el cerebro lo manejará sin cambiar. La versión mínima son tres métodos
 —`capabilities()`, `observe()` e `invoke()`— envueltos en el adaptador `awi_mcp.py` que viene con
-cada mundo. Copia de [sim-desk](../../../world/sim-desk) para el caso más simple o de
+cada mundo. Copia de [camera](../../../world/camera) si tu mundo solo se mira, de
+[sim-chess](../../../world/sim-chess) si actúa, o de
 [sim-house-nav](../../../world/sim-house-nav) para el completo, y lee antes
 [world/README.md](../../../world/README.md). El contrato está escrito en
 [docs/awi-spec-v1.md](../../awi-spec-v1.md), y `anima conformance <url>` comprueba un mundo contra

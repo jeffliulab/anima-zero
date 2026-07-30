@@ -89,9 +89,9 @@ es lo primero que habrá que cambiar cuando llegue una tabla de transposición.
 La pasada lingüística de la v1.1 llevó al inglés todo lo que lee un modelo y todo lo que muestran
 la CLI y la aplicación web. Quedaron cuatro sitios, cada uno por un motivo:
 
-- `src/worlds/desk/awi_mcp.py`: descripciones de recursos y prompts de MCP. Este archivo existe
-  como **copia idéntica byte a byte en seis sitios**, uno de ellos un submódulo, sostenido por una
-  prueba. Cambiar cuatro cadenas significa cambiar las seis al unísono, y eso no es algo que se
+- `world/sim-chess/awi_mcp.py`: descripciones de recursos y prompts de MCP. Este archivo existe
+  como **copia idéntica byte a byte en cuatro sitios**, tres de ellos sostenidos por una
+  prueba. Cambiar cuatro cadenas significa cambiar las cuatro al unísono, y eso no es algo que se
   haga el día de una publicación.
 - `src/dev_turn.py`: un arnés de desarrollo, no un comando que se distribuya.
 - Las descripciones de campos de `src/config.py` y dos líneas de log del orquestador: solo

@@ -283,7 +283,7 @@ Both new channels so far arrived this way: `anima://config` in v1.0 and the `awi
 ## 8. Checking your world
 
 ```bash
-anima conformance http://localhost:8100
+anima conformance http://localhost:8102
 ```
 
 It connects, exercises every channel, and reports each check against the section of this

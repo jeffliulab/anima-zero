@@ -9,6 +9,15 @@
 Notas de versión de ANIMA Zero. **Mantenerlas cortas: por versión, solo lo que cambió de
 verdad.** (Formato inspirado en [Keep a Changelog](https://keepachangelog.com).)
 
+## [1.1.1] — 2026-07-30
+
+Main: el mundo desk y `anima demo` ya no están. El mundo que viajaba dentro del wheel existía para que `pip install` llevara a alguna parte; costaba dos copias idénticas byte a byte, un submódulo de git y un segundo desk en cada lista de mundos, y eso era más de lo que valía.
+
+1. **Eliminados los dos mundos desk, y `anima demo` con ellos**: el integrado que viajaba en el wheel y el submódulo `sim-desk` que lo acompañaba. ⚠️ **`pip install anima-zero` ahora te da el cerebro y ningún mundo.** Un mundo es un programa aparte: clona este repositorio para los de `world/`, o escribe el tuyo siguiendo la especificación AWI. El cerebro simulado no cambia y se sigue pudiendo elegir.
+2. **El README te entrega a un agente de código**: donde la instalación lucía una demo de un solo comando, ahora dice que el paso siguiente es conseguir un mundo, y que la vía más rápida es darle el repositorio a Claude Code o Codex y dejar que lea `AGENTS.md`.
+3. **La conformidad ya no prueba el mundo que casualmente distribuimos**: la comprobación de extremo a extremo arranca ahora un **mundo mínimo escrito desde la especificación dentro de la propia prueba** —ocho casillas, una herramienta, un PNG real— y descodifica esa imagen en lugar de fiarse del tipo mime declarado. ⛔ Falla en vez de saltarse cuando el objetivo no arranca.
+4. **El repositorio ya no tiene submódulos**, `awi_mcp.py` baja de seis copias idénticas byte a byte a cuatro, y solo la de soma-zero queda fuera de este repositorio.
+
 ## [1.1.0] — 2026-07-27
 
 Lo principal: pasar de un repositorio de portafolio a un proyecto que otras personas pueden
@@ -37,6 +46,9 @@ Novedades:
    compilar la interfaz (`build_ui.py` antes de `python -m build`), y `anima serve` imprime la
    marca de tiempo de compilación de la app web, porque **distribuir un paquete con una interfaz
    caducada es justo lo que nadie llegaría a notar.**
+
+   > ⚠️ **Sustituido en v1.1.1**: el mundo desk integrado y `anima demo` se eliminaron. El
+   > comando `anima`, la app web incluida en el wheel y el cerebro simulado no cambian.
 3. **⭐ Un mundo se trata como una parte remota no fiable.** La `guidance` de un mundo se une al
    **prompt de sistema** del cerebro y sus descripciones de herramientas se convierten en la
    **lista de herramientas**: todo ello texto que escribió otra persona. Por eso: el contenido de

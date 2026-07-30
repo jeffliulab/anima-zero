@@ -16,4 +16,4 @@ Three things must agree, and CI enforces it on every tag push:
 三处必须一致，CI 在每次推 tag 时强制校验：``git tag`` == ``__version__`` == **每一份** ``CHANGELOG`` 顶栏。
 """
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"

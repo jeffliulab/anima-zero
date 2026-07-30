@@ -286,7 +286,8 @@ def _pairs(raw: str) -> list[tuple[str, str]]:
 
 # ---- 世界清单（单一来源：后端 server 与 dev_turn CLI 都从这里读）----
 # ⛔ T0：默认清单必须含所有已知世界——加世界=往这份默认里【追加】,绝不替换
-#    (2026-06-28 教训：加 sim-chess 时只写了它,把 sim-desk 挤没了)。
+#    (2026-06-28 教训：加 sim-chess 时只写了它,把当时的 sim-desk 世界挤没了；
+#     那个世界已在 v1.1.1 删除,但这条教训是这条规矩存在的唯一证据,留着)。
 def worlds() -> list[tuple[str, str]]:
     """可连的世界清单 [(name, url)]。env ANIMA_WORLDS="name=url,name2=url2" 覆盖；没设=全部已知世界。
     在【调用时】读 env（不在 import 时）——调用方通常先 load_dotenv，.env 里的地址才生效。"""
@@ -294,22 +295,24 @@ def worlds() -> list[tuple[str, str]]:
     if raw:
         return _pairs(raw)
 
-    # 内置的演示世界永远在清单里：它随 wheel 分发，`anima demo` 起的就是它。
-    out = [("desk", _s("DESK_URL", "http://localhost:8114"))]
-
     # 仓内那几个世界**只有在那个目录真的存在时**才列出来。
     #
     # ⚠️ 这不是"替换全集"（T0 红线）：一个 checkout 里 world/ 全在，所以列出来的和以前一模一样。
-    # 变的只是**用 pip 装的人**——他没有仓库，那五个地址对他而言是五个必然连不上的条目，
+    # 变的只是**用 pip 装的人**——他没有仓库，那几个地址对他而言是必然连不上的条目，
     # 装完第一眼就像坏的。世界在不在，按"它的目录在不在"判断，比按"代码里写死了几个"判断更接近事实。
+    #
+    # ⚠️ v1.1.1 起 wheel 里不再带任何世界，所以**用 pip 装的人拿到的是一张空清单**——这是
+    # 有意的，不是 bug。世界是独立的程序：clone 本仓能拿到 world/ 下的几个，或者照
+    # docs/awi-spec-v1.md 自己写一个，再用 `anima world add` 注册。
     #
     # ⚠️ Not a replacement of the whole set: in a checkout every world/ directory is there,
     # so the list comes out exactly as before. What changes is the person who installed with
-    # pip — they have no repository, and those five addresses are five entries that can
-    # never connect. Whether a world exists is better answered by whether its directory
-    # exists than by how many were hardcoded here.
+    # pip — they have no repository, and those addresses are entries that can never connect.
+    # Since v1.1.1 the wheel carries no world at all, so a pip install yields an **empty**
+    # list. That is deliberate: a world is a separate program, obtained by cloning this
+    # repository or by writing one against docs/awi-spec-v1.md.
+    out: list[tuple[str, str]] = []
     repo_worlds = [
-        ("sim-desk", "SIM_DESK_URL", "http://localhost:8100"),
         ("sim-chess", "SIM_CHESS_URL", "http://localhost:8102"),
         ("camera", "CAMERA_URL", "http://localhost:8104"),
         ("gazebo-chess", "GAZEBO_CHESS_URL", "http://localhost:8106"),   # 代码在 soma-zero/sim/

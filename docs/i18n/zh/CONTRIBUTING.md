@@ -18,16 +18,16 @@ ANIMA = 具身机器人的「大脑」(System 2,只想不动);它隔着一套 **
 
 ## 本地跑起来
 
-按 README「快速上手」即可,三件一起跑:**世界(`world/sim-desk`)· ANIMA 后端 · 网页**。配置(API key /
-本地 Ollama 地址 / 世界清单)见 [`.env.example`](../../../.env.example)。注意 `world/sim-desk` 是 **git 子模块**,
-clone 时记得 `git clone --recursive` 或事后 `git submodule update --init`。
+按 README「快速上手」即可,三件一起跑:**世界(`world/sim-chess`)· ANIMA 后端 · 网页**。配置(API key /
+本地 Ollama 地址 / 世界清单)见 [`.env.example`](../../../.env.example)。本仓没有子模块,普通 clone
+就能拿到全部内容。
 
 ## 想加点东西?
 
 - **加一个新世界**:世界就是一个标准 **MCP server**(挂在 `/mcp`),用三类原语说话——**Tools**(能力)、
   **Resources**(感知,`anima://observation`)、**Prompts**(说明书 `guidance`);在 `.env` 的
-  `ANIMA_WORLDS` 里加一行 URL 即可被 ANIMA 连上。框架一行都不用改。参考 [`world/sim-desk`](../../../world/sim-desk)
-  与 README「怎么接入一个世界」一节。
+  `ANIMA_WORLDS` 里加一行 URL 即可被 ANIMA 连上。框架一行都不用改。只能看的世界参考 [`world/camera`](../../../world/camera),
+  会动手的参考 [`world/sim-chess`](../../../world/sim-chess),以及 README「怎么接入一个世界」一节。
 - **加一个新大脑(LLM)**:见 [`src/llm/README_zh.md`](../../../src/llm/README_zh.md);多数模型走 OpenAI 兼容口,登记到
   `src/llm/factory.py` 那张表即可。
 - **工具(tool)怎么写**:工具是世界在 MCP `tools/list` 里声明的(名字 + 3~4 句描述写清「何时调 / 何时别调」+

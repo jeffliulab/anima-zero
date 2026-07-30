@@ -18,8 +18,6 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-import pytest
-
 from anima import conformance
 from anima.conformance import FAIL, PASS, WARN, Report
 
@@ -250,45 +248,6 @@ def test_unreachable_world_reports_rather_than_raising():
     assert any("MCP handshake" in t for t in _fails(rep))
 
 
-# ---------------------------------------------------------------- end to end
-
-def test_builtin_world_is_conformant():
-    """The world shipped in the wheel must pass its own spec. If our own reference world
-    cannot, the spec is wrong or the world is.
-    / 随 wheel 发出去的那个世界必须过自己的规范。连我们自己的参考世界都过不了，
-    要么规范错了，要么世界错了。"""
-    import socket
-    import subprocess
-    import sys
-    import time
-    import urllib.error
-    import urllib.request
-
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        port = s.getsockname()[1]
-
-    proc = subprocess.Popen([sys.executable, "-m", "anima.worlds.desk", "--port", str(port)],
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    try:
-        url = f"http://127.0.0.1:{port}"
-        deadline = time.monotonic() + 30
-        while time.monotonic() < deadline:
-            try:
-                with urllib.request.urlopen(url + "/health", timeout=1.0):
-                    break
-            except (urllib.error.URLError, OSError):
-                time.sleep(0.2)
-        else:
-            pytest.skip("the built-in world did not start in time")
-
-        rep = conformance.run(url)
-        assert rep.conformant, f"the built-in world fails its own spec: {_fails(rep)}"
-        assert rep.manifest_hash
-        assert "move_pen" in rep.tool_names
-    finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+# 端到端（起一个真世界、跑完整条管道）在 tests/test_awi_minimal_world.py。
+# 它自带靶子，不连仓里任何一个具体世界——用户完全可以只装 anima、自己写世界。
+# 这个文件只做单元测试：喂坏输入给每个 _check_*，证明**不合规的世界会被判红**。

@@ -104,16 +104,17 @@ services/      board-game engine   frontend/  web app   eval/  scoring
 
 ```bash
 uv tool install anima-zero     # or: pipx install anima-zero, or plain pip
-anima demo
 ```
 
-That starts a world, connects a brain, and drops you into a conversation. No API key, no
-node, nothing else to install. The brain it uses does not think — it calls one tool and
-reports back — because the point of the demo is to show you the loop, not to impress you.
-Add a key and `anima demo --brain gpt-5.4` to see the same loop with a brain that does.
+That installs the brain, and only the brain. A world is a separate program and none ships in
+the wheel, so the next step is to get one: clone this repository for the worlds in
+[`world/`](world/), or write your own against [the AWI spec](docs/awi-spec-v1.md).
+
+The fastest way to find your way around is to hand the repository to a coding agent — Claude
+Code, Codex, or whichever you use — and let it read [AGENTS.md](AGENTS.md), which is written
+for exactly that. It will start a world with you, or write you a new one.
 
 ```text
-anima demo                    one command, something happens
 anima chat --world W          a conversation in the terminal
 anima run --say "..."         one turn, scripted
 anima serve                   the backend API, for the web app
@@ -142,7 +143,7 @@ content, not the name: if the world comes back different you are asked again, wi
 on what changed. While developing your own world, set `ANIMA_TRUST_ALL=1`.
 [SECURITY.md](SECURITY.md) says what this does and does not protect against.
 
-## Running the demo
+## Seeing it run
 
 Open the web app, create a session against `sim-house-nav`, and type "go to the living room".
 The middle column shows what the robot sees and, separately, a chase camera that only you can
@@ -164,7 +165,6 @@ These worlds ship with the repository:
 |---|---|---|
 | [sim-house-nav](world/sim-house-nav) | 8112 | An apartment and a walking robot, quadruped or humanoid |
 | [sim-chess](world/sim-chess) | 8102 | A chess set that holds the only ground truth and plays back |
-| [sim-desk](world/sim-desk) | 8100 | A desk, a pen and a canvas |
 | [camera](world/camera) | 8104 | A real webcam, with no tools at all — look but never touch |
 
 ### How well it actually works
@@ -193,8 +193,9 @@ Runs that did work, with per-frame verification, are written up in
 Implement a standard MCP server with the four channels above, add its address to `ANIMA_WORLDS`, and the
 brain will drive it unchanged. The smallest version is three methods — `capabilities()`, `observe()` and
 `invoke()` — wrapped in the `awi_mcp.py` adapter that ships with every world. Copy from
-[sim-desk](world/sim-desk) for the simplest case or [sim-house-nav](world/sim-house-nav) for the complete
-one, and read [world/README.md](world/README.md) first. The contract is written down in
+[camera](world/camera) if your world is only something to look at, [sim-chess](world/sim-chess) if it
+takes actions, or [sim-house-nav](world/sim-house-nav) for the complete one, and read
+[world/README.md](world/README.md) first. The contract is written down in
 [docs/awi-spec-v1.md](docs/awi-spec-v1.md), and `anima conformance <url>` checks a world against it.
 
 ## Acknowledgements

@@ -91,9 +91,9 @@ c'est la première chose à changer le jour où arrive une table de transpositio
 La passe linguistique de la v1.1 a fait passer en anglais tout ce qu'un modèle lit et tout ce
 que la CLI et l'application web affichent. Quatre endroits sont restés, chacun pour une raison :
 
-- `src/worlds/desk/awi_mcp.py` — descriptions de ressources et de prompts MCP. Ce fichier existe
-  en **copie identique au bit près à six endroits**, dont un sous-module, tenu par un test.
-  Changer quatre chaînes, c'est changer les six d'un même mouvement : pas une chose à faire le
+- `world/sim-chess/awi_mcp.py` — descriptions de ressources et de prompts MCP. Ce fichier existe
+  en **copie identique au bit près à quatre endroits**, dont trois tenus par un test.
+  Changer quatre chaînes, c'est changer les quatre d'un même mouvement : pas une chose à faire le
   jour d'une publication.
 - `src/dev_turn.py` — un harnais de développement, pas une commande livrée.
 - Les descriptions de champs de `src/config.py` et deux lignes de journal de l'orchestrateur —

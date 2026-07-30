@@ -30,7 +30,6 @@ from __future__ import annotations
 import argparse
 import functools
 import json
-import subprocess
 import sys
 import time
 import urllib.error
@@ -47,9 +46,6 @@ from .llm import DEFAULT_BRAIN, list_brains, make_llm
 from .session import SessionStore, session_log
 from .session.session_log import LoggingLLM, session_scope
 
-BUILTIN_WORLD = "desk"
-BUILTIN_WORLD_MODULE = "anima.worlds.desk"
-BUILTIN_WORLD_PORT = 8114
 SERVE_HOST, SERVE_PORT = "127.0.0.1", 8000
 
 
@@ -223,7 +219,14 @@ def cmd_doctor(args) -> int:
             note = ("   (not approved, but the escape hatch is on, so usable)" if bypass
                     else "   (not approved — the brain cannot use it)")
         print(f"  {'✓' if online else '·'} {name:<16} {url}{note}")
-    print("\nNothing configured? This still runs: anima demo")
+    # No worlds is the normal state after `pip install`: worlds are separate programs and
+    # none of them ships in the wheel. Say where to get one rather than leaving an empty list.
+    # 装完包之后"一个世界都没有"是正常状态：世界是独立的程序，wheel 里一个都不带。
+    # 与其留一张空清单，不如说清楚去哪弄一个。
+    if not config.worlds():
+        print("  (none — a world is a separate program; clone the repository for the ones in "
+              "world/, or write your own against docs/awi-spec-v1.md)")
+    print("\nRegister one with: anima world add NAME URL")
     return 0
 
 
@@ -337,85 +340,12 @@ def cmd_serve(args) -> int:
     return 0
 
 
-def cmd_demo(args) -> int:
-    """Install, one command, something happens — with no key and no world of your own.
-
-    Starts the built-in world, approves it, and drops into a conversation with the brain
-    that does not think. The point is not the conversation; it is that you can watch a
-    frame, a decision, a tool call and a result go past.
-
-    装完、一条命令、有事发生——不需要 key，也不需要你自己的世界。
-
-    它起内置世界、批准它，然后进入一场和"不思考的大脑"的对话。重点不在对话本身，
-    而在于你能亲眼看到一帧画面、一个决定、一次工具调用和一个结果走过去。
-    """
-    from .clients.world_client import RemoteWorld
-
-    url = f"http://127.0.0.1:{args.port}"
-    print(f"Starting the built-in world {BUILTIN_WORLD} at {url} …")
-    proc = subprocess.Popen([sys.executable, "-m", BUILTIN_WORLD_MODULE,
-                             "--port", str(args.port)],
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    try:
-        if not _wait_for_health(url, timeout=20):
-            print("The built-in world did not start.", file=sys.stderr)
-            return 1
-
-        # Approved without asking, and only this one. It ships in the same wheel as the
-        # brain, so someone who installed the package has already made this decision;
-        # asking again would train people to click through approvals that do matter.
-        # 不问就批准，而且只批这一个。它和大脑装在同一个 wheel 里，所以装了这个包的人**已经**做过
-        # 这个决定了；再问一遍只会训练人把真正要紧的审批也一路点过去。
-        world = RemoteWorld(BUILTIN_WORLD, url)
-        world.approve()
-
-        store = SessionStore()
-        session, _ = store.new(BUILTIN_WORLD, args.brain)
-        reg = WorldRegistry()
-        reg._worlds[BUILTIN_WORLD] = world
-        llm = LoggingLLM(make_llm(args.brain), args.brain)
-        orch = Orchestrator(reg, store)
-
-        print(f"\nThe world is up. Brain: {args.brain}")
-        if args.brain == "mock":
-            print("(The mock brain does not think — it walks the chain end to end. Once a\n"
-                  " key is configured, pick a real one with --brain.)")
-        print(f"You can watch this world yourself: {url}/stream\n")
-        print('Try saying something, such as "draw a block in the middle of the canvas".\n'
-              "An empty line leaves.\n")
-
-        while True:
-            try:
-                text = input("you › ").strip()
-            except (EOFError, KeyboardInterrupt):
-                print()
-                break
-            if not text:
-                break
-            with session_scope(session.id):
-                out = orch.handle(session, text, llm)
-            print(f"\nANIMA › {out['reply']}\n")
-    finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-        print("The built-in world has stopped.")
-    return 0
-
-
 # ===================================================================== parser / 入口 ===
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="anima", description="ANIMA — the brain of an embodied robot")
     ap.add_argument("--version", action="version", version=f"anima {__version__}")
     sub = ap.add_subparsers(dest="cmd", required=True)
-
-    p = sub.add_parser("demo", help="see it run, in one command (built-in world, no key needed)")
-    p.add_argument("--brain", default="mock")
-    p.add_argument("--port", type=int, default=BUILTIN_WORLD_PORT)
-    p.set_defaults(fn=cmd_demo)
 
     p = sub.add_parser("chat", help="talk to it in the terminal")
     p.add_argument("--world", default=None)
@@ -441,7 +371,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(fn=cmd_doctor)
 
     p = sub.add_parser("conformance", help="check a world against the AWI v1 contract")
-    p.add_argument("url", help="the world's base address, e.g. http://localhost:8100")
+    p.add_argument("url", help="the world's base address, e.g. http://localhost:8102")
     p.add_argument("--timeout", type=float, default=conformance.PROBE_TIMEOUT_S)
     p.set_defaults(fn=cmd_conformance)
 

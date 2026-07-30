@@ -52,7 +52,7 @@ def in_tree(path: str, ref: str | None) -> bool:
     """这个路径在 git 里吗？ref 为空 = 查 index（含刚 git add 的），否则查那个 ref。
 
     ⚠️ 用 ls-tree / ls-files，别用 `cat-file -e`：**目录和子模块不是 blob**，
-    cat-file 一律查不到，会把 `src/clients`、`world/sim-desk` 这类正常引用报成失效
+    cat-file 一律查不到，会把 `src/clients` 这类正常引用报成失效
     （第一版就是这么误报了 14 条）。
     """
     path = path.rstrip("/")

@@ -35,7 +35,7 @@ def test_every_documented_command_exists():
     """⛔ The set of commands, asserted as a whole. Dropping one is the kind of change that
     passes review because the diff looks like a tidy-up.
     / ⛔ 命令的**全集**，整体断言。删掉一个正是那种"diff 看起来像是在整理"、于是评审就放过去的改动。"""
-    for argv in (["demo"], ["chat"], ["run", "--say", "hi"], ["serve"], ["doctor"],
+    for argv in (["chat"], ["run", "--say", "hi"], ["serve"], ["doctor"],
                  ["world", "list"], ["world", "add", "x", "http://x"],
                  ["world", "show", "x"], ["world", "remove", "x"]):
         assert _parse(argv).fn is not None, f"命令没了：{' '.join(argv)}"
@@ -46,12 +46,6 @@ def test_serve_binds_to_this_machine_only_by_default():
     anyone nearby drive whatever you have connected.
     / ⛔ 世界是会**动东西**的。默认把 API 开给整个网络，等于让附近任何人都能驱动你连着的东西。"""
     assert _parse(["serve"]).host == "127.0.0.1"
-
-
-def test_demo_needs_no_key():
-    """The whole point of `demo`: it must work before the user has any provider account.
-    / `demo` 的全部意义：它必须在用户还没有任何服务商账号时就能用。"""
-    assert _parse(["demo"]).brain == "mock"
 
 
 def test_run_can_continue_an_existing_session():
@@ -149,7 +143,10 @@ def test_doctor_runs_without_anything_configured(capsys, monkeypatch):
     assert cli.cmd_doctor(_parse(["doctor"])) == 0
     out = capsys.readouterr().out
     assert "mock" in out, "没配 key 的人也得看到有一个能用的大脑"
-    assert "anima demo" in out, "得告诉他下一步能跑什么"
+    # 世界清单是空的（上一行 monkeypatch 成 []）——v1.1.1 起 wheel 不带世界，这是 pip 装完的
+    # 正常状态。doctor 必须说清「去哪弄一个世界」，而不是留一张沉默的空清单。
+    assert "anima world add" in out, "得告诉他下一步能跑什么"
+    assert "world/" in out, "空清单时得说清世界从哪来"
 
 
 # ---------------------------------------------------------------- the UI staleness check

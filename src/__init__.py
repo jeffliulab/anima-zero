@@ -1,6 +1,6 @@
 """ANIMA —— 具身机器人的大脑:AWI(世界接口)+ 注册表 + 通用 agent loop。
 
-公开 API。具体世界(sim-desk 等)住在 anima-zero/world/ 下,只通过 AWI(World 标准)接入。
+公开 API。具体世界(sim-chess 等)住在 anima-zero/world/ 下,只通过 AWI(World 标准)接入。
 """
 from ._version import __version__
 from .core.awi import ActionResult, Capabilities, Observation, ToolSpec, World

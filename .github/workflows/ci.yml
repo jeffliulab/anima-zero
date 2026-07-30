@@ -21,11 +21,8 @@ jobs:
     name: Python checks / Python 侧检查
     runs-on: ubuntu-latest
     steps:
-      # Worlds live in submodules; check them out so CI sees what `git clone --recursive` gives.
-      # 世界在子模块里；递归拉取，让 CI 看到的和贡献者 clone 到的一样。
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 0          # check_readme.py inspects git-tracked content / 按 git 内容查图片
 
       - uses: actions/setup-python@v5

@@ -21,21 +21,22 @@ ANIMA は具身ロボットの**ブレイン**です。System 2 であり、考�
 ## ローカルで動かす
 
 ```bash
-uv tool install anima-zero && anima demo     # これだけ。キーも node も不要
+uv tool install anima-zero     # 入るのはブレインだけ。ワールドは別のプログラムです
 ```
 
 開発時は 3 プロセス（ワールド・バックエンド・ウェブアプリ）です。README を参照してください。
 設定（API キー、ローカル Ollama のアドレス、ワールド一覧）は
-[`.env.example`](../../../.env.example) にあります。`world/sim-desk` は **git サブモジュール**
-なので、`--recursive` を付けてクローンするか、あとから `git submodule update --init` を実行してください。
+[`.env.example`](../../../.env.example) にあります。サブモジュールはありません。ふつうに
+クローンすれば全部そろいます。
 
 ## 何かを足すとき
 
 - **新しいワールド。** ワールドとは、3 つのプリミティブを話す標準の **MCP サーバー**
   （`/mcp` にマウント）です。**Tools**（何ができるか）、**Resources**（知覚、
   `anima://observation`）、**Prompts**（自分自身のガイダンス）。`anima world add 名前 URL`
-  でアドレスを登録すれば、ブレインは一行も変わらずにそれを動かします。いちばん単純な例は
-  [`world/sim-desk`](../../../world/sim-desk)、いちばん完全な例は
+  でアドレスを登録すれば、ブレインは一行も変わらずにそれを動かします。見るだけのワールドなら
+  [`world/camera`](../../../world/camera)、動くワールドなら
+  [`world/sim-chess`](../../../world/sim-chess)、いちばん完全な例は
   [`world/sim-house-nav`](../../../world/sim-house-nav)。着手する前にまず
   [`world/README.md`](../../../world/README.md) を読んでください。
 - **新しいブレイン（LLM）。** [`src/llm/README.md`](../../../src/llm/README.md) を参照。

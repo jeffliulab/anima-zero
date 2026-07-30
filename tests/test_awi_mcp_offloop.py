@@ -3,7 +3,7 @@
 守三条契约（v0.4 的雷：长动作同步跑在事件循环上，一次 move 冻住整个世界服务器 35 秒）：
 1. 慢工具执行期间，世界服务器的事件循环必须保持响应（带外 /ping 亚秒级返回）；
 2. 世界声明了 keyword-only `_progress` 时，进度按 MCP `notifications/progress` 真送达客户端；
-3. 没声明 `_progress` 的即时世界（sim-desk/sim-chess/camera 形态）一行不改、照常工作。
+3. 没声明 `_progress` 的即时世界（sim-chess/camera 形态）一行不改、照常工作。
 
 测试起一个真 uvicorn（环回随机端口）+ 真 MCP 往返，不 mock 协议层——协议层正是被测对象。
 awi_mcp.py 从 world/sim-chess/ 加载（各世界这份字节一致由 test_awi_mcp_copies 守住；测的世界是下面
