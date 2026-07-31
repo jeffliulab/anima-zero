@@ -131,14 +131,11 @@ and every placeholder is intact, which is what makes them usable as first drafts
 as a first draft" is the claim, not "correct". English and Chinese are the maintainer's own and
 carry no such caveat.
 
-### R9 · Two pages have no language switcher
+### R9 · ~~Two pages have no language switcher~~ — fixed in v1.2
 
-`/awi` and `/session-logs` render as full pages without the sidebar, and the switcher lives in
-the sidebar. Opened directly, they inherit whatever language is in `localStorage` and offer no
-way to change it. Reached from the main app, which is the normal path, they are fine.
-
-Not fixed because the honest options are both larger than the problem: put the switcher in a
-layout both routes share, or accept that those two routes are secondary surfaces.
+`/awi` and `/session-logs` rendered as full pages without the sidebar, and the switcher
+lived in the sidebar, so opened directly they offered no way to change language. Both
+pages now carry the switcher floating at the top-right corner.
 
 ### R10 · Nine dependencies are unbounded, and one of them will break CI again
 

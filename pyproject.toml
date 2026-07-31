@@ -129,7 +129,15 @@ Homepage = "https://github.com/jeffliulab/anima-zero"
 # 预先构建好的网页随包分发，好让没有 node 的机器也有界面。由 `python scripts/build_ui.py` 生成；
 # 不入库，因为它是发版产物不是源码。⚠️ 打 wheel 之前先构建它——忘了为什么是**静默**失败，见那个脚本的头。
 [tool.setuptools.package-data]
-"anima.presentation" = ["web/**/*"]
+# ⛔ "web/.build-time" must be listed explicitly: glob patterns like web/**/* do NOT
+# match dotfiles, so the build stamp silently never entered the wheel (v1.1.0–v1.1.1
+# shipped without it, and the staleness check it feeds was dead for pip users).
+# After touching this, verify by unzipping a built wheel — this is precisely the
+# failure mode that build logs do not show.
+# ⛔ 点开头的文件必须显式列出：web/**/* 这类通配**匹配不到点文件**，构建时间戳因此从来没
+# 进过 wheel（v1.1.0–v1.1.1 都没有，防界面过时那道守卫对 pip 用户形同虚设）。
+# 改完这里必须解开 wheel 实地确认——这正是构建日志里看不出来的那类失效。
+"anima.presentation" = ["web/**/*", "web/.build-time"]
 
 # Version is read statically from src/_version.py — never duplicate it here.
 # 版本号从 src/_version.py 静态读取——绝不在这里再写一份。

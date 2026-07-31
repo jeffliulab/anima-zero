@@ -113,3 +113,29 @@ jobs:
 
       - name: The export must actually contain a page / 导出产物里必须真有页面
         run: test -f out/index.html && test -f out/awi.html
+
+      # A release wheel ships whatever happens to sit in src/presentation/web/ — and
+      # forgetting build_ui.py before `python -m build` is silent (v1.1.1 nearly shipped
+      # without the Japanese UI for exactly this reason). So on every push: place the
+      # export where the package carries it, build the wheel, and prove that both the
+      # page and the .build-time stamp really made it inside. The stamp check matters
+      # because package-data globs do not match dotfiles — the failure this guards
+      # against is invisible in build logs.
+      # 发版 wheel 会把 src/presentation/web/ 里碰巧留着的那份发出去，而忘了跑 build_ui.py
+      # 是静默的（v1.1.1 就差点因此发出一份缺日文的界面）。所以每次推送都真跑一遍：
+      # 放导出物、打 wheel、断言页面和 .build-time 时间戳都在包里。时间戳必须单查，
+      # 因为 package-data 通配匹配不到点文件——这道失效在构建日志里是看不见的。
+      - name: The wheel carries the fresh UI and its stamp / wheel 真带上新界面与时间戳
+        working-directory: ${{ github.workspace }}
+        run: |
+          python3 scripts/build_ui.py
+          python3 -m pip install --quiet build
+          python3 -m build --wheel -o /tmp/wheelcheck
+          python3 - <<'EOF'
+          import glob, zipfile
+          w = glob.glob('/tmp/wheelcheck/*.whl')[0]
+          names = zipfile.ZipFile(w).namelist()
+          assert 'anima/presentation/web/index.html' in names, 'wheel has no web page'
+          assert 'anima/presentation/web/.build-time' in names, 'wheel lost the build stamp'
+          print('wheel carries the fresh UI and its build stamp')
+          EOF

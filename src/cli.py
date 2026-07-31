@@ -315,7 +315,7 @@ def cmd_demo(args) -> int:
     print("    then:                   anima world add example http://localhost:8090")
     print("  · talk to it:             anima chat --world example")
     print("  · the web app:            anima serve")
-    print("  · write your own world:   src/anima/examples/minimal_world.py is the template,")
+    print("  · write your own world:   src/examples/minimal_world.py is the template,")
     print("                            docs/awi-spec-v1.md is the contract it follows")
     return 0
 

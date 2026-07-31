@@ -1,6 +1,6 @@
 """`anima demo` 与它的示例世界：「装完就能跑」这条承诺的守卫。
 
-示例世界（src/anima/examples/minimal_world.py）随 wheel 分发，是给用户照抄的模板。
+示例世界（src/examples/minimal_world.py）随 wheel 分发，是给用户照抄的模板。
 这里守三件事：它真过自家 conformance（教科书第一页不能是错的）、它的两个工具各司其职
 （look 只读 / step 真动 / 墙如实拒绝）、demo 命令的表面没烂（参数解析、大脑登记表）。
 """

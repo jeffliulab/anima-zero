@@ -104,7 +104,7 @@ talker/listener——挑一个大脑，真跑一轮：你有 API key 就用你�
 
 真实世界是独立的程序，wheel 里一个都不带，所以下一步是去弄一个：clone 本仓就能拿到
 [`world/`](../../../world/) 下的那几个，或者照 [AWI 规范](../../awi-spec-v1.md)
-自己写一个——`src/anima/examples/minimal_world.py`（就是 demo 里那条走廊）是给你抄的模板。
+自己写一个——`src/examples/minimal_world.py`（就是 demo 里那条走廊）是给你抄的模板。
 
 最快摸清门道的办法，是把这个仓交给一个 coding agent——Claude Code、Codex，你手边哪个都行——
 让它去读 [AGENTS.md](../../../AGENTS.md)，那份文件就是为这件事写的。它会陪你起一个世界，
@@ -118,6 +118,8 @@ anima serve                   起后端 API（网页连它）
 anima world add 名字 地址      登记一个世界——先看清它声明了什么，再决定批不批
 anima doctor                  什么配好了、什么连得上
 ```
+
+卡住了？[常见问题](../../faq_zh.md)收录了新用户真正会踩的六个坑。
 
 ### 完整搭一套
 
@@ -201,7 +203,7 @@ curl -s localhost:8112/status
 ## 接你自己的世界
 
 实现一个标准 MCP server，提供上面那四条通道，把地址加进 `ANIMA_WORLDS`，大脑一行不改就能驱动它。
-最小且完整的示例随包分发：`src/anima/examples/minimal_world.py`——就是 `anima demo` 里那条走廊，
+最小且完整的示例随包分发：`src/examples/minimal_world.py`——就是 `anima demo` 里那条走廊，
 逐行对照规范注释，单独跑起来只要 `python -m anima.examples.minimal_world`。
 只能看的世界照 [camera](../../../world/camera) 抄，会动手的照
 [sim-chess](../../../world/sim-chess) 抄，最完整的看

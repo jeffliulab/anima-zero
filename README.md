@@ -115,7 +115,7 @@ frame, thought and tool call lands in a session log you can read afterwards.
 
 A real world is a separate program and none ships in the wheel, so the next step is to
 get one: clone this repository for the worlds in [`world/`](world/), or write your own
-against [the AWI spec](docs/awi-spec-v1.md) — `src/anima/examples/minimal_world.py`,
+against [the AWI spec](docs/awi-spec-v1.md) — `src/examples/minimal_world.py`,
 the corridor from the demo, is the template to copy.
 
 The fastest way to find your way around is to hand the repository to a coding agent — Claude
@@ -130,6 +130,8 @@ anima serve                   the backend API, for the web app
 anima world add NAME URL      register a world — and review it before approving
 anima doctor                  what is configured and what is reachable
 ```
+
+Stuck? [The FAQ](docs/faq.md) covers the six things new users actually trip over.
 
 ### The full setup
 
@@ -201,7 +203,7 @@ Runs that did work, with per-frame verification, are written up in
 
 Implement a standard MCP server with the four channels above, add its address to `ANIMA_WORLDS`, and the
 brain will drive it unchanged. The smallest complete example ships inside the package:
-`src/anima/examples/minimal_world.py` — the corridor from `anima demo`, annotated line by line
+`src/examples/minimal_world.py` — the corridor from `anima demo`, annotated line by line
 against the spec, and runnable on its own with `python -m anima.examples.minimal_world`.
 Copy from [camera](world/camera) if your world is only something to look at,
 [sim-chess](world/sim-chess) if it takes actions, or [sim-house-nav](world/sim-house-nav) for the

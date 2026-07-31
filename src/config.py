@@ -322,12 +322,17 @@ def worlds() -> list[tuple[str, str]]:
     repo_worlds = [
         ("sim-chess", "SIM_CHESS_URL", "http://localhost:8102"),
         ("camera", "CAMERA_URL", "http://localhost:8104"),
-        ("gazebo-chess", "GAZEBO_CHESS_URL", "http://localhost:8106"),   # 代码在 open-chess-robot/sim/
         ("sim-house-nav", "SIM_HOUSE_NAV_URL", "http://localhost:8112"),
     ]
     world_dir = os.path.join(paths.REPO_ROOT, "world")
     if os.path.isdir(world_dir):
         out += [(name, _s(env, default)) for name, env, default in repo_worlds]
+    # gazebo-chess 不在默认清单里：它的代码住在伴随仓 open-chess-robot（2026-07-08 迁出），
+    # 默认列出它对绝大多数人就是一个永远 offline 的死条目（v1.2 清障）。
+    # 但老能力不丢（T0）：显式设了 GAZEBO_CHESS_URL 的人，照旧出现在清单里。
+    gazebo = os.getenv("GAZEBO_CHESS_URL", "").strip()
+    if gazebo:
+        out.append(("gazebo-chess", gazebo))
     return out
 
 
