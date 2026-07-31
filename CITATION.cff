@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this software in your work, please cite it as follows."
+type: software
+title: "ANIMA Zero — the brain of an embodied robot"
+abstract: >-
+  An open (MIT) System-2 brain for embodied robots: a generic agent loop that
+  connects to separately running "worlds" over AWI (an MCP-based contract),
+  with a trust model that treats every world as an untrusted remote party,
+  a written specification with a conformance checker, and honest measured
+  limits. Worlds ship separately; a minimal corridor example is included.
+authors:
+  - family-names: "Liu Lab"
+    given-names: "Jeff"
+    email: "contact@jeffliulab.com"
+repository-code: "https://github.com/jeffliulab/anima-zero"
+url: "https://pypi.org/project/anima-zero/"
+license: MIT
+# ⛔ 不写 version / date-released：版本号的单一来源是 src/_version.py，
+#    这里再写一份迟早漂移（selfcheck 只钉三处，顾不到这里）。

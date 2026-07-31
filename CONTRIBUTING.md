@@ -29,6 +29,23 @@ For development, three processes: a world, the backend, the web app — see the 
 Configuration (API keys, a local Ollama address, the world list) is in
 [`.env.example`](.env.example). There are no submodules; a plain clone gives you everything.
 
+## Where to start
+
+Three kinds of contribution are especially welcome, each with a concrete first file to read:
+
+- **Write a new world** — the most valuable one. Start from
+  `src/examples/minimal_world.py` (a ~300-line corridor, annotated against the spec),
+  read [`world/README.md`](world/README.md) for the two-lines rule, then check your work
+  with `anima conformance <url>`. A world is your own program; merging one here is not
+  the only way to contribute it — publishing it anywhere and telling us is just as good.
+- **Review a translation** ([ROADMAP R8](ROADMAP.md)) — the Japanese, French and Spanish
+  documents were written by the maintainer with model help and have never been read by a
+  native speaker. If that is you, `docs/i18n/` is the place; even a handful of corrected
+  sentences is a real fix.
+- **Documentation and small fixes** — if a sentence cost you five minutes, it will cost
+  the next person five too. Issues labelled **`good first issue`** are scoped to be
+  finishable without knowing the whole codebase.
+
 ## Adding something
 
 - **A new world.** A world is a standard **MCP server** (mounted at `/mcp`) speaking three
