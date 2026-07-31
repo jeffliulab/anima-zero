@@ -10,12 +10,14 @@ from .base import LLMReply, ToolCall, norm_images
 
 
 class OpenAICompatLLM:
-    vision = True
-
-    def __init__(self, model: str, base_url: str | None, api_key: str):
+    def __init__(self, model: str, base_url: str | None, api_key: str,
+                 vision: bool = True):
         from openai import OpenAI
 
         self.model = model
+        # vision=False 告诉主循环「这个脑看不见」：画面照常进会话留痕给人看，
+        # 但不喂给它（纯文本模型收到 image_url 轻则浪费 token、重则直接报错）。
+        self.vision = vision
         # 用占位 key 也能构造客户端(没 key 时 import / 启动不报错,真正调用时才报鉴权错)
         self.client = OpenAI(base_url=base_url, api_key=api_key or "EMPTY")
 

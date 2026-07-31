@@ -155,3 +155,47 @@ def test_handle_stream_forwards_progress_events(tmp_path):
     i_call = next(i for i, e in enumerate(events) if e["type"] == "tool_call")
     i_res = next(i for i, e in enumerate(events) if e["type"] == "tool_result")
     assert all(i_call < events.index(p) < i_res for p in prog), "进度事件夹在调用与结果之间"
+
+
+# ---------------------------------------------------------- vision gate / 视觉闸 ----
+
+class _ImageWorld(_CountWorld):
+    """带画面的假世界：perceive 总返回一张图。"""
+
+    def perceive(self):
+        self.n_perceive += 1
+        return Observation(image_png=b"\x89PNG-fake", state={"phase": "idle"})
+
+
+class _ImageRecordingLLM(_SeqLLM):
+    """记下每次 chat 收到的 image，视觉可配。"""
+
+    def __init__(self, replies, vision):
+        super().__init__(replies)
+        self.vision = vision
+        self.seen_images: list = []
+
+    def chat(self, system, history, tools, image):
+        self.seen_images.append(image)
+        return super().chat(system, history, tools, image)
+
+
+def test_a_brain_without_eyes_is_not_sent_pictures(tmp_path):
+    """⛔ llm.vision=False（纯文本脑，如 demo 的 Qwen3-4B）时主循环不把画面喂给它——
+    纯文本模型处理不了 image_url，喂了只会浪费 token 或直接报错。画面照常落会话留痕，
+    那是给人看的。"""
+    world = _ImageWorld()
+    orch, session = _orch(tmp_path, world)
+    llm = _ImageRecordingLLM([LLMReply(text="done")], vision=False)
+    orch.handle(session, "hi", llm)
+    assert llm.seen_images, "主循环一次都没问大脑，测试前提就不成立"
+    assert all(img is None for img in llm.seen_images)
+
+
+def test_a_brain_with_eyes_gets_the_picture(tmp_path):
+    """vision=True 的脑照常拿到画面（默认行为不变）。"""
+    world = _ImageWorld()
+    orch, session = _orch(tmp_path, world)
+    llm = _ImageRecordingLLM([LLMReply(text="done")], vision=True)
+    orch.handle(session, "hi", llm)
+    assert llm.seen_images and llm.seen_images[0] == b"\x89PNG-fake"

@@ -140,7 +140,7 @@ version = { attr = "anima._version.__version__" }
 [tool.setuptools]
 package-dir = { "anima" = "src" }
 packages = ["anima", "anima.core", "anima.clients", "anima.session", "anima.llm",
-            "anima.presentation"]
+            "anima.presentation", "anima.examples"]
 
 [tool.pytest.ini_options]
 cache_dir = ".cache/pytest"       # 把 .pytest_cache 收进 .cache/

@@ -152,9 +152,14 @@ class Orchestrator:
 
         obs = world.perceive() if world else None
         # 多相机：把全套命名图交给 LLM（provider 会给每张标相机名）；单相机/无名图=老形状 bytes，行为不变。
+        # ⛔ 但先问一句「这个脑长眼睛吗」：llm.vision=False（纯文本脑，如 demo 的 Qwen3-4B）时
+        #    画面不进模型——它处理不了 image_url，喂了只会浪费 token 或直接报错。
+        #    画面照常落会话留痕（下面的 append_perception 不受影响），那是给人看的。
+        vision = getattr(state.get("llm"), "vision", True)
         image = None
         if obs:
-            image = obs.images if len(obs.images) > 1 else obs.image_png
+            if vision:
+                image = obs.images if len(obs.images) > 1 else obs.image_png
             self.store.append_perception(session.id, obs.image_png, obs.state, images=obs.images)
             img_b64 = base64.b64encode(obs.image_png).decode() if obs.image_png else None
             state["trace"]["inputs"].append({"image_b64": img_b64, "state": obs.state,

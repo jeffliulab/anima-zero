@@ -188,6 +188,138 @@ def cmd_world_show(args) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- demo / 演示 ===
+
+DEMO_WORLD_NAME = "corridor-demo"
+# The scripted first task. Kept short on purpose: the point of the first five minutes is
+# watching the loop run — a task that takes fifteen steps teaches nothing that three do not.
+DEMO_SAY = "Move the dot to the right end of the corridor."
+
+
+def _pick_demo_brain(requested: str | None) -> str:
+    """Which brain the demo runs on, decided out loud.
+
+    Order: an explicit --brain → a configured online brain → the local CPU demo brain
+    (Qwen3-4B via Ollama, pulling it if asked to) → the mock, with the three-step guide
+    for getting the real one. Every step says what it picked and why: a demo that
+    silently falls back teaches the wrong lesson.
+    """
+    import shutil
+    import subprocess
+
+    from .llm.factory import _ollama_tags
+
+    if requested:
+        return requested
+
+    brains = {b["name"]: b for b in list_brains()}
+    for name, b in brains.items():
+        if b["hosting"] == "api" and b["available"]:
+            print(f"Brain: {name} — you have its API key configured, so the demo uses "
+                  f"the real thing.")
+            return name
+
+    model = config.MODEL_DEMO
+    tags = _ollama_tags(config.OLLAMA_BASE_URL)
+    ollama_up = bool(tags) or _ollama_reachable()
+    if model in tags:
+        print(f"Brain: demo — {model} on your local Ollama. No key, no cloud; "
+              f"it really thinks, on your CPU.")
+        return "demo"
+    if ollama_up:
+        print(f"Your Ollama is running but {model} is not pulled yet.")
+        if _confirm("Pull it now? (~2.5 GB, one time, runs purely on CPU)"):
+            rc = subprocess.run(["ollama", "pull", model]).returncode
+            if rc == 0:
+                print("Brain: demo — model pulled, using it.")
+                return "demo"
+            print("The pull failed; falling back to the mock brain for this run.")
+    else:
+        print("No API key and no local Ollama — the demo falls back to the mock brain,")
+        print("which does NOT think: it only walks the chain so you can watch it.")
+        print("\nFor a brain that actually thinks, free and offline:")
+        if shutil.which("ollama"):
+            print("  1. start Ollama:        ollama serve")
+        else:
+            print("  1. install Ollama:      https://ollama.com/download")
+        print(f"  2. pull the demo brain: ollama pull {model}   (~2.5 GB, one time)")
+        print("  3. run this again:      anima demo\n")
+    return "mock"
+
+
+def _ollama_reachable() -> bool:
+    """Whether an Ollama server answers at all — `_ollama_tags` cannot tell 'server down'
+    from 'zero models pulled', and the guidance to print differs between the two."""
+    try:
+        with urllib.request.urlopen(config.OLLAMA_BASE_URL.rstrip("/") + "/models",
+                                    timeout=config.OLLAMA_PROBE_TIMEOUT) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def cmd_demo(args) -> int:
+    """Prove the whole loop works, against a world that ships inside the package.
+
+    ROS has talker/listener; ANIMA has this. A corridor world starts on a free local
+    port, a brain is picked (see _pick_demo_brain), and one scripted turn really runs —
+    session on disk, trace in the logs, nothing staged.
+    / 证明整条链路是活的——ROS 有 talker/listener，ANIMA 有这条命令。"""
+    from .examples.minimal_world import serve_in_thread
+
+    print("ANIMA demo — a dot on an eight-cell corridor, one brain, one real turn.")
+    print("Everything you are about to see really happens: real session, real trace.\n")
+
+    brain = _pick_demo_brain(args.brain)
+    try:
+        make_llm(brain)     # validate now rather than mid-turn
+    except KeyError as e:
+        print(str(e), file=sys.stderr)
+        return 1
+
+    with serve_in_thread() as base:
+        reg = WorldRegistry()
+        reg.register_world(DEMO_WORLD_NAME, base)
+        world = reg.get(DEMO_WORLD_NAME)
+
+        # The trust flow, exercised honestly rather than bypassed: a world's text never
+        # reaches the brain unapproved, so the demo approves — and says that normally
+        # this is the step where a person reads the manifest first. The approval is
+        # revoked on the way out: the port is ephemeral, and a stale entry in the trust
+        # store would approve nothing but clutter it forever.
+        print(f"\nWorld: {DEMO_WORLD_NAME} on {base} (started just now, inside this process)")
+        print("Approving it for this run — normally YOU review the manifest first; that")
+        print("review is what `anima world add` walks you through for any other world.")
+        world.approve()
+
+        store = SessionStore()
+        session, _ = store.new(DEMO_WORLD_NAME, brain)
+        llm = LoggingLLM(make_llm(session.brain), session.brain)
+        orch = Orchestrator(reg, store)
+
+        print(f"\nTask: {args.say!r}   (brain: {brain}, session: {session.id})")
+        print("Thinking... (a local CPU brain can take a few seconds per step)\n")
+        try:
+            with session_scope(session.id):
+                out = orch.handle(session, args.say, llm)
+        finally:
+            # 审批是这轮临时给的，走完就还回去——端口每次都换，留着只会把信任库堆满死条目。
+            trust.TrustStore().revoke(base)
+
+        print(f"ANIMA › {out['reply']}\n")
+        log = session_log._file_for(session.id)
+        print(f"Every frame, thought and tool call of that turn is in:\n  {log}")
+
+    print("\nNext steps:")
+    print("  · same world, your pace:  python -m anima.examples.minimal_world --port 8090")
+    print("    then:                   anima world add example http://localhost:8090")
+    print("  · talk to it:             anima chat --world example")
+    print("  · the web app:            anima serve")
+    print("  · write your own world:   src/anima/examples/minimal_world.py is the template,")
+    print("                            docs/awi-spec-v1.md is the contract it follows")
+    return 0
+
+
 def cmd_doctor(args) -> int:
     """What is configured, what is reachable, and what would happen if you ran something.
     / 什么配好了、什么连得上、以及你现在跑一条命令会发生什么。"""
@@ -226,6 +358,7 @@ def cmd_doctor(args) -> int:
     if not config.worlds():
         print("  (none — a world is a separate program; clone the repository for the ones in "
               "world/, or write your own against docs/awi-spec-v1.md)")
+        print("  Want to see it move first? `anima demo` starts a bundled world and runs one turn.")
     print("\nRegister one with: anima world add NAME URL")
     return 0
 
@@ -369,6 +502,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("doctor", help="what is configured, and what is reachable")
     p.set_defaults(fn=cmd_doctor)
+
+    p = sub.add_parser("demo", help="prove the loop works: a bundled world, one brain, one real turn")
+    p.add_argument("--brain", default=None,
+                   help="force a brain (default: an online key if configured, else the "
+                        "local CPU demo brain, else the mock)")
+    p.add_argument("--say", default=DEMO_SAY,
+                   help="the scripted task (default: %(default)r)")
+    p.set_defaults(fn=cmd_demo)
 
     p = sub.add_parser("conformance", help="check a world against the AWI v1 contract")
     p.add_argument("url", help="the world's base address, e.g. http://localhost:8102")

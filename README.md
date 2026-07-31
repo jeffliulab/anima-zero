@@ -104,17 +104,26 @@ services/      board-game engine   frontend/  web app   eval/  scoring
 
 ```bash
 uv tool install anima-zero     # or: pipx install anima-zero, or plain pip
+anima demo
 ```
 
-That installs the brain, and only the brain. A world is a separate program and none ships in
-the wheel, so the next step is to get one: clone this repository for the worlds in
-[`world/`](world/), or write your own against [the AWI spec](docs/awi-spec-v1.md).
+That is the whole first five minutes. The demo starts a tiny bundled world — a dot on an
+eight-cell corridor, ANIMA's talker/listener — picks a brain, and runs one real turn:
+if you have an API key it uses it, otherwise it walks you to a **free local brain that
+runs on your CPU** (Qwen3-4B via Ollama, ~2.5 GB, offered as a one-line pull). Every
+frame, thought and tool call lands in a session log you can read afterwards.
+
+A real world is a separate program and none ships in the wheel, so the next step is to
+get one: clone this repository for the worlds in [`world/`](world/), or write your own
+against [the AWI spec](docs/awi-spec-v1.md) — `src/anima/examples/minimal_world.py`,
+the corridor from the demo, is the template to copy.
 
 The fastest way to find your way around is to hand the repository to a coding agent — Claude
 Code, Codex, or whichever you use — and let it read [AGENTS.md](AGENTS.md), which is written
 for exactly that. It will start a world with you, or write you a new one.
 
 ```text
+anima demo                    prove the loop works: a bundled world, one brain, one real turn
 anima chat --world W          a conversation in the terminal
 anima run --say "..."         one turn, scripted
 anima serve                   the backend API, for the web app
@@ -191,11 +200,12 @@ Runs that did work, with per-frame verification, are written up in
 ## Add your own world
 
 Implement a standard MCP server with the four channels above, add its address to `ANIMA_WORLDS`, and the
-brain will drive it unchanged. The smallest version is three methods — `capabilities()`, `observe()` and
-`invoke()` — wrapped in the `awi_mcp.py` adapter that ships with every world. Copy from
-[camera](world/camera) if your world is only something to look at, [sim-chess](world/sim-chess) if it
-takes actions, or [sim-house-nav](world/sim-house-nav) for the complete one, and read
-[world/README.md](world/README.md) first. The contract is written down in
+brain will drive it unchanged. The smallest complete example ships inside the package:
+`src/anima/examples/minimal_world.py` — the corridor from `anima demo`, annotated line by line
+against the spec, and runnable on its own with `python -m anima.examples.minimal_world`.
+Copy from [camera](world/camera) if your world is only something to look at,
+[sim-chess](world/sim-chess) if it takes actions, or [sim-house-nav](world/sim-house-nav) for the
+complete one, and read [world/README.md](world/README.md) first. The contract is written down in
 [docs/awi-spec-v1.md](docs/awi-spec-v1.md), and `anima conformance <url>` checks a world against it.
 
 ## Acknowledgements

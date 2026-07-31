@@ -94,17 +94,24 @@ services/      棋类引擎顾问       frontend/  网页    eval/  记分卡
 
 ```bash
 uv tool install anima-zero     # 或者 pipx install，或者普通 pip
+anima demo
 ```
 
-装上的只有大脑。**世界是独立的程序，wheel 里一个都不带**，所以下一步是去弄一个：
-clone 本仓就能拿到 [`world/`](../../../world/) 下的那几个，或者照
-[AWI 规范](../../awi-spec-v1.md)自己写一个。
+头五分钟就这两行。demo 会起一个随包的迷你世界——八格走廊上的一个点，ANIMA 的
+talker/listener——挑一个大脑，真跑一轮：你有 API key 就用你的；没有，它带你装一个
+**本地 CPU 上免费跑的大脑**（Qwen3-4B，经 Ollama，约 2.5GB，会问你一句再拉）。
+每一帧、每一次思考、每一次工具调用都落进一份可以回看的会话流水。
+
+真实世界是独立的程序，wheel 里一个都不带，所以下一步是去弄一个：clone 本仓就能拿到
+[`world/`](../../../world/) 下的那几个，或者照 [AWI 规范](../../awi-spec-v1.md)
+自己写一个——`src/anima/examples/minimal_world.py`（就是 demo 里那条走廊）是给你抄的模板。
 
 最快摸清门道的办法，是把这个仓交给一个 coding agent——Claude Code、Codex，你手边哪个都行——
 让它去读 [AGENTS.md](../../../AGENTS.md)，那份文件就是为这件事写的。它会陪你起一个世界，
 或者给你写一个新的。
 
 ```text
+anima demo                    证明链路是活的：随包世界 + 一个大脑 + 真跑一轮
 anima chat --world W          在终端里对话
 anima run --say "..."         跑一轮就退出，可脚本化
 anima serve                   起后端 API（网页连它）
@@ -194,8 +201,9 @@ curl -s localhost:8112/status
 ## 接你自己的世界
 
 实现一个标准 MCP server，提供上面那四条通道，把地址加进 `ANIMA_WORLDS`，大脑一行不改就能驱动它。
-最小的一份只有三个方法，`capabilities()`、`observe()`、`invoke()`，用每个世界都自带的 `awi_mcp.py`
-适配层包一下即可。只能看的世界照 [camera](../../../world/camera) 抄，会动手的照
+最小且完整的示例随包分发：`src/anima/examples/minimal_world.py`——就是 `anima demo` 里那条走廊，
+逐行对照规范注释，单独跑起来只要 `python -m anima.examples.minimal_world`。
+只能看的世界照 [camera](../../../world/camera) 抄，会动手的照
 [sim-chess](../../../world/sim-chess) 抄，最完整的看
 [sim-house-nav](../../../world/sim-house-nav)，动手前先读
 [world/README_zh.md](../../../world/README_zh.md)。契约写在

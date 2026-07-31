@@ -48,6 +48,7 @@ def _registry() -> dict[str, dict]:
     qwen_model = config.MODEL_QWEN
     opus_model, haiku_model = config.MODEL_OPUS, config.MODEL_HAIKU
     gpt55_model, gpt54_model, gpt54_mini_model = config.MODEL_GPT_55, config.MODEL_GPT_54, config.MODEL_GPT_54_MINI
+    demo_model = config.MODEL_DEMO
     has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
     has_openai = bool(okey)
     tags: set[str] | None = None  # 本地脑可用性才需查 Ollama,惰性求值
@@ -79,6 +80,12 @@ def _registry() -> dict[str, dict]:
         "qwen3-vl": {"vendor": "Ollama · local", "label": "Qwen3-VL 8B", "model": qwen_model, "hosting": "local",
                      "build": lambda: OpenAICompatLLM(qwen_model, ollama, "ollama"),
                      "ready": lambda: ollama_ready(qwen_model)},
+        # demo 演示脑：纯文本（vision=False），纯 CPU 可跑。它的世界传感器全是文字，
+        # 不需要眼睛；选型理由写在 config 的 model_demo 字段说明里。
+        "demo": {"vendor": "Ollama · local", "label": "Qwen3 4B Instruct (demo brain, CPU)", "model": demo_model,
+                 "hosting": "local",
+                 "build": lambda: OpenAICompatLLM(demo_model, ollama, "ollama", vision=False),
+                 "ready": lambda: ollama_ready(demo_model)},
         # —— 不需要 key 的演示脑：它**不思考**，只把链路走一遍（见 llm/mock.py）——
         # 列在最后、标签里直说它不思考：它是给"刚装完想看看能不能跑"用的，不是一个可选的大脑。
         # ready 恒真是它唯一的意义所在——没有 key 的人也得有一个能跑的东西。

@@ -35,7 +35,7 @@ def test_every_documented_command_exists():
     """⛔ The set of commands, asserted as a whole. Dropping one is the kind of change that
     passes review because the diff looks like a tidy-up.
     / ⛔ 命令的**全集**，整体断言。删掉一个正是那种"diff 看起来像是在整理"、于是评审就放过去的改动。"""
-    for argv in (["chat"], ["run", "--say", "hi"], ["serve"], ["doctor"],
+    for argv in (["chat"], ["run", "--say", "hi"], ["serve"], ["doctor"], ["demo"],
                  ["world", "list"], ["world", "add", "x", "http://x"],
                  ["world", "show", "x"], ["world", "remove", "x"]):
         assert _parse(argv).fn is not None, f"命令没了：{' '.join(argv)}"

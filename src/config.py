@@ -167,6 +167,12 @@ class Settings(BaseSettings):
                                    description="GPT-5.4-mini 的模型 id。")
     model_qwen: str = Field("qwen3-vl:8b", validation_alias="ANIMA_QWEN3VL_MODEL",
                             description="本地 Qwen3-VL（Ollama）的模型名。")
+    model_demo: str = Field(
+        "qwen3:4b-instruct-2507", validation_alias="ANIMA_DEMO_MODEL",
+        description="`anima demo` 的本地演示脑（经 Ollama，纯 CPU 可跑）。选型：4B 是最小且"
+                    "真正可靠的工具调用尺寸（BFCL 函数调用榜有正式条目；1.7B/0.6B 不可靠），"
+                    "Apache-2.0，Q4 约 2.5GB。它是纯文本模型——演示世界的传感器全是文字"
+                    "（look 工具 + state 读数），不需要视觉。")
 
 
 # 启动即校验：env/.env 有非法值这里直接抛可读的 ValidationError（fail-fast）。
@@ -206,6 +212,7 @@ MODEL_GPT_55 = _settings.model_gpt_55
 MODEL_GPT_54 = _settings.model_gpt_54
 MODEL_GPT_54_MINI = _settings.model_gpt_54_mini
 MODEL_QWEN = _settings.model_qwen
+MODEL_DEMO = _settings.model_demo
 
 
 # ---- 给网页显示的「核心运行参数」----
