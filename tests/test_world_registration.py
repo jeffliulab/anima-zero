@@ -21,7 +21,7 @@ ENV_EXAMPLE = ROOT / ".env.example"
 RUN_DOC = ROOT.parent / "anima-zero-个人用详细开发日志" / "运行命令.md"
 
 # 不住在本仓的世界（各自独立仓/子模块），本文件只核"清单里有没有它"，不核目录。
-EXTERNAL_WORLDS = {"gazebo-chess"}   # 2026-07-08 迁去 soma-zero/sim/
+EXTERNAL_WORLDS = {"gazebo-chess"}   # 2026-07-08 迁去 open-chess-robot/sim/
 
 
 def _declared_worlds() -> list[str]:

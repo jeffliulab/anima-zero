@@ -91,7 +91,7 @@ show, into English. Four places were left, each for a reason:
   **byte-identical copy in four places**, three of them held by a test. Changing four strings
   means changing all four in lockstep. Since v1.1.1 that is a thing one can do: deleting the two
   desk worlds took the count from six to four and removed the submodule, so the whole set is now
-  in this repository apart from the copy in soma-zero.
+  in this repository apart from the copy in open-chess-robot.
 - `src/dev_turn.py` — a development harness, not a shipped command.
 - `src/config.py` field descriptions and two orchestrator log lines — internal only. The
   panel hints they used to feed are now separate and English.

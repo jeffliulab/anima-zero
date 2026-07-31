@@ -38,7 +38,7 @@ ce qui se passe réellement, et qu'il ne voit jamais.</sub>
 ### Pourquoi « Zero » ?
 
 C'est un nom de série, pas un numéro de version. **Zero signifie que cette lignée reste
-ouverte** — le cerveau est ANIMA Zero, le corps est SOMA Zero, et toute édition commerciale
+ouverte** — le cerveau est ANIMA Zero, le corps est Open Chess Robot, et toute édition commerciale
 future portera un autre nom plutôt que de refermer celle-ci. L'ensemble du projet est sous MIT.
 
 Sur PyPI, c'est `pip install anima-zero` et l'import est `import anima` — `anima` tout court

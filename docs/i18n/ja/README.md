@@ -38,7 +38,7 @@ ANIMA Zero は具身ロボットのブレインです。考えるだけで、決
 ### なぜ「Zero」なのか
 
 これはバージョン番号ではなくシリーズ名です。**Zero とは、この系統がオープンソースであり
-続けるという意味**です。ブレインが ANIMA Zero、身体が SOMA Zero。将来もし商用版が出るとしても、
+続けるという意味**です。ブレインが ANIMA Zero、身体が Open Chess Robot。将来もし商用版が出るとしても、
 この系統を閉じるのではなく別の名前を名乗ります。プロジェクト全体が MIT です。
 
 PyPI では `pip install anima-zero`、import は `import anima` です——`anima` という名前だけは

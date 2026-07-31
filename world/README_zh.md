@@ -121,5 +121,5 @@
 | `sim-house-nav` | 8112 | 住宅导航：机器人在屋里靠视觉找房间；两种身体可切换 |
 | `computer` | — | 占位，尚未实现 |
 
-> `gazebo-chess`（8106）于 2026-07-08 迁去 `soma-zero/sim/`，不在本目录；
+> `gazebo-chess`（8106）于 2026-07-08 迁去 `open-chess-robot/sim/`，不在本目录；
 > 它那份 `awi_mcp.py` 的一致性**没有自动守卫**，改 AWI 协议时记得手动同步过去。

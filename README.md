@@ -37,7 +37,7 @@ In each clip the left half is the only input ANIMA gets; the right half is what 
 ### Why "Zero"?
 
 It is a series name, not a version number. **Zero means this line stays open source** —
-the brain is ANIMA Zero, the body is SOMA Zero, and any future commercial edition will
+the brain is ANIMA Zero, the body is Open Chess Robot, and any future commercial edition will
 carry a different name rather than closing this one. The whole project is MIT.
 
 On PyPI it is `pip install anima-zero` and the import is `import anima` — `anima` alone was already registered by someone else.

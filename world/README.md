@@ -142,6 +142,6 @@ sim-house-nav):
 | `sim-house-nav` | 8112 | House navigation: a robot finds rooms by sight; two switchable bodies |
 | `computer` | — | A placeholder, not implemented |
 
-> `gazebo-chess` (8106) moved to `soma-zero/sim/` on 2026-07-08 and is not in this directory.
+> `gazebo-chess` (8106) moved to `open-chess-robot/sim/` on 2026-07-08 and is not in this directory.
 > **Its copy of `awi_mcp.py` has no automated guard** — when you change the AWI protocol,
 > remember to sync it by hand.

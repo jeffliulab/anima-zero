@@ -7,7 +7,7 @@
 
 测试起一个真 uvicorn（环回随机端口）+ 真 MCP 往返，不 mock 协议层——协议层正是被测对象。
 awi_mcp.py 从 world/sim-chess/ 加载（各世界这份字节一致由 test_awi_mcp_copies 守住；测的世界是下面
-的 inline mock，借哪个世界的 awi_mcp 都一样——原借 gazebo-chess，它已迁去 soma-zero，改借 sim-chess）。
+的 inline mock，借哪个世界的 awi_mcp 都一样——原借 gazebo-chess，它已迁去 open-chess-robot，改借 sim-chess）。
 """
 from __future__ import annotations
 

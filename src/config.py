@@ -315,7 +315,7 @@ def worlds() -> list[tuple[str, str]]:
     repo_worlds = [
         ("sim-chess", "SIM_CHESS_URL", "http://localhost:8102"),
         ("camera", "CAMERA_URL", "http://localhost:8104"),
-        ("gazebo-chess", "GAZEBO_CHESS_URL", "http://localhost:8106"),   # 代码在 soma-zero/sim/
+        ("gazebo-chess", "GAZEBO_CHESS_URL", "http://localhost:8106"),   # 代码在 open-chess-robot/sim/
         ("sim-house-nav", "SIM_HOUSE_NAV_URL", "http://localhost:8112"),
     ]
     world_dir = os.path.join(paths.REPO_ROOT, "world")

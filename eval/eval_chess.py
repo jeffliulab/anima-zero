@@ -43,7 +43,7 @@ except ImportError:
     sys.exit("需要 python-chess：pip install chess（eval 只依赖 stdlib + python-chess + 一个 UCI 引擎）")
 
 _HERE = Path(__file__).resolve().parent
-# 运行产物在仓库根 logs/（awi-*.jsonl 在这；gazebo 的 games-*.jsonl 已随世界移到 soma-zero，
+# 运行产物在仓库根 logs/（awi-*.jsonl 在这；gazebo 的 games-*.jsonl 已随世界移到 open-chess-robot，
 # 要评它用 EVAL_LOGS_DIR 指过去）。
 LOGS_DIR = os.getenv("EVAL_LOGS_DIR") or str(_HERE.parent / "logs")
 OUT_DIR = os.getenv("EVAL_OUT_DIR") or str(_HERE / "out")

@@ -34,7 +34,7 @@ ANIMA Zero 是一台具身机器人的脑。它只想、不动手：它决定做
 
 ### 为什么叫「Zero」
 
-它是系列名，不是版本号。**Zero 的含义是这条线永远开源**——脑叫 ANIMA Zero，身体叫 SOMA Zero；
+它是系列名，不是版本号。**Zero 的含义是这条线永远开源**——脑叫 ANIMA Zero，身体叫 open-chess-robot；
 将来若有商业版，会另起名字，而不是把这条线关掉。整个项目是 MIT。
 
 装是 `pip install anima-zero`，导入是 `import anima`——光是 `anima` 那个名字在 PyPI 上已被别人注册。
