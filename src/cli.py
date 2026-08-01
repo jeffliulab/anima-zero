@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import functools
 import json
+import os
 import sys
 import time
 import urllib.error
@@ -152,13 +153,56 @@ def cmd_world_add(args) -> int:
         return 1
     world.approve()
 
-    print(f"\nApproved. Add it to the world list — ANIMA_WORLDS in {paths.ENV_FILE}.\n"
-          "⛔ Append; do not replace, or you drop the worlds already there:")
-    # 清单为空是 pip 用户的常态——那时候别打印出 `ANIMA_WORLDS=,example=...` 那个前导逗号，
-    # 它照抄进 .env 就是一个空条目。有就接在后面，没有就只写这一个。
-    entries = [f"{n}={u}" for n, u in config.worlds()] + [f"{args.name}={url}"]
-    print(f"  ANIMA_WORLDS={','.join(entries)}")
+    # ⛔ 审批 ≠ 注册。approve() 记的是"我读过这份清单并信任它"，**不会**让世界出现在世界清单里
+    #    ——清单的唯一来源是 `ANIMA_WORLDS`。两件事分开是对的（信任跟着人走、清单跟着环境走），
+    #    但只做前一件、让用户自己去建 `.env`，那条"装完 → demo → 接着聊"的链子就是断的：
+    #    `anima world add example …` 成功，紧接着 `anima chat --world example` 报
+    #    「No world named 'example'」。v1.2 发版前的独立审计正是在这里断的。
+    #    所以这里把它**追加**进 ANIMA_WORLDS（⛔ 永远追加、绝不替换，T0）。
+    if getattr(args, "save", True):
+        state = _remember_world(args.name, url)
+        print(f"\nApproved and added to your world list ({paths.ENV_FILE}).")
+        if state == "already":
+            print(f"  (it was already listed as {args.name})")
+        print(f"  Use it now:  anima chat --world {args.name}")
+    else:
+        print(f"\nApproved, but NOT added to the world list (--no-save). Put it in "
+              f"ANIMA_WORLDS in {paths.ENV_FILE} yourself.\n"
+              "⛔ Append; do not replace, or you drop the worlds already there:")
+        entries = [f"{n}={u}" for n, u in config.worlds()] + [f"{args.name}={url}"]
+        print(f"  ANIMA_WORLDS={','.join(entries)}")
     return 0
+
+
+def _remember_world(name: str, url: str) -> str:
+    """把一个世界追加进 `.env` 的 ANIMA_WORLDS，返回 'added' / 'already'。
+
+    ⛔ 只碰 ANIMA_WORLDS 那一行，其它行原样保留——这个文件里还有别人的 API key 和配置。
+    ⛔ 追加，不替换（T0）：先读现有清单，把新条目接在后面；同名已在就什么都不做。
+    """
+    import re
+
+    path = paths.ENV_FILE
+    existing = [f"{n}={u}" for n, u in config.worlds()]
+    if any(e.split("=", 1)[0] == name for e in existing):
+        return "already"
+    line = "ANIMA_WORLDS=" + ",".join(existing + [f"{name}={url}"])
+
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+    except FileNotFoundError:
+        text = ""
+    # 只替换未被注释掉的那一行；没有就在末尾新起一行。
+    pattern = re.compile(r"^ANIMA_WORLDS=.*$", re.MULTILINE)
+    if pattern.search(text):
+        text = pattern.sub(lambda _m: line, text, count=1)
+    else:
+        text = (text.rstrip("\n") + "\n" if text.strip() else "") + line + "\n"
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    return "added"
 
 
 def cmd_world_remove(args) -> int:
@@ -370,7 +414,8 @@ def cmd_demo(args) -> int:
     template = _example_world_source()
     print("\nNext steps:")
     print("  · same world, your pace:  python -m anima.examples.minimal_world --port 8090")
-    print("    then:                   anima world add example http://localhost:8090")
+    print("    register it:            anima world add example http://localhost:8090")
+    print("                            (that both approves it and adds it to your world list)")
     print("  · talk to it:             anima chat --world example")
     print("  · the web app:            anima serve")
     print(f"  · write your own world:   the corridor is the template to copy —\n"
@@ -567,15 +612,17 @@ def build_parser() -> argparse.ArgumentParser:
     #    substitute a usable one for an unconfigured default.
     # ⛔ 默认是 None、不是 DEFAULT_BRAIN：`_resolve_brain` 必须分得清"用户点名了"和
     #    "没人说"，因为只有后一种情况它才允许把用不了的默认脑换成一个能用的。
-    p.add_argument("--brain", default=None, help=f"default: {DEFAULT_BRAIN} if usable, "
-                                                 f"else the first brain that is")
+    p.add_argument("--brain", default=None, help=f"which brain to use (default: {DEFAULT_BRAIN}, "
+                                                 f"or the first usable one if it is not "
+                                                 f"configured)")
     p.set_defaults(fn=cmd_chat)
 
     p = sub.add_parser("run", help="one turn, then exit (scriptable)")
     p.add_argument("--say", required=True)
     p.add_argument("--world", default=None)
-    p.add_argument("--brain", default=None, help=f"default: {DEFAULT_BRAIN} if usable, "
-                                                 f"else the first brain that is")
+    p.add_argument("--brain", default=None, help=f"which brain to use (default: {DEFAULT_BRAIN}, "
+                                                 f"or the first usable one if it is not "
+                                                 f"configured)")
     p.add_argument("--session", default=None, help="continue an existing session")
     p.add_argument("--trace", action="store_true", help="print this turn's trace as well")
     p.set_defaults(fn=cmd_run)
@@ -613,6 +660,8 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("--yes", action="store_true",
                    help="⚠ approve without reading (for scripts; not for ordinary use)")
     q.add_argument("--timeout", type=float, default=10.0)
+    q.add_argument("--no-save", dest="save", action="store_false",
+                   help="approve only; do not add it to ANIMA_WORLDS in .env")
     q.set_defaults(fn=cmd_world_add)
     q = w.add_parser("show", help="what a world declares, and its trust status")
     q.add_argument("name")

@@ -18,6 +18,8 @@ CLI 比代码库里任何东西都烂得快：它在项目内部没有调用方�
 from __future__ import annotations
 
 import os
+import pathlib
+
 import pytest
 
 from anima import cli
@@ -80,11 +82,15 @@ class _FakeWorld:
 
 
 @pytest.fixture
-def _fake_add(monkeypatch):
+def _fake_add(monkeypatch, tmp_path):
     world = _FakeWorld()
     monkeypatch.setattr(cli, "_wait_for_health", lambda url, timeout: True)
     monkeypatch.setattr("anima.clients.world_client.RemoteWorld",
                         lambda name, url: world)
+    # ⛔ 文件系统也得替掉，不只是网络：`world add` 现在会把世界**写进** `.env`
+    #    （v1.2 起，见 cli._remember_world）。不指到 tmp 的话，它会照着 conftest 设的那个
+    #    占位路径在 tests/ 里落下一个真文件——一条测试往仓库里拉屎。
+    monkeypatch.setattr(cli.paths, "ENV_FILE", str(tmp_path / ".env"))
     return world
 
 
@@ -112,6 +118,17 @@ def test_world_add_approves_when_you_say_yes(_fake_add, monkeypatch):
     monkeypatch.setattr("builtins.input", lambda *_: "y")
     assert cli.cmd_world_add(_parse(["world", "add", "w", "http://w"])) == 0
     assert _fake_add.approved
+    # 批准之后世界必须真的进清单——审批和注册是一条链，断在哪里都等于 `anima chat --world w`
+    # 报「No world named 'w'」。
+    assert "w=http://w" in pathlib.Path(cli.paths.ENV_FILE).read_text(encoding="utf-8")
+
+
+def test_world_add_can_approve_without_registering(_fake_add, monkeypatch):
+    """`--no-save` 留给脚本和"只想看看清单"的人：审批照做，清单不动。"""
+    monkeypatch.setattr("builtins.input", lambda *_: "y")
+    assert cli.cmd_world_add(_parse(["world", "add", "w", "http://w", "--no-save"])) == 0
+    assert _fake_add.approved
+    assert not pathlib.Path(cli.paths.ENV_FILE).exists()
 
 
 def test_world_add_yes_flag_is_marked_as_the_dangerous_one():
@@ -192,3 +209,47 @@ def test_ui_build_time_is_none_without_a_web_app(tmp_path, monkeypatch):
 
     monkeypatch.setattr(server, "_UI_DIR", str(tmp_path / "nothing-here"))
     assert server.ui_build_time() is None
+
+
+# --------------------------------------- world add 真的把世界注册进清单（不只是审批）----
+
+def test_world_add_appends_to_an_empty_env(tmp_path, monkeypatch):
+    """⛔ 审批 ≠ 注册。v1.2 发版前的独立审计发现：`anima world add` 只写信任库，
+    于是 demo 结尾印的那串命令对 pip 用户是断的——下一条 `anima chat --world example`
+    直接报「No world named 'example'」。这条测试盯的就是那条链子。"""
+    env = tmp_path / ".env"
+    monkeypatch.setattr(cli.paths, "ENV_FILE", str(env))
+    monkeypatch.setattr(cli.config, "worlds", lambda: [])
+
+    assert cli._remember_world("example", "http://localhost:8090") == "added"
+    assert env.read_text(encoding="utf-8").strip() == \
+        "ANIMA_WORLDS=example=http://localhost:8090"
+
+
+def test_world_add_appends_and_never_replaces(tmp_path, monkeypatch):
+    """T0：追加，不替换。已有的世界一个都不许掉，其它配置行原样保留。"""
+    env = tmp_path / ".env"
+    env.write_text("OPENAI_API_KEY=sk-secret\n"
+                   "ANIMA_WORLDS=sim-chess=http://localhost:8102\n"
+                   "DEFAULT_WORLD=\n", encoding="utf-8")
+    monkeypatch.setattr(cli.paths, "ENV_FILE", str(env))
+    monkeypatch.setattr(cli.config, "worlds",
+                        lambda: [("sim-chess", "http://localhost:8102")])
+
+    assert cli._remember_world("example", "http://localhost:8090") == "added"
+    text = env.read_text(encoding="utf-8")
+    assert "ANIMA_WORLDS=sim-chess=http://localhost:8102,example=http://localhost:8090" in text
+    assert "OPENAI_API_KEY=sk-secret" in text, "改世界清单时动了别的配置行"
+    assert "DEFAULT_WORLD=" in text
+
+
+def test_world_add_is_idempotent(tmp_path, monkeypatch):
+    """同名已在清单里就什么都不做——重复跑一次不该把地址写两遍。"""
+    env = tmp_path / ".env"
+    env.write_text("ANIMA_WORLDS=example=http://localhost:8090\n", encoding="utf-8")
+    monkeypatch.setattr(cli.paths, "ENV_FILE", str(env))
+    monkeypatch.setattr(cli.config, "worlds",
+                        lambda: [("example", "http://localhost:8090")])
+
+    assert cli._remember_world("example", "http://localhost:9999") == "already"
+    assert env.read_text(encoding="utf-8").count("example=") == 1

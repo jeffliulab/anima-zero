@@ -237,12 +237,31 @@ def check(brain: str) -> dict:
 # ---- 会话:同一个世界单活 + 冻结;本地持久化 ----
 class NewSessionIn(BaseModel):
     world: str | None = None
-    brain: str = _DEFAULT_BRAIN
+    # ⛔ 默认 None、不是 _DEFAULT_BRAIN：得分得清"调用方点名了某个脑"和"没人说"。
+    #    只有后一种情况才允许替他挑一个能用的（见 resolve_brain）。
+    brain: str | None = None
+
+
+def resolve_brain(requested: str | None) -> str:
+    """点名的那个 → 配置的默认脑 → 第一个真能用的。与 CLI 的 `_resolve_brain` 同一套规矩。
+
+    ⛔ 网页侧栏自己会挑"第一个可用的脑"，所以点界面的人碰不到这个问题；但**直接调 API 的人
+    会**——没配 key 时建出来的会话钉在一个用不了的在线脑上，一开口就得到「That brain is not
+    configured」，还在会话列表里留一条死会话。CLI 那边已经有这层兜底，API 这边漏了。
+    （v1.2 发版前的独立测试逮到的。）
+    """
+    if requested:
+        return requested
+    brains = {b["name"]: b for b in list_brains()}
+    default = brains.get(_DEFAULT_BRAIN)
+    if default is None or default["available"]:
+        return _DEFAULT_BRAIN
+    return next((n for n, b in brains.items() if b["available"]), _DEFAULT_BRAIN)
 
 
 @app.post("/api/sessions")  # 新建会话(同一个世界的活跃会话会被冻结)
 def new_session(inp: NewSessionIn) -> dict:
-    s, _frozen = store.new(inp.world, inp.brain)
+    s, _frozen = store.new(inp.world, resolve_brain(inp.brain))
     return s.summary()
 
 

@@ -14,14 +14,28 @@ from __future__ import annotations
 
 import pathlib
 
+import pytest
+
 from anima import config
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 ENV_EXAMPLE = ROOT / ".env.example"
-RUN_DOC = ROOT.parent / "anima-zero-个人用详细开发日志" / "运行命令.md"
 
 # 不住在本仓的世界（各自独立仓/子模块），本文件只核"清单里有没有它"，不核目录。
 EXTERNAL_WORLDS = {"gazebo-chess"}   # 2026-07-08 迁去 open-chess-robot/sim/
+
+
+@pytest.fixture(autouse=True)
+def _default_world_list(monkeypatch):
+    """让本文件永远看到**默认**世界清单，不受跑测试那台机器的环境影响。
+
+    ⛔ 不这么做的话，一个真在跑 gazebo-chess 的贡献者（他按文档设了 `GAZEBO_CHESS_URL`）
+    会看到这些 T0 守卫**莫名其妙地红**，而且报的还是一条误导性的「谁替换了全集」——
+    可他一个字都没改。守卫要守的是仓库的默认全集，不是某台机器此刻的环境。
+    """
+    monkeypatch.delenv("ANIMA_WORLDS", raising=False)
+    for env in config._OPTIONAL_WORLDS.values():
+        monkeypatch.delenv(env, raising=False)
 
 
 def _declared_worlds() -> list[str]:
@@ -109,13 +123,7 @@ def test_multi_stream_worlds_mark_awi_visibility():
             f"网页分不出哪一路大脑看得见。见 world/README.md 的「/streams 的 awi 字段」。")
 
 
-def test_run_doc_mentions_every_world():
-    """启动命令文档里要有每个世界（v0.3 漏补过 camera 的运行命令，封版才发现）。
-
-    这份文档在本仓之外（个人开发日志），不在就跳过——它不该阻断公开仓的测试。
-    """
-    if not RUN_DOC.exists():
-        return
-    text = RUN_DOC.read_text(encoding="utf-8")
-    missing = [n for n in _declared_worlds() if n not in text]
-    assert not missing, f"这些世界在启动命令文档里找不到：{missing}"
+# ⛔ 这里曾有一条 `test_run_doc_mentions_every_world`，核的是仓**外**一份私人开发文档。
+# 删掉的两个理由：① 那份文档不随仓分发，外来贡献者永远跑不到它，守卫对他们恒为跳过——
+# 一条永远跳过的守卫看着是绿的，其实什么都没守；② 它把私有目录名写进了一个**公开入库**的
+# 文件里。仓外文档的同步归维护者的封版流程管（见 CONTRIBUTING），不归公开测试管。

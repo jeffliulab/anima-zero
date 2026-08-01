@@ -64,7 +64,15 @@ export default function SensingArea({
     setFailed(online === false);
   }, [worldUrl, online, nonce]);
 
-  const disconnected = !!worldName && !!worldUrl && failed;
+  // ⛔ 两件不同的事，别混成一个提示：
+  //   · 世界连不上（online === false）→ 是故障，该说"进程起来了吗"。
+  //   · 世界在线、只是没有视频流 → **不是故障**。/stream 是场外可选的东西（给人看的连续画面），
+  //     一个世界完全可以只实现 AWI 那四条通道而不提供它——随包的走廊示例就是这样。
+  // 以前两者共用一句"确认世界进程有没有起来"，于是新用户接上第一个世界就会看到一句
+  // **明确错误的指路**（进程明明在跑）。2026-08-01 v1.2 封版前逮到。
+  const offline = !!worldName && !!worldUrl && online === false;
+  const noVideo = !!worldName && !!worldUrl && online !== false && failed;
+  const disconnected = offline || noVideo;
   const shown = selected === ALL ? cams : cams.filter((c) => c.name === selected);
   const multi = cams.length > 1;
   // 两块：大脑看得见的 / 只有你看得见的。分开摆、各有各的标题（见文件头的红线说明）。
@@ -125,20 +133,28 @@ export default function SensingArea({
             </div>
             {disconnected && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-2xl bg-neutral-950/70 p-6 text-center">
-                <div className="text-3xl">🔌</div>
-                <div className="text-sm font-medium text-amber-400">{t("Not connected to world “{name}”", { name: worldName ?? "" })}</div>
+                <div className="text-3xl">{offline ? "🔌" : "🎬"}</div>
+                <div className={`text-sm font-medium ${offline ? "text-amber-400" : "text-neutral-300"}`}>
+                  {offline
+                    ? t("Not connected to world “{name}”", { name: worldName ?? "" })
+                    : t("World “{name}” has no video stream", { name: worldName ?? "" })}
+                </div>
                 <div className="max-w-xs text-xs leading-relaxed text-neutral-400">
                   {/* ⛔ 整句一个 key。上一版把它切成三段（"…(see" + <code> + ") and then retry below."），
                       日语拼出来是病句：句子已经结束又接了半句，还读成"启动那份文档"。
                       各语言语序不同，碎片拼不回去——代价是失去 <code> 排版，换它真的能被翻译。 */}
-                  {t("No video from this world. Make sure the world process is running (see the run-commands doc), then press retry below.")}
+                  {offline
+                    ? t("No video from this world. Make sure the world process is running (see the run-commands doc), then press retry below.")
+                    : t("It is online and ANIMA can drive it — /stream is an optional extra that shows you continuous video, and this world does not offer one. What ANIMA actually perceives is one frame per turn, shown in the conversation.")}
                 </div>
-                <button
-                  onClick={() => setNonce((n) => n + 1)}
-                  className="mt-1 rounded-lg bg-amber-600/80 px-3 py-1.5 text-xs text-white hover:bg-amber-600"
-                >
-                  {t("Retry connection")}
-                </button>
+                {offline && (
+                  <button
+                    onClick={() => setNonce((n) => n + 1)}
+                    className="mt-1 rounded-lg bg-amber-600/80 px-3 py-1.5 text-xs text-white hover:bg-amber-600"
+                  >
+                    {t("Retry connection")}
+                  </button>
+                )}
               </div>
             )}
           </>

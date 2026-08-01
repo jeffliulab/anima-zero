@@ -86,7 +86,7 @@ function fmtResp(method: string, resp?: Resp): { text: string; warn: boolean } {
     // 启发式：含 fen/board/pieces/legal 或 FEN 样式(行间 '/') → 疑似棋盘真值
     const looksLikeTruth = /fen|"board"|pieces|legal|[pnbrqkPNBRQK1-8]+\/[pnbrqkPNBRQK1-8]+/.test(blob);
     return {
-      text: `图片 ${resp.img_bytes ?? 0} 字节 · 回程 state: ${blob}${looksLikeTruth ? tt("(⚠ looks like it leaked ground truth)") : tt("(no ground truth found ✓)")}`,
+      text: `${tt("image")} ${resp.img_bytes ?? 0} ${tt("bytes")} · ${tt("returned state")}: ${blob}${looksLikeTruth ? tt("(⚠ looks like it leaked ground truth)") : tt("(no ground truth found ✓)")}`,
       warn: looksLikeTruth,
     };
   }
@@ -157,7 +157,7 @@ function WorldCard({ w }: { w: AwiWorld }) {
           {!online ? (
             <div className="text-xs text-neutral-500">{t("(offline — cannot fetch)")}</div>
           ) : (
-            <CapCard name="anima://observation" kind="读一次给一份" accent="text-sky-300"
+            <CapCard name="anima://observation" kind={t("one read, one snapshot")} accent="text-sky-300"
               desc={t("What the world shows the brain: a frame snapshot (png) plus structured state (listed below — never ground truth).")}
               schema={stateSchema && Object.keys(stateSchema).length ? stateSchema : (w.state ?? {})} />
           )}

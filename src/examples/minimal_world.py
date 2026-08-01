@@ -306,9 +306,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--port", type=int, default=DEFAULT_PORT,
                     help=f"default {DEFAULT_PORT}")
     args = ap.parse_args(argv)
+    # flush=True：stdout 不是终端时（脚本里、Docker 里、`> log` 重定向）Python 会全缓冲，
+    # 这两行会一直卡在缓冲区里不出来，世界看起来像启动挂住了。
     print(f"corridor example world on http://127.0.0.1:{args.port}  "
-          f"(god's-eye for you only: http://127.0.0.1:{args.port}/status)")
-    print(f"point the brain at it with:  anima world add example http://localhost:{args.port}")
+          f"(god's-eye for you only: http://127.0.0.1:{args.port}/status)", flush=True)
+    print(f"point the brain at it with:  anima world add example "
+          f"http://localhost:{args.port}", flush=True)
     uvicorn.run(build_app(CorridorWorld()), host="127.0.0.1", port=args.port,
                 log_level="warning")
     return 0
