@@ -28,13 +28,20 @@ silencieusement la mauvaise chose sont corrigés et gardés par la CI.
    aussi de modèle pour écrire votre propre monde (`src/examples/minimal_world.py`, exécutable
    seul avec `python -m anima.examples.minimal_world`). Derrière, la boucle respecte désormais
    `llm.vision` : un cerveau qui ne voit pas ne reçoit plus d'images.
-2. **Le chemin sans clé va jusqu'au bout, pas seulement jusqu'à la démo.** `anima chat` et
-   `anima run` échouaient sur une erreur d'authentification dès que le cerveau par défaut
-   configuré n'avait pas de clé — y compris pour qui suivait le conseil final de la démo
-   elle-même. Ils basculent maintenant sur le premier cerveau utilisable et le disent.
-   Vérifié de bout en bout **sans aucune clé** : démo, enregistrement et approbation d'un
-   monde, conversation au terminal, et l'application web avec son tableau de bord AWI, le
-   tout piloté par le cerveau 4B sur CPU.
+2. **Le chemin sans clé va jusqu'au bout, pas seulement jusqu'à la démo.** Trois choses le
+   rompaient, chacune trouvée en confiant la version à un auditeur indépendant avant
+   publication. `anima world add` approuvait un monde puis ne l'enregistrait nulle part, si
+   bien que la ligne suivante affichée par la démo échouait sur « No world named … » — il
+   ajoute désormais le monde à `ANIMA_WORLDS` (ajout, jamais remplacement ; `--no-save`
+   pour s'en passer). `anima chat`, `anima run` et `POST /api/sessions` levaient une erreur
+   d'authentification dès que le cerveau par défaut n'avait pas de clé ; tous trois
+   basculent maintenant sur le premier cerveau utilisable et le disent. Et le panneau de
+   capteurs de l'application web annonçait le monde couloir fourni comme « non connecté,
+   vérifiez qu'il tourne » alors qu'il tournait parfaitement — un monde peut n'implémenter
+   que les quatre canaux AWI sans flux vidéo, ce qui est désormais un état calme à part
+   entière plutôt qu'une alerte. Vérifié de bout en bout **sans aucune clé** : démo,
+   enregistrement et approbation d'un monde, conversation au terminal, et l'application web
+   avec son tableau de bord AWI, le tout piloté par le cerveau 4B sur CPU.
 3. **Un paquet installé garde ses données là où vous pouvez les trouver.** `pip install`
    plaçait les journaux, la mémoire de session et — le pire — le `.env` qu'on vous dit de
    créer à l'intérieur de `site-packages`, ce qui signifiait qu'un utilisateur pip n'avait

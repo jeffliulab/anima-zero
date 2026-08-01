@@ -28,12 +28,19 @@ silenciosamente lo incorrecto están corregidos y vigilados por la CI.
    plantilla para escribir tu propio mundo (`src/examples/minimal_world.py`, ejecutable por
    separado con `python -m anima.examples.minimal_world`). Por detrás, el bucle ahora respeta
    `llm.vision`: a un cerebro que no ve ya no se le mandan imágenes.
-2. **El camino sin clave llega hasta el final, no solo hasta la demo.** `anima chat` y
-   `anima run` fallaban con un error de autenticación en cuanto el cerebro por defecto
-   configurado no tenía clave — incluido quien seguía el consejo final de la propia demo.
-   Ahora recurren al primer cerebro utilizable y lo dicen. Verificado de extremo a extremo
-   **sin ninguna clave**: demo, registro y aprobación de un mundo, conversación en terminal, y
-   la aplicación web con su panel AWI, todo movido por el cerebro de 4B en CPU.
+2. **El camino sin clave llega hasta el final, no solo hasta la demo.** Tres cosas lo
+   rompían, cada una encontrada al poner a un auditor independiente frente a la versión antes
+   de publicarla. `anima world add` aprobaba un mundo y luego no lo registraba en ninguna
+   parte, así que la siguiente línea que imprime la demo fallaba con «No world named …» —
+   ahora añade el mundo a `ANIMA_WORLDS` (añadir, nunca reemplazar; `--no-save` lo evita).
+   `anima chat`, `anima run` y `POST /api/sessions` lanzaban un error de autenticación en
+   cuanto el cerebro por defecto no tenía clave; los tres recurren ahora al primer cerebro
+   utilizable y lo dicen. Y el panel de sensores de la aplicación web daba el mundo pasillo
+   incluido por «no conectado, comprueba que esté en marcha» cuando funcionaba
+   perfectamente — un mundo puede implementar solo los cuatro canales AWI y ningún flujo de
+   vídeo, lo cual es ahora un estado tranquilo propio y no una alarma. Verificado de extremo
+   a extremo **sin ninguna clave**: demo, registro y aprobación de un mundo, conversación en
+   terminal, y la aplicación web con su panel AWI, todo movido por el cerebro de 4B en CPU.
 3. **Un paquete instalado guarda sus datos donde puedes encontrarlos.** `pip install` metía
    los registros, la memoria de sesión y — lo peor — el `.env` que se te pide crear dentro de
    `site-packages`, lo que significaba que un usuario de pip **no tenía sitio alguno donde

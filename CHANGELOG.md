@@ -26,12 +26,18 @@ that shipped silently are fixed and guarded in CI.
    as the template for writing your own world (`src/examples/minimal_world.py`, run
    standalone with `python -m anima.examples.minimal_world`). Behind it, the loop now
    honours `llm.vision`: a brain that cannot see is no longer sent pictures.
-2. **The keyless path goes all the way through, not just to the demo.** `anima chat` and
-   `anima run` used to fail with an authentication error the moment the configured default
-   brain had no key — including for someone following the demo's own closing advice. They
-   now fall back to the first usable brain and say that they did. Verified end to end with
-   no keys present: demo, world registration and approval, terminal chat, and the web app
-   with its AWI dashboard, all driven by the 4B brain on CPU.
+2. **The keyless path goes all the way through, not just to the demo.** Three things
+   broke it, each found by pointing an independent auditor at the release before it shipped.
+   `anima world add` approved a world and then did not register it anywhere, so the very
+   next line the demo prints failed with "No world named …" — it now appends the world to
+   `ANIMA_WORLDS` (append, never replace; `--no-save` opts out). `anima chat`, `anima run`
+   and `POST /api/sessions` raised an authentication error whenever the configured default
+   brain had no key; all three now fall back to the first usable brain and say so. And the
+   web app's sensor panel reported the bundled corridor world as "not connected, make sure
+   it is running" when it was running perfectly — a world may implement the four AWI
+   channels and no video stream, which is now its own calm state rather than an alarm.
+   Verified end to end with no keys present: demo, world registration and approval,
+   terminal chat, and the web app with its AWI dashboard, all driven by the 4B brain on CPU.
 3. **An installed package keeps its data where you can find it.** `pip install` used to put
    logs, session memory and — worst of all — the `.env` you are told to create inside
    `site-packages`, which meant a pip user had nowhere to configure an API key at all. All
