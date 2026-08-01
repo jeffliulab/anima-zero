@@ -176,6 +176,32 @@ tandis que le paquet publié reste permissif. Cela a son propre prix — une cho
 maintenir, et cela *retarde* le moment où l'on découvre que l'amont a changé. Le raisonnement est
 écrit en tête de la liste des dépendances, là où se tient celui qui est tenté d'ajouter une borne.
 
+### R11 · Seules les interfaces anglaise et chinoise ont été regardées
+
+Le garde des catalogues et le vérificateur de types garantissent que les chaînes sont
+complètes et les chemins de code identiques d'une langue à l'autre — c'est pourquoi ajouter
+une langue tient dans un fichier JSON. Ni l'un ni l'autre ne peut vous dire qu'un libellé
+traduit dépasse son bouton de trois mots. L'anglais et le chinois ont été lus à l'écran ; le
+japonais, le français et l'espagnol non.
+
+Non corrigé ici parce que c'est le même problème que R8 — il faut quelqu'un qui lise la
+langue — et parce que les gardes en font un risque cosmétique, pas fonctionnel. Le moment le
+moins coûteux pour le clore est la prochaine modification de l'interface : prendre alors les
+trois jeux de captures, plutôt que d'en faire une course à part.
+
+### R12 · Les dépendances d'un monde sont l'affaire de ce monde, et la FAQ ne peut que le dire
+
+Chaque monde de `world/` est un programme séparé, avec son propre `pyproject.toml` ; le
+démarrer est donc `pip install -e . && uvicorn ...` — deux étapes, et la première se saute
+facilement parce que c'est la seconde qui *ressemble* à la commande. `anima doctor` sait
+rapporter qu'un monde est hors ligne, mais pas distinguer « pas démarré » de « démarré et
+tombé à l'import ».
+
+Non corrigé parce que les options honnêtes sont toutes deux plus grandes que le problème :
+faire démarrer les mondes par le cerveau (exclu — un monde est un programme séparé, et cette
+séparation est toute la conception), ou donner à chaque monde un script de lancement (de la
+duplication dans chacun, pour un message que la FAQ donne déjà).
+
 ## Non prévu
 
 Dire non fait partie d'une feuille de route.

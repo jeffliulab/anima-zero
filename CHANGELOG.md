@@ -9,35 +9,45 @@
 Release notes for ANIMA Zero. **Keep them short: per version, only what actually changed.**
 (Format after [Keep a Changelog](https://keepachangelog.com).)
 
-## [1.2.0] — 2026-07-31
+## [1.2.0] — 2026-08-01
 
-Main: the first five minutes are back — `anima demo` proves the whole loop on any machine,
-with or without an API key — and the repository is ready for visitors: an FAQ, a front door
-for contributors, zero CVE alerts, and the packaging faults that shipped silently are fixed
-and guarded in CI.
+Main: **without an API key you can now run the whole thing** — a bundled world, a local CPU
+brain, and every command that leads out of the demo. The repository is also ready for
+visitors: an FAQ, a front door for contributors, zero CVE alerts, and the packaging faults
+that shipped silently are fixed and guarded in CI.
 
 1. **`anima demo` returns, with nothing the old one cost.** A ~300-line corridor world
    (a dot, `look`, `step`, one real camera frame) ships inside the package, handwritten
    against the AWI spec — no byte-identical copies, no submodule, no duplicate desk in
    every world list, the three things that killed the v1.1 desk world. The demo starts it
    on a free port and picks a brain out loud: your API key if you have one, else a **local
-   CPU brain** (Qwen3-4B-Instruct-2507 via Ollama, ~2.5 GB, offered as a one-line pull —
-   the smallest size with genuinely reliable tool calling), else the honest mock. The
-   corridor doubles as the template for writing your own world
-   (`src/examples/minimal_world.py`, run standalone with
-   `python -m anima.examples.minimal_world`). Behind it, the loop now honours
-   `llm.vision`: a brain that cannot see is no longer sent pictures.
-2. **The new-user path is cleared.** gazebo-chess leaves the default world list (its code
-   lives in the companion repo now; set `GAZEBO_CHESS_URL` and it is back, nothing lost);
-   the `.build-time` stamp finally enters the wheel, so `anima serve` reports the UI's real
-   build time to pip users, and CI proves on every push that the wheel carries the fresh UI
-   and its stamp; new `docs/faq.md` (English and Chinese) covers the six things new users
-   actually trip over; and `/awi` and `/session-logs` no longer 404 when opened directly —
-   they also gained their own language switchers (ROADMAP R9, closed).
-3. **Zero CVE alerts** (ROADMAP R4, closed): Next 15 → 16, with `postcss`/`sharp` pinned
-   past the advisories via `overrides`. `npm audit` is clean; the interface was re-checked
-   by eye after the major bump.
-4. **A front door for contributors**: CONTRIBUTING gains a "Where to start" section
+   CPU brain** (Qwen3-4B-Instruct via Ollama, `qwen3:4b-instruct`, ~2.5 GB — the smallest
+   size with genuinely reliable tool calling), else the honest mock. The corridor doubles
+   as the template for writing your own world (`src/examples/minimal_world.py`, run
+   standalone with `python -m anima.examples.minimal_world`). Behind it, the loop now
+   honours `llm.vision`: a brain that cannot see is no longer sent pictures.
+2. **The keyless path goes all the way through, not just to the demo.** `anima chat` and
+   `anima run` used to fail with an authentication error the moment the configured default
+   brain had no key — including for someone following the demo's own closing advice. They
+   now fall back to the first usable brain and say that they did. Verified end to end with
+   no keys present: demo, world registration and approval, terminal chat, and the web app
+   with its AWI dashboard, all driven by the 4B brain on CPU.
+3. **An installed package keeps its data where you can find it.** `pip install` used to put
+   logs, session memory and — worst of all — the `.env` you are told to create inside
+   `site-packages`, which meant a pip user had nowhere to configure an API key at all. All
+   of it now lives under `~/.anima` (`ANIMA_HOME`), the way trust decisions already did.
+   A source checkout is unchanged. `anima doctor` prints where everything landed.
+4. **The rest of the new-user path is cleared.** gazebo-chess leaves the default world list
+   (its code lives in the companion repo now; setting `GAZEBO_CHESS_URL` brings it back
+   whether or not `ANIMA_WORLDS` is set); the `.build-time` stamp finally enters the wheel,
+   so `anima serve` reports the UI's real build time to pip users, and CI proves on every
+   push that the wheel carries the fresh UI and its stamp; new `docs/faq.md` (English and
+   Chinese); and `/awi` and `/session-logs` no longer 404 when opened directly — they also
+   gained their own language switchers (ROADMAP R9, closed).
+5. **Zero CVE alerts** (ROADMAP R4, closed): Next 15 → 16, with `postcss`/`sharp` pinned
+   past the advisories via `overrides`, and the tsconfig rewrite Next 16 requires. `npm
+   audit` is clean and the interface was checked by eye after the major bump.
+6. **A front door for contributors**: CONTRIBUTING gains a "Where to start" section
    (write a world from the corridor template / review a translation / good first issues),
    plus `CITATION.cff` and a PyPI badge.
 

@@ -111,12 +111,14 @@ anima demo
 That is the whole first five minutes. The demo starts a tiny bundled world — a dot on an
 eight-cell corridor, ANIMA's talker/listener — picks a brain, and runs one real turn:
 if you have an API key it uses it, otherwise it walks you to a **free local brain that
-runs on your CPU** (Qwen3-4B via Ollama, ~2.5 GB, offered as a one-line pull). Every
-frame, thought and tool call lands in a session log you can read afterwards.
+runs on your CPU** (Qwen3-4B-Instruct via Ollama — `qwen3:4b-instruct`, ~2.5 GB, offered
+as a one-line pull). Every frame, thought and tool call lands in a session log you can
+read afterwards. Nothing you see is staged, and `anima doctor` will tell you where on
+your disk all of it landed.
 
 A real world is a separate program and none ships in the wheel, so the next step is to
 get one: clone this repository for the worlds in [`world/`](world/), or write your own
-against [the AWI spec](docs/awi-spec-v1.md) — `src/examples/minimal_world.py`,
+against [the AWI spec](docs/awi-spec-v1.md) — [`src/examples/minimal_world.py`](src/examples/minimal_world.py),
 the corridor from the demo, is the template to copy.
 
 The fastest way to find your way around is to hand the repository to a coding agent — Claude

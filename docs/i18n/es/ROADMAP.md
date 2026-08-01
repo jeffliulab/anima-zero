@@ -169,6 +169,32 @@ publicado sigue siendo permisivo. Tiene su propio precio: algo más que mantener
 momento en que descubres que arriba cambió algo. El razonamiento está escrito al principio de la
 lista de dependencias, que es donde está de pie quien siente la tentación de añadir un tope.
 
+### R11 · Solo se han mirado las interfaces en inglés y chino
+
+El guardián de catálogos y el verificador de tipos garantizan que las cadenas estén completas
+y que las rutas de código sean idénticas entre idiomas — por eso añadir un idioma cabe en un
+archivo JSON. Ninguno de los dos puede decirte que una etiqueta traducida sobresale tres
+palabras de su botón. El inglés y el chino se han leído en pantalla; el japonés, el francés y
+el español no.
+
+No se corrige aquí porque es el mismo problema que R8 — hace falta alguien que lea el idioma —
+y porque los guardianes lo convierten en un riesgo estético, no funcional. El momento más
+barato para cerrarlo es el próximo cambio de interfaz: tomar entonces los tres juegos de
+capturas, en lugar de hacerlo como recado aparte.
+
+### R12 · Las dependencias de un mundo son asunto suyo, y el FAQ solo puede decirlo
+
+Cada mundo de `world/` es un programa separado con su propio `pyproject.toml`, así que
+arrancar uno es `pip install -e . && uvicorn ...` — dos pasos, y el primero se salta con
+facilidad porque es el segundo el que *parece* el comando. `anima doctor` puede informar de
+que un mundo está offline, pero no distinguir «no arrancado» de «arrancado y caído en un
+import».
+
+No se corrige porque las opciones honestas son ambas mayores que el problema: que el cerebro
+arranque los mundos (descartado — un mundo es un programa separado, y esa separación es todo
+el diseño), o que cada mundo tenga un script de arranque (duplicación en cada uno, por un
+mensaje que el FAQ ya da).
+
 ## No previsto
 
 Decir que no es parte de una hoja de ruta.

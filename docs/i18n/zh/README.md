@@ -100,7 +100,8 @@ anima demo
 
 头五分钟就这两行。demo 会起一个随包的迷你世界——八格走廊上的一个点，ANIMA 的
 talker/listener——挑一个大脑，真跑一轮：你有 API key 就用你的；没有，它带你装一个
-**本地 CPU 上免费跑的大脑**（Qwen3-4B，经 Ollama，约 2.5GB，会问你一句再拉）。
+**本地 CPU 上免费跑的大脑**（Qwen3-4B-Instruct，经 Ollama，tag `qwen3:4b-instruct`，
+约 2.5GB，会问你一句再拉）。
 每一帧、每一次思考、每一次工具调用都落进一份可以回看的会话流水。
 
 真实世界是独立的程序，wheel 里一个都不带，所以下一步是去弄一个：clone 本仓就能拿到

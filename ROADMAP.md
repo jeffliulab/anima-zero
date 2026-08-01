@@ -160,6 +160,30 @@ It has its own price — something to maintain, and it *delays* the moment you f
 upstream changed. The reasoning is written at the top of the dependency list, which is where
 somebody is standing when they are tempted to add a cap.
 
+### R11 · Only the English and Chinese interfaces have been looked at
+
+The locale guard and the type checker keep the string catalogues complete and the code paths
+identical across languages, which is why adding one is a JSON file. Neither can tell you that
+a translated label is three words too long for its button. English and Chinese have been read
+on screen; Japanese, French and Spanish have not.
+
+Not fixed here because it is the same problem as R8 — it needs a person who reads the
+language — and the guards make it a cosmetic risk rather than a functional one. The cheap
+moment to close it is the next time the interface changes: take the three screenshot sets
+then, rather than as a separate errand.
+
+### R12 · A world's own dependencies are its own problem, and the FAQ can only say so
+
+Every world in `world/` is a separate program with its own `pyproject.toml`, so starting one
+is `pip install -e . && uvicorn ...` — two steps, and the first is easy to skip because the
+second is the one that looks like the command. `anima doctor` can report that a world is
+offline but cannot tell "not started" from "started and crashed on an import".
+
+Not fixed because the honest options are both bigger than the problem: have the brain start
+worlds (it must not — a world is a separate program, and that separation is the whole design),
+or have every world grow a launcher script (duplication in each world, for a message the FAQ
+already gives).
+
 ## Not planned
 
 Saying no is part of a roadmap.

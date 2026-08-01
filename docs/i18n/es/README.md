@@ -120,7 +120,8 @@ anima demo
 Eso es todo lo que duran los primeros cinco minutos. La demo arranca un pequeño mundo
 integrado —un punto en un pasillo de ocho casillas, el talker/listener de ANIMA— elige un
 cerebro y ejecuta un turno de verdad: si tienes clave de API la usa; si no, te guía hacia un
-**cerebro local gratuito que corre en CPU** (Qwen3-4B vía Ollama, ~2,5 GB, ofrecido tras
+**cerebro local gratuito que corre en CPU** (Qwen3-4B-Instruct vía Ollama, etiqueta
+`qwen3:4b-instruct`, ~2,5 GB, ofrecido tras
 confirmación). Cada fotograma, pensamiento y llamada a herramienta queda en un registro de
 sesión que puedes releer después.
 
