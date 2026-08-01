@@ -9,6 +9,41 @@
 Notas de versión de ANIMA Zero. **Mantenerlas cortas: por versión, solo lo que cambió de
 verdad.** (Formato inspirado en [Keep a Changelog](https://keepachangelog.com).)
 
+## [1.2.0] — 2026-07-31
+
+Lo esencial: los primeros cinco minutos están de vuelta — `anima demo` demuestra que todo
+el circuito funciona en cualquier máquina, con o sin clave de API — y el repositorio está
+listo para recibir visitas: un FAQ, una puerta de entrada para colaboradores, cero alertas
+CVE, y los dos fallos de empaquetado que enviaban silenciosamente lo incorrecto están
+corregidos y vigilados en CI.
+
+1. **`anima demo` regresa, sin nada de lo que costaba el anterior.** Un mundo-pasillo de
+   ~300 líneas (un punto, `look`, `step`, un fotograma de cámara real) se distribuye dentro
+   del paquete, escrito a mano según la especificación AWI — sin copias byte a byte, sin
+   submódulos, sin un desk duplicado en cada lista de mundos: las tres cosas que mataron
+   al mundo desk de v1.1. La demo lo arranca en un puerto libre y elige un cerebro en voz
+   alta: tu clave de API si la tienes; si no, un **cerebro local en CPU** (Qwen3-4B-Instruct-2507
+   vía Ollama, ~2,5 GB, ofrecido como un pull de una línea — el tamaño más pequeño con
+   llamadas a herramientas realmente fiables); si no, el mock honesto. El pasillo sirve
+   además como plantilla para escribir tu propio mundo
+   (`src/examples/minimal_world.py`, ejecutable por separado con
+   `python -m anima.examples.minimal_world`). Entre bastidores, el bucle ahora respeta
+   `llm.vision`: un cerebro que no puede ver ya no recibe imágenes.
+2. **El camino del usuario nuevo está despejado.** gazebo-chess sale de la lista de mundos
+   por defecto (su código vive ahora en el repositorio compañero; define `GAZEBO_CHESS_URL`
+   y vuelve, nada se pierde); el sello `.build-time` por fin entra en el wheel, así que
+   `anima serve` informa a los usuarios de pip la hora real de construcción de la UI, y CI
+   demuestra en cada push que el wheel lleva la UI fresca y su sello; el nuevo
+   `docs/faq.md` (inglés y chino) cubre los seis tropiezos reales de los usuarios nuevos;
+   y `/awi` y `/session-logs` ya no dan 404 al abrirlos directamente — además ganaron su
+   propio selector de idioma (ROADMAP R9, cerrado).
+3. **Cero alertas CVE** (ROADMAP R4, cerrado): Next 15 → 16, con `postcss`/`sharp` fijados
+   por encima de los avisos mediante `overrides`. `npm audit` está limpio; la interfaz fue
+   revisada a simple vista tras el salto de versión mayor.
+4. **Una puerta de entrada para colaboradores**: CONTRIBUTING gana una sección «Where to
+   start» (escribir un mundo desde la plantilla del pasillo / revisar una traducción /
+   good first issues), además de `CITATION.cff` y una insignia de PyPI.
+
 ## [1.1.1] — 2026-07-30
 
 Main: el mundo desk y `anima demo` ya no están. El mundo que viajaba dentro del wheel existía para que `pip install` llevara a alguna parte; costaba dos copias idénticas byte a byte, un submódulo de git y un segundo desk en cada lista de mundos, y eso era más de lo que valía.

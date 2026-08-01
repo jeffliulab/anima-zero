@@ -1,6 +1,7 @@
 # ANIMA Zero
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org)
+[![PyPI](https://img.shields.io/pypi/v/anima-zero.svg)](https://pypi.org/project/anima-zero/)
 [![MCP](https://img.shields.io/badge/protocol-MCP-6f42c1.svg)](https://modelcontextprotocol.io)
 [![MuJoCo](https://img.shields.io/badge/sim-MuJoCo-orange.svg)](https://mujoco.org)
 [![Version](https://img.shields.io/github/v/tag/jeffliulab/anima-zero?label=version&color=lightgrey)](CHANGELOG.md)
@@ -113,24 +114,37 @@ services/      motor de juegos de mesa   frontend/  app web   eval/  puntuación
 
 ```bash
 uv tool install anima-zero     # o: pipx install anima-zero, o pip a secas
+anima demo
 ```
 
-Eso instala el cerebro, y solo el cerebro. Un mundo es un programa aparte y **ninguno viaja
-dentro del wheel**, así que el paso siguiente es conseguir uno: clona este repositorio para los
-que viven en [`world/`](../../../world/), o escribe el tuyo siguiendo
-[la especificación AWI](../../awi-spec-v1.md).
+Eso es todo lo que duran los primeros cinco minutos. La demo arranca un pequeño mundo
+integrado —un punto en un pasillo de ocho casillas, el talker/listener de ANIMA— elige un
+cerebro y ejecuta un turno de verdad: si tienes clave de API la usa; si no, te guía hacia un
+**cerebro local gratuito que corre en CPU** (Qwen3-4B vía Ollama, ~2,5 GB, ofrecido tras
+confirmación). Cada fotograma, pensamiento y llamada a herramienta queda en un registro de
+sesión que puedes releer después.
+
+Un mundo real es un programa aparte y **ninguno viaja dentro del wheel**, así que el paso
+siguiente es conseguir uno: clona este repositorio para los que viven en
+[`world/`](../../../world/), o escribe el tuyo siguiendo
+[la especificación AWI](../../awi-spec-v1.md) — `src/examples/minimal_world.py`
+(el pasillo de la demo) es la plantilla para copiar.
 
 La forma más rápida de orientarte es entregarle el repositorio a un agente de código —Claude
 Code, Codex, el que uses— y dejar que lea [AGENTS.md](../../../AGENTS.md), que está escrito
 justo para eso. Arrancará un mundo contigo, o te escribirá uno nuevo.
 
 ```text
+anima demo                    prueba que el circuito funciona: mundo integrado, un cerebro, un turno real
 anima chat --world W          una conversación en la terminal
 anima run --say "..."         un solo turno, para guiones
 anima serve                   la API del backend, para la app web
 anima world add NOMBRE URL    registrar un mundo, y revisarlo antes de aprobarlo
 anima doctor                  qué está configurado y qué responde
 ```
+
+¿Atascado? [El FAQ](../../faq.md) cubre los seis tropiezos reales de los usuarios nuevos
+(en inglés y chino por ahora).
 
 ### La instalación completa
 
@@ -203,9 +217,10 @@ Los intentos que sí funcionaron, con verificación imagen a imagen, están reco
 ## Añadir tu propio mundo
 
 Implementa un servidor MCP estándar con los cuatro canales de arriba, añade su dirección a
-`ANIMA_WORLDS` y el cerebro lo manejará sin cambiar. La versión mínima son tres métodos
-—`capabilities()`, `observe()` e `invoke()`— envueltos en el adaptador `awi_mcp.py` que viene con
-cada mundo. Copia de [camera](../../../world/camera) si tu mundo solo se mira, de
+`ANIMA_WORLDS` y el cerebro lo manejará sin cambiar. El ejemplo completo más pequeño viene
+dentro del paquete: `src/examples/minimal_world.py` —el pasillo de `anima demo`, anotado línea
+a línea según la spec, y ejecutable por separado con `python -m anima.examples.minimal_world`.
+Copia de [camera](../../../world/camera) si tu mundo solo se mira, de
 [sim-chess](../../../world/sim-chess) si actúa, o de
 [sim-house-nav](../../../world/sim-house-nav) para el completo, y lee antes
 [world/README.md](../../../world/README.md). El contrato está escrito en

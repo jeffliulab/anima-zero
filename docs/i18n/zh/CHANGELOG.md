@@ -8,6 +8,15 @@
 
 ANIMA Zero 版本记录。**版本记录要点：保持简洁，每版只说重点，比如具体改了什么。**（格式参考 [Keep a Changelog](https://keepachangelog.com)）
 
+## [1.2.0] — 2026-07-31
+
+Main：头五分钟回来了——`anima demo` 在任意机器上证明整条链路是活的，有没有 API key 都行——同时仓库做好了待客准备：一份 FAQ、一扇给贡献者的前门、安全告警归零，以及两处曾经静默发错东西的发包链路缺陷被修复并守进 CI。
+
+1. **`anima demo` 回归，且当年删它的三样代价一样都不带回。** 一个约 300 行的走廊世界（一个点、`look`、`step`、一张真相机画面）随包分发，照 AWI 规范手写——没有逐字节副本、没有 submodule、没有每张世界清单里多一个 desk，正是这三样杀死了 v1.1 的 desk 世界。demo 在空闲端口起它，并明说着挑大脑：有 API key 就用你的；没有就用**本地 CPU 大脑**（Qwen3-4B-Instruct-2507，经 Ollama，约 2.5GB，问一句再拉——最小且工具调用真正可靠的尺寸）；再不行才落诚实的 mock。这条走廊同时就是「写你自己的世界」的模板（`src/examples/minimal_world.py`，`python -m anima.examples.minimal_world` 可单独跑）。配套地，主循环现在尊重 `llm.vision`：不长眼睛的脑不再被塞画面。
+2. **新用户路径清障。** gazebo-chess 移出默认世界清单（它的代码早已住进伴随仓；设 `GAZEBO_CHESS_URL` 就回来，老能力不丢）；`.build-time` 时间戳终于进了 wheel，`anima serve` 对 pip 用户报告的是网页的真实构建时间，且 CI 每次推送都证明 wheel 带的是新界面和时间戳；新增 `docs/faq.md`（中英双语），收录新用户真正会踩的六个坑；`/awi` 和 `/session-logs` 直接打开不再 404——还各自补上了语言切换器（ROADMAP R9 销账）。
+3. **安全告警归零**（ROADMAP R4 销账）：Next 15 → 16，`postcss`/`sharp` 用 `overrides` 钉过公告线。`npm audit` 干净；大版本跳之后界面已逐页肉眼复核。
+4. **给贡献者的前门**：CONTRIBUTING 新增「从哪里入手」一节（照走廊模板写世界 / 审校翻译 / good first issue），外加 `CITATION.cff` 和 PyPI 徽章。
+
 ## [1.1.1] — 2026-07-30
 
 Main: desk 世界和 `anima demo` 都删掉了。那个随 wheel 分发的世界，存在的理由是让 `pip install` 之后有个去处；代价是两份逐字节副本、一个 git 子模块、以及每张世界清单里都有两个 desk——不值。

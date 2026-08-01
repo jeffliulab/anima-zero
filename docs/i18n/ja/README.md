@@ -1,6 +1,7 @@
 # ANIMA Zero
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org)
+[![PyPI](https://img.shields.io/pypi/v/anima-zero.svg)](https://pypi.org/project/anima-zero/)
 [![MCP](https://img.shields.io/badge/protocol-MCP-6f42c1.svg)](https://modelcontextprotocol.io)
 [![MuJoCo](https://img.shields.io/badge/sim-MuJoCo-orange.svg)](https://mujoco.org)
 [![Version](https://img.shields.io/github/v/tag/jeffliulab/anima-zero?label=version&color=lightgrey)](CHANGELOG.md)
@@ -108,12 +109,20 @@ services/      ボードゲームエンジン  frontend/  ウェブアプリ   e
 
 ```bash
 uv tool install anima-zero     # pipx install anima-zero でも、素の pip でも可
+anima demo
 ```
 
-入るのはブレインだけです。ワールドは独立したプログラムで、**wheel には 1 つも同梱されません**。
+最初の5分はこの2行だけです。デモは小さな同梱ワールド——8マスの回廊上の1つの点、ANIMA の
+talker/listener——を起動し、ブレインを選んで1ターンを本物のまま実行します：API キーがあれば
+それを使い、なければ**CPU で無料で動くローカルブレイン**（Qwen3-4B、Ollama 経由、約2.5GB、
+確認のうえで pull）へ案内します。すべてのフレーム・思考・ツール呼び出しは、あとで読める
+セッションログに残ります。
+
+本物のワールドは独立したプログラムで、wheel には 1 つも同梱されません。
 そこで次の一歩は、ワールドを手に入れることです。このリポジトリを clone すれば
 [`world/`](../../../world/) にあるものが手に入りますし、[AWI 仕様](../../awi-spec-v1.md)
-に沿って自分で書くこともできます。
+に沿って自分で書くこともできます——`src/examples/minimal_world.py`（デモのあの回廊）が
+写すためのテンプレートです。
 
 いちばん早く全体像をつかむ方法は、このリポジトリをコーディングエージェント——Claude Code、
 Codex、お使いのどれでも——に渡し、[AGENTS.md](../../../AGENTS.md) を読ませることです。
@@ -121,12 +130,15 @@ Codex、お使いのどれでも——に渡し、[AGENTS.md](../../../AGENTS.md
 新しいワールドを書いてもくれます。
 
 ```text
+anima demo                    ループが生きていることを証明：同梱ワールド + 1ブレイン + 本物の1ターン
 anima chat --world W          ターミナルでの会話
 anima run --say "..."         1 ターンだけ、スクリプト向け
 anima serve                   ウェブアプリ用のバックエンド API
 anima world add 名前 URL      ワールドを登録する——承認の前に中身を読むこと
 anima doctor                  何が設定され、何に届くか
 ```
+
+困ったら？[FAQ](../../faq.md) に新規ユーザーが実際につまずく6項目があります（現時点では英語と中国語）。
 
 ### ひととおり揃える
 
@@ -197,8 +209,9 @@ cd frontend && npm install && npm run dev
 ## 自分のワールドを足す
 
 上の 4 チャネルを備えた標準の MCP サーバーを実装し、そのアドレスを `ANIMA_WORLDS` に足せば、
-ブレインは変わらないままそれを動かします。最小の実装はメソッド 3 つ——`capabilities()`、
-`observe()`、`invoke()`——で、どのワールドにも同梱されている `awi_mcp.py` アダプタで包みます。
+ブレインは変わらないままそれを動かします。最小で完全な例はパッケージに同梱されています：
+`src/examples/minimal_world.py`——`anima demo` のあの回廊で、仕様に沿って1行ずつ注釈付き、
+`python -m anima.examples.minimal_world` で単独起動できます。
 見るだけのワールドなら [camera](../../../world/camera)、動くワールドなら
 [sim-chess](../../../world/sim-chess)、いちばん完全な例は
 [sim-house-nav](../../../world/sim-house-nav) を写してください。着手前にまず

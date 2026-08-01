@@ -9,6 +9,38 @@
 Release notes for ANIMA Zero. **Keep them short: per version, only what actually changed.**
 (Format after [Keep a Changelog](https://keepachangelog.com).)
 
+## [1.2.0] — 2026-07-31
+
+Main: the first five minutes are back — `anima demo` proves the whole loop on any machine,
+with or without an API key — and the repository is ready for visitors: an FAQ, a front door
+for contributors, zero CVE alerts, and the packaging faults that shipped silently are fixed
+and guarded in CI.
+
+1. **`anima demo` returns, with nothing the old one cost.** A ~300-line corridor world
+   (a dot, `look`, `step`, one real camera frame) ships inside the package, handwritten
+   against the AWI spec — no byte-identical copies, no submodule, no duplicate desk in
+   every world list, the three things that killed the v1.1 desk world. The demo starts it
+   on a free port and picks a brain out loud: your API key if you have one, else a **local
+   CPU brain** (Qwen3-4B-Instruct-2507 via Ollama, ~2.5 GB, offered as a one-line pull —
+   the smallest size with genuinely reliable tool calling), else the honest mock. The
+   corridor doubles as the template for writing your own world
+   (`src/examples/minimal_world.py`, run standalone with
+   `python -m anima.examples.minimal_world`). Behind it, the loop now honours
+   `llm.vision`: a brain that cannot see is no longer sent pictures.
+2. **The new-user path is cleared.** gazebo-chess leaves the default world list (its code
+   lives in the companion repo now; set `GAZEBO_CHESS_URL` and it is back, nothing lost);
+   the `.build-time` stamp finally enters the wheel, so `anima serve` reports the UI's real
+   build time to pip users, and CI proves on every push that the wheel carries the fresh UI
+   and its stamp; new `docs/faq.md` (English and Chinese) covers the six things new users
+   actually trip over; and `/awi` and `/session-logs` no longer 404 when opened directly —
+   they also gained their own language switchers (ROADMAP R9, closed).
+3. **Zero CVE alerts** (ROADMAP R4, closed): Next 15 → 16, with `postcss`/`sharp` pinned
+   past the advisories via `overrides`. `npm audit` is clean; the interface was re-checked
+   by eye after the major bump.
+4. **A front door for contributors**: CONTRIBUTING gains a "Where to start" section
+   (write a world from the corridor template / review a translation / good first issues),
+   plus `CITATION.cff` and a PyPI badge.
+
 ## [1.1.1] — 2026-07-30
 
 Main: the desk world and `anima demo` are gone. The world that shipped inside the wheel existed

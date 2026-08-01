@@ -45,6 +45,7 @@ Everything below the first row is where task-specific knowledge is *allowed* to 
 | add or register an LLM | [`src/llm/README.md`](src/llm/README.md) and the table in `src/llm/factory.py` |
 | change a tunable number | `src/config.py` — every knob lives there with a description, overridable by env |
 | see what changed in a release | [`CHANGELOG.md`](CHANGELOG.md) · direction: [`ROADMAP.md`](ROADMAP.md) |
+| unstick a fresh install | [`docs/faq.md`](docs/faq.md) — the six things new users actually trip over |
 
 ## Repo map
 
@@ -54,6 +55,7 @@ Everything below the first row is where task-specific knowledge is *allowed* to 
 | `src/clients/` | MCP client side: world client, service client, registry, bridge |
 | `src/session/` | session state, context, and the session log every turn is recorded in |
 | `src/llm/` | brain adapters (OpenAI-compatible, Claude, mock) behind one factory |
+| `src/examples/` | the bundled corridor world `anima demo` runs — and the template for writing your own |
 | `src/presentation/` | the backend API (`anima serve`) the web app talks to |
 | `world/` | the worlds that ship with the repo as separate processes — `sim-house-nav` (8112), `sim-chess` (8102), `camera` (8104). No world ships inside the wheel: `pip install` gives you the brain only. `world/computer/` is a **reserved idea folder with no code**: not registered anywhere, nothing to start |
 | `services/boardgame_engine/` | the advisory engine service (a "thinks about the game" server, never a controller) |
@@ -70,6 +72,7 @@ opponent). Do not merge them; the isolation is the point and it is verified by t
 ```bash
 uv tool install anima-zero   # the brain only — a world is a separate program you start yourself
 
+anima demo                  # prove the loop works: a bundled world, one brain, one real turn
 anima chat --world W        # a conversation in the terminal
 anima serve                # the backend API for the web app
 anima world add NAME URL    # register a world — review it before approving
