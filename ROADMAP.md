@@ -64,13 +64,12 @@ would be reliable — this is open for the whole field.
 The protection that works is the human approval in `anima world add`, and it only works if
 the person actually reads the manifest. See [SECURITY.md](SECURITY.md) §2.
 
-### R4 · Four high-severity CVEs in the frontend's npm tree
+### R4 · ~~Four high-severity CVEs in the frontend's npm tree~~ — fixed in v1.2
 
-`next`, `postcss`, `sharp` and `@tailwindcss/postcss`, all fixable in range. They are
-build-time and none reaches the browser bundle, but they are real and they are known.
-
-Not yet done because a Next major bump needs the interface checked by eye, which is a
-separate piece of work from the release.
+`next` was raised to 16.x and `postcss` / `sharp` were pinned past the advisories with
+`overrides` (the patched Next line only existed as a preview release at the time).
+`npm audit` reports zero. All four were build-time only and never reached the browser
+bundle — the alert noise was the real cost.
 
 ### R5 · The chess rules library is fast enough, not fast
 

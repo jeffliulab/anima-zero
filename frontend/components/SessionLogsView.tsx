@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useI18n } from "@/lib/i18n";
+import LangToggle from "./LangToggle";
 import {
   getSessionLogs,
   listSessions,
@@ -164,6 +165,8 @@ export default function SessionLogsView({
           >
             {copied ? t("Copied ✓") : t("Copy all logs")}
           </button>
+          {/* 整页路由没有侧栏，语言切换器就没地方住了（R9）——住进自己的顶栏。 */}
+          {!embedded && <LangToggle />}
         </div>
         <div className="flex items-baseline gap-2">
           <h1 className="truncate text-sm font-semibold">

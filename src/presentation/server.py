@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import os
 import time
@@ -539,5 +540,16 @@ def ui_build_time() -> str | None:
 
 if os.path.isdir(_UI_DIR):
     from fastapi.staticfiles import StaticFiles
+
+    # StaticFiles(html=True) 只会给目录找 index.html，**不会**把 /awi 映射到 awi.html——
+    # 于是直接打开这两个整页路由会吃到 404（应用内跳转是客户端路由，从不经过这里，
+    # 所以这个毛病只在「直接打开链接」时现形）。赶在通配 mount 之前显式端出来。
+    def _serve_page(request, _html: str):
+        return FileResponse(_html)
+
+    for _page in ("awi", "session-logs", "anima-logs"):
+        _html = os.path.join(_UI_DIR, f"{_page}.html")
+        if os.path.exists(_html):
+            app.add_route(f"/{_page}", functools.partial(_serve_page, _html=_html))
 
     app.mount("/", StaticFiles(directory=_UI_DIR, html=True), name="web")

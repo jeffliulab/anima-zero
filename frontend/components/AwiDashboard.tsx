@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { tt, useI18n } from "@/lib/i18n";
+import LangToggle from "./LangToggle";
 import { WorldTrust } from "./WorldTrust";
 import {
   getAwi, awiEventsUrl, AWI_LOG_SHOWN, POLL_AWI_MS, setWorldConfig, refreshWorld,
@@ -328,7 +329,9 @@ export default function AwiDashboard({ embedded = false, onOpenLogs }: { embedde
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold">{t("AWI dashboard · Anima World Interface")}</h1>
           {!embedded && (
-            <div className="space-x-3 text-sm">
+            <div className="flex items-center gap-3 text-sm">
+              {/* 整页路由没有侧栏，语言切换器就没地方住了（R9）——住进自己的顶栏。 */}
+              <LangToggle />
               <a href="/session-logs" className="text-blue-400 hover:underline">{t("Session Logs (activity trace)")}</a>
               <a href="/" className="text-blue-400 hover:underline">{t("← Back to the app")}</a>
             </div>
