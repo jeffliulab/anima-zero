@@ -140,6 +140,8 @@ datasets/
 # ------------------------------------------------------------
 *.log
 logs/
+# MuJoCo drops this next to the working directory on every run (it is not a *.log).
+MUJOCO_LOG.TXT
 tmp/
 temp/
 *.tmp
