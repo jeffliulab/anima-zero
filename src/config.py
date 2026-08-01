@@ -168,11 +168,17 @@ class Settings(BaseSettings):
     model_qwen: str = Field("qwen3-vl:8b", validation_alias="ANIMA_QWEN3VL_MODEL",
                             description="本地 Qwen3-VL（Ollama）的模型名。")
     model_demo: str = Field(
-        "qwen3:4b-instruct-2507", validation_alias="ANIMA_DEMO_MODEL",
-        description="`anima demo` 的本地演示脑（经 Ollama，纯 CPU 可跑）。选型：4B 是最小且"
-                    "真正可靠的工具调用尺寸（BFCL 函数调用榜有正式条目；1.7B/0.6B 不可靠），"
-                    "Apache-2.0，Q4 约 2.5GB。它是纯文本模型——演示世界的传感器全是文字"
-                    "（look 工具 + state 读数），不需要视觉。")
+        # ⛔ 这里填的是 **Ollama 的 tag**，不是 HuggingFace 的模型名。两者长得像但不通用：
+        #    上游那个模型在 HF 上叫 `Qwen3-4B-Instruct-2507`，而 Ollama 库里的 tag 是
+        #    `qwen3:4b-instruct`——照抄 HF 名字加上 `-2507` 会得到一个**不存在的 tag**，
+        #    `ollama pull` 直接 404，而这条路正是没有 API key 的人唯一的演示路径。
+        #    （v1.2 发版前的独立审计逮到的：registry 实探 404，改前从没被真跑过。）
+        #    换模型时先 `ollama pull <tag>` 验一遍，再往这里填。
+        "qwen3:4b-instruct", validation_alias="ANIMA_DEMO_MODEL",
+        description="`anima demo` 的本地演示脑（经 Ollama，纯 CPU 可跑）。填 Ollama tag，"
+                    "不是 HF 模型名。选型：4B 是最小且真正可靠的工具调用尺寸（BFCL 函数调用"
+                    "榜有正式条目；1.7B/0.6B 不可靠），Apache-2.0，Q4 约 2.5GB。它是纯文本"
+                    "模型——演示世界的传感器全是文字（look 工具 + state 读数），不需要视觉。")
 
 
 # 启动即校验：env/.env 有非法值这里直接抛可读的 ValidationError（fail-fast）。
@@ -300,7 +306,7 @@ def worlds() -> list[tuple[str, str]]:
     在【调用时】读 env（不在 import 时）——调用方通常先 load_dotenv，.env 里的地址才生效。"""
     raw = os.getenv("ANIMA_WORLDS", "").strip()
     if raw:
-        return _pairs(raw)
+        return _with_optional_worlds(_pairs(raw))
 
     # 仓内那几个世界**只有在那个目录真的存在时**才列出来。
     #
@@ -327,12 +333,30 @@ def worlds() -> list[tuple[str, str]]:
     world_dir = os.path.join(paths.REPO_ROOT, "world")
     if os.path.isdir(world_dir):
         out += [(name, _s(env, default)) for name, env, default in repo_worlds]
-    # gazebo-chess 不在默认清单里：它的代码住在伴随仓 open-chess-robot（2026-07-08 迁出），
-    # 默认列出它对绝大多数人就是一个永远 offline 的死条目（v1.2 清障）。
-    # 但老能力不丢（T0）：显式设了 GAZEBO_CHESS_URL 的人，照旧出现在清单里。
-    gazebo = os.getenv("GAZEBO_CHESS_URL", "").strip()
-    if gazebo:
-        out.append(("gazebo-chess", gazebo))
+    return _with_optional_worlds(out)
+
+
+# 可选世界：默认不列，但**显式给了地址就必须回到清单里**（T0：加新不许弄丢旧）。
+#   name → 环境变量
+# gazebo-chess 不在默认清单里：它的代码住在伴随仓 open-chess-robot（2026-07-08 迁出），
+# 默认列出它对绝大多数人就是一个永远 offline 的死条目（v1.2 清障）。
+_OPTIONAL_WORLDS = {"gazebo-chess": "GAZEBO_CHESS_URL"}
+
+
+def _with_optional_worlds(out: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """把显式配了地址的可选世界补回清单。
+
+    ⛔ 这一步必须**对两条路径都生效**——`ANIMA_WORLDS` 那条也要。v1.2 起初只在默认清单那条
+    分支上补，而 `ANIMA_WORLDS` 一旦非空就提前 return 了；`.env.example` 偏偏默认就把
+    `ANIMA_WORLDS` 写满，于是"设了 GAZEBO_CHESS_URL 它就回来"这句话对**照文档配好的人正好
+    是假的**。承诺了老能力不丢，就得在人真的会走的那条路上不丢。
+    已在清单里的同名条目不重复追加（`ANIMA_WORLDS` 里手写了它的人，以他写的地址为准）。
+    """
+    have = {name for name, _ in out}
+    for name, env in _OPTIONAL_WORLDS.items():
+        url = os.getenv(env, "").strip()
+        if url and name not in have:
+            out.append((name, url))
     return out
 
 

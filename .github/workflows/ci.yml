@@ -81,6 +81,15 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      # The wheel check at the bottom of this job runs python. Ask for it explicitly rather
+      # than relying on whatever the runner image happens to preinstall — the alternative is
+      # a build that breaks the day the image changes, in a job nobody thinks of as Python.
+      # 本 job 末尾那步 wheel 校验要跑 python。显式装一个，别赌 runner 镜像里碰巧预装的那个
+      # ——否则镜像哪天一变，这个"没人当成 Python job"的地方就会莫名其妙地红。
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Install / 安装
         run: npm ci
 

@@ -538,18 +538,49 @@ def ui_build_time() -> str | None:
     return time.strftime("%Y-%m-%d %H:%M", time.localtime(os.path.getmtime(index)))
 
 
-if os.path.isdir(_UI_DIR):
+# Full-page routes that the static export produces as `<name>.html` rather than as a
+# directory with an index. StaticFiles(html=True) only ever looks for `index.html` inside a
+# directory, so it never maps /awi to awi.html — opening those links directly used to 404.
+# (In-app navigation is client-side routing and never reaches the server, which is why the
+# fault stayed hidden while the docs kept telling people to open exactly these URLs.)
+# 静态导出把这几个页面产出成 `<名字>.html` 而不是「目录 + index」。StaticFiles(html=True)
+# 只会给目录找 index.html，从不把 /awi 映射到 awi.html——所以直接打开这些链接曾经 404。
+# 应用内跳转是客户端路由、从不经过服务端，这个毛病才藏到现在。
+_FULL_PAGES = ("awi", "session-logs", "anima-logs")
+
+
+def _serve_page(request, _html: str):
+    return FileResponse(_html)
+
+
+def mount_ui(target, ui_dir: str = _UI_DIR) -> bool:
+    """Attach the bundled web app to `target`, returning whether there was one to attach.
+
+    ⚠️ A function, not module-level code, for one reason: it is the only shape that can be
+    tested. The previous version ran at import time against the module's own `_UI_DIR`, so a
+    test could not point it anywhere else — monkeypatching the constant and reloading the
+    module just re-ran the assignment and put the real path back, which meant the test
+    silently exercised whatever the developer happened to have built and failed outright in
+    CI, where the UI is not built at all. Taking the directory as an argument removes the
+    whole problem: the test hands it a temporary directory and a fresh app.
+
+    ⚠️ 写成函数而不是模块级代码，只为一个理由：**只有这个形状测得了**。上一版在 import 时
+    直接对着模块自己的 `_UI_DIR` 跑，测试没法把它指到别处——monkeypatch 掉那个常量再 reload
+    模块，只会把赋值重跑一遍、把真路径又填回去，结果测试实际测的是开发者本机碰巧构建过的那份，
+    而在根本不构建界面的 CI 里直接失败。把目录改成入参，这个问题就整个不存在了。
+    """
+    if not os.path.isdir(ui_dir):
+        return False
     from fastapi.staticfiles import StaticFiles
 
-    # StaticFiles(html=True) 只会给目录找 index.html，**不会**把 /awi 映射到 awi.html——
-    # 于是直接打开这两个整页路由会吃到 404（应用内跳转是客户端路由，从不经过这里，
-    # 所以这个毛病只在「直接打开链接」时现形）。赶在通配 mount 之前显式端出来。
-    def _serve_page(request, _html: str):
-        return FileResponse(_html)
+    # 赶在通配 mount 之前显式端出来（先注册者先匹配）。
+    for page in _FULL_PAGES:
+        html = os.path.join(ui_dir, f"{page}.html")
+        if os.path.exists(html):
+            target.add_route(f"/{page}", functools.partial(_serve_page, _html=html))
 
-    for _page in ("awi", "session-logs", "anima-logs"):
-        _html = os.path.join(_UI_DIR, f"{_page}.html")
-        if os.path.exists(_html):
-            app.add_route(f"/{_page}", functools.partial(_serve_page, _html=_html))
+    target.mount("/", StaticFiles(directory=ui_dir, html=True), name="web")
+    return True
 
-    app.mount("/", StaticFiles(directory=_UI_DIR, html=True), name="web")
+
+mount_ui(app)

@@ -8,9 +8,13 @@ abstract: >-
   with a trust model that treats every world as an untrusted remote party,
   a written specification with a conformance checker, and honest measured
   limits. Worlds ship separately; a minimal corridor example is included.
+# ⛔ Entity form (a bare `name:`), not family-names/given-names: splitting "Jeff Liu Lab"
+#    into those two fields renders the citation as "Liu Lab, J.", which is nobody's name.
+#    This matches the single `name` field in pyproject.toml's authors.
+# ⛔ 用机构写法（光一个 `name:`），不要拆成 family-names/given-names：拆了会渲染成
+#    "Liu Lab, J."，那不是任何人的名字。与 pyproject.toml 里 authors 的单一 name 字段一致。
 authors:
-  - family-names: "Liu Lab"
-    given-names: "Jeff"
+  - name: "Jeff Liu Lab"
     email: "contact@jeffliulab.com"
 repository-code: "https://github.com/jeffliulab/anima-zero"
 url: "https://pypi.org/project/anima-zero/"

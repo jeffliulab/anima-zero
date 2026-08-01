@@ -14,6 +14,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from anima import config
 from anima.config import Settings
 
 
@@ -72,3 +73,39 @@ def test_timeout_rejects_nonpositive(monkeypatch):
     monkeypatch.setenv("ANIMA_WORLD_TIMEOUT", "0")
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+# ------------------------------------------------- 可选世界（gazebo-chess）/ T0 不丢老能力 ----
+
+def test_an_optional_world_comes_back_even_when_anima_worlds_is_set(monkeypatch):
+    """⛔ v1.2 把 gazebo-chess 移出默认清单时承诺「设了 GAZEBO_CHESS_URL 它就回来」。
+
+    起初这个补丁只加在默认清单那条分支上，而 `ANIMA_WORLDS` 一旦非空就提前 return 了——
+    偏偏 `.env.example` 默认就把 `ANIMA_WORLDS` 写满，所以那句承诺对**照文档配好的人正好
+    是假的**。这条测试盯的就是"人真的会走的那条路"。
+    """
+    monkeypatch.setenv("ANIMA_WORLDS", "sim-chess=http://localhost:8102")
+    monkeypatch.setenv("GAZEBO_CHESS_URL", "http://localhost:8106")
+    assert ("gazebo-chess", "http://localhost:8106") in config.worlds()
+
+
+def test_an_optional_world_comes_back_without_anima_worlds(monkeypatch):
+    monkeypatch.delenv("ANIMA_WORLDS", raising=False)
+    monkeypatch.setenv("GAZEBO_CHESS_URL", "http://localhost:8106")
+    assert ("gazebo-chess", "http://localhost:8106") in config.worlds()
+
+
+def test_an_optional_world_is_not_listed_twice(monkeypatch):
+    """在 ANIMA_WORLDS 里手写了它的人说了算——不重复追加，也不覆盖他写的地址。"""
+    monkeypatch.setenv("ANIMA_WORLDS", "gazebo-chess=http://custom:9999")
+    monkeypatch.setenv("GAZEBO_CHESS_URL", "http://localhost:8106")
+    names = [n for n, _ in config.worlds()]
+    assert names.count("gazebo-chess") == 1
+    assert dict(config.worlds())["gazebo-chess"] == "http://custom:9999"
+
+
+def test_no_optional_world_when_its_address_is_unset(monkeypatch):
+    """没设地址就不该出现——默认清单里多一个永远 offline 的死条目，正是 v1.2 要清掉的。"""
+    monkeypatch.delenv("ANIMA_WORLDS", raising=False)
+    monkeypatch.delenv("GAZEBO_CHESS_URL", raising=False)
+    assert "gazebo-chess" not in [n for n, _ in config.worlds()]

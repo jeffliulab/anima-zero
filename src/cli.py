@@ -152,10 +152,12 @@ def cmd_world_add(args) -> int:
         return 1
     world.approve()
 
-    print("\nApproved. Add it to the world list — ANIMA_WORLDS in `.env`.\n"
+    print(f"\nApproved. Add it to the world list — ANIMA_WORLDS in {paths.ENV_FILE}.\n"
           "⛔ Append; do not replace, or you drop the worlds already there:")
-    existing = ",".join(f"{n}={u}" for n, u in config.worlds())
-    print(f"  ANIMA_WORLDS={existing},{args.name}={url}")
+    # 清单为空是 pip 用户的常态——那时候别打印出 `ANIMA_WORLDS=,example=...` 那个前导逗号，
+    # 它照抄进 .env 就是一个空条目。有就接在后面，没有就只写这一个。
+    entries = [f"{n}={u}" for n, u in config.worlds()] + [f"{args.name}={url}"]
+    print(f"  ANIMA_WORLDS={','.join(entries)}")
     return 0
 
 
@@ -228,12 +230,31 @@ def _pick_demo_brain(requested: str | None) -> str:
         return "demo"
     if ollama_up:
         print(f"Your Ollama is running but {model} is not pulled yet.")
-        if _confirm("Pull it now? (~2.5 GB, one time, runs purely on CPU)"):
+        # ⛔ Reachable does NOT imply local: OLLAMA_BASE_URL is documented as possibly
+        #    pointing at another machine, and there `ollama pull` cannot run here at all.
+        #    Calling it anyway raised a bare FileNotFoundError. Check for the binary, and
+        #    when it is missing say where the pull has to happen instead.
+        # ⛔ 连得上 ≠ 在本机：OLLAMA_BASE_URL 明说可以指向别的机器，那种情况下这里根本没有
+        #    `ollama` 这个命令，硬调会抛裸的 FileNotFoundError。先查有没有，没有就告诉用户
+        #    该去哪台机器上拉。
+        if not shutil.which("ollama"):
+            print(f"That Ollama is not on this machine (no `ollama` command here), so the "
+                  f"pull has to happen there:  ollama pull {model}")
+            print("Using the mock brain for this run.")
+        elif _confirm("Pull it now? (~2.5 GB, one time, runs purely on CPU)"):
             rc = subprocess.run(["ollama", "pull", model]).returncode
             if rc == 0:
                 print("Brain: demo — model pulled, using it.")
                 return "demo"
             print("The pull failed; falling back to the mock brain for this run.")
+        else:
+            # Declining is a choice, not a reason to go quiet: this branch used to return
+            # "mock" without printing anything, which is exactly the silent fallback the
+            # docstring above forbids.
+            # 拒绝也是一种选择，不是闭嘴的理由：这条分支以前一声不吭就 return "mock"，
+            # 正是上面 docstring 明令禁止的那种静默降级。
+            print("Fine — the mock brain for this run; it walks the chain but does not think.")
+            print(f"When you want the real one:  ollama pull {model}  then  anima demo")
     else:
         print("No API key and no local Ollama — the demo falls back to the mock brain,")
         print("which does NOT think: it only walks the chain so you can watch it.")
@@ -245,6 +266,35 @@ def _pick_demo_brain(requested: str | None) -> str:
         print(f"  2. pull the demo brain: ollama pull {model}   (~2.5 GB, one time)")
         print("  3. run this again:      anima demo\n")
     return "mock"
+
+
+def _resolve_brain(requested: str | None) -> str:
+    """Which brain an ordinary command runs on: what you asked for, else the configured
+    default, else the first one that actually works — saying so when it substitutes.
+
+    Without this, someone with no API key who follows the demo's own closing advice
+    (`anima chat --world example`) hits an authentication error on their first turn: the
+    default brain is an online one, and nothing checked whether it was usable. An explicit
+    `--brain` is always obeyed, including into that error — asking for a specific brain and
+    silently getting another would be worse.
+
+    一条普通命令用哪个脑：你点名的 → 配置的默认脑 → 第一个真的能用的；替换时明说换了谁。
+    没有这一步，一个没配 key 的人照着 demo 结尾的指引跑 `anima chat --world example`，
+    第一轮就撞鉴权错——默认脑是在线脑，而此前没有任何地方检查过它能不能用。
+    显式 `--brain` 永远照办（哪怕照办的结果是报错）：点名了还给你换一个才更糟。
+    """
+    if requested:
+        return requested
+    brains = {b["name"]: b for b in list_brains()}
+    default = brains.get(DEFAULT_BRAIN)
+    if default is None or default["available"]:
+        return DEFAULT_BRAIN
+    for name, b in brains.items():
+        if b["available"]:
+            print(f"Brain: {name} — the configured default ({DEFAULT_BRAIN}) is not usable "
+                  f"here (no API key, or the model is not pulled). Pick another with --brain.")
+            return name
+    return DEFAULT_BRAIN        # 到不了：mock 的 ready() 恒真，上面的循环必然命中
 
 
 def _ollama_reachable() -> bool:
@@ -298,7 +348,9 @@ def cmd_demo(args) -> int:
         orch = Orchestrator(reg, store)
 
         print(f"\nTask: {args.say!r}   (brain: {brain}, session: {session.id})")
-        print("Thinking... (a local CPU brain can take a few seconds per step)\n")
+        # 只有本地脑才慢到需要打预防针；对 mock 和云端脑说"CPU 每步要几秒"是不实的。
+        print("Thinking..." + (" (a local CPU brain can take a while per step)\n"
+                               if brain in ("demo", "qwen3-vl") else "\n"))
         try:
             with session_scope(session.id):
                 out = orch.handle(session, args.say, llm)
@@ -310,22 +362,49 @@ def cmd_demo(args) -> int:
         log = session_log._file_for(session.id)
         print(f"Every frame, thought and tool call of that turn is in:\n  {log}")
 
+    # ⛔ Every path printed here must exist for whoever is reading it. Someone who ran
+    #    `pip install` has no `src/` directory, so pointing them at `src/examples/...` names
+    #    a file they cannot open — the module path and the URL are what work for both.
+    # ⛔ 这里打印的每条路径，对读它的人都必须真实存在。用 pip 装的人没有 `src/` 目录，
+    #    指给他 `src/examples/...` 等于指了一个他打不开的文件——模块路径和网址才是两边都成立的。
+    template = _example_world_source()
     print("\nNext steps:")
     print("  · same world, your pace:  python -m anima.examples.minimal_world --port 8090")
     print("    then:                   anima world add example http://localhost:8090")
     print("  · talk to it:             anima chat --world example")
     print("  · the web app:            anima serve")
-    print("  · write your own world:   src/examples/minimal_world.py is the template,")
-    print("                            docs/awi-spec-v1.md is the contract it follows")
+    print(f"  · write your own world:   the corridor is the template to copy —\n"
+          f"                            {template}")
+    print("                            the contract it follows is docs/awi-spec-v1.md:")
+    print("                            https://github.com/jeffliulab/anima-zero/blob/main/docs/awi-spec-v1.md")
     return 0
+
+
+def _example_world_source() -> str:
+    """Where the corridor's source really is on *this* machine.
+
+    In a checkout that is the file in the repository; installed from a wheel it is the copy
+    inside site-packages, which is still readable and still the thing to copy from.
+    / 走廊的源码在**这台机器上**真正的位置：检出里是仓库那份，装出来的是包里那份——
+    后者照样读得到，也照样是该抄的那份。"""
+    from .examples import minimal_world
+    return minimal_world.__file__
 
 
 def cmd_doctor(args) -> int:
     """What is configured, what is reachable, and what would happen if you ran something.
     / 什么配好了、什么连得上、以及你现在跑一条命令会发生什么。"""
     print(f"anima {__version__}   python {sys.version.split()[0]}")
+    # Where things land is the first thing a new user needs to know — especially after
+    # `pip install`, where the answer is ~/.anima and not any directory they can see.
+    # Say it, and say which of the two layouts is in effect.
+    # 东西落在哪儿是新用户第一个要问的——尤其 pip 装出来的人，答案是 ~/.anima，
+    # 不是他眼前任何一个目录。直接说出来，并说明现在是两种布局中的哪一种。
+    print(f"install   {'source checkout' if paths._IN_CHECKOUT else 'installed package'}"
+          f"  →  data in {paths.DATA_ROOT}")
     print(f"settings  {paths.ENV_FILE}"
-          + ("" if paths.ENV_FILE and _exists(paths.ENV_FILE) else "  (does not exist)"))
+          + ("" if paths.ENV_FILE and _exists(paths.ENV_FILE) else "  (does not exist — create it here)"))
+    print(f"logs      {paths.LOGS_DIR}")
     print(f"trust     {trust.TrustStore().path}")
     if trust.trust_all_enabled():
         print(f"⚠ {trust.TRUST_ALL_ENV} is on — every world allowed. Development only.")
@@ -391,8 +470,9 @@ def cmd_run(args) -> int:
     reg = _registry()
     _resolve_world(reg, args.world)
     store = SessionStore()
+    brain = _resolve_brain(args.brain)
     session = (store.get(args.session) if args.session and store.exists(args.session)
-               else store.new(args.world, args.brain)[0])
+               else store.new(args.world, brain)[0])
     llm = LoggingLLM(make_llm(session.brain), session.brain)
     orch = Orchestrator(reg, store)
 
@@ -417,12 +497,12 @@ def cmd_chat(args) -> int:
     reg = _registry()
     _resolve_world(reg, args.world)
     store = SessionStore()
-    session, _ = store.new(args.world, args.brain)
+    session, _ = store.new(args.world, _resolve_brain(args.brain))
     llm = LoggingLLM(make_llm(session.brain), session.brain)
     orch = Orchestrator(reg, store)
 
     where = f"world {args.world}" if args.world else "no world (chat only)"
-    print(f"anima chat · brain {args.brain} · {where} · session {session.id}")
+    print(f"anima chat · brain {session.brain} · {where} · session {session.id}")
     print("Just type. Ctrl-C or an empty line to leave.\n")
     while True:
         try:
@@ -482,13 +562,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("chat", help="talk to it in the terminal")
     p.add_argument("--world", default=None)
-    p.add_argument("--brain", default=DEFAULT_BRAIN)
+    # ⛔ default=None, not DEFAULT_BRAIN: `_resolve_brain` has to be able to tell "the user
+    #    named a brain" from "nobody said", because only in the second case may it
+    #    substitute a usable one for an unconfigured default.
+    # ⛔ 默认是 None、不是 DEFAULT_BRAIN：`_resolve_brain` 必须分得清"用户点名了"和
+    #    "没人说"，因为只有后一种情况它才允许把用不了的默认脑换成一个能用的。
+    p.add_argument("--brain", default=None, help=f"default: {DEFAULT_BRAIN} if usable, "
+                                                 f"else the first brain that is")
     p.set_defaults(fn=cmd_chat)
 
     p = sub.add_parser("run", help="one turn, then exit (scriptable)")
     p.add_argument("--say", required=True)
     p.add_argument("--world", default=None)
-    p.add_argument("--brain", default=DEFAULT_BRAIN)
+    p.add_argument("--brain", default=None, help=f"default: {DEFAULT_BRAIN} if usable, "
+                                                 f"else the first brain that is")
     p.add_argument("--session", default=None, help="continue an existing session")
     p.add_argument("--trace", action="store_true", help="print this turn's trace as well")
     p.set_defaults(fn=cmd_run)

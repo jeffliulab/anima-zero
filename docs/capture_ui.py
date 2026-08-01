@@ -25,7 +25,15 @@ REPO = os.path.dirname(HERE)
 OUT = os.path.join(HERE, "images")
 
 CHROME = "google-chrome"
-WEB = os.getenv("ANIMA_WEB", "http://localhost:3000")
+# ⛔ 对着**后端 :8000** 拍，不是 dev server :3000。两个理由，第二个是被咬出来的：
+#   1. :8000 端出来的是 `scripts/build_ui.py` 生成、随 wheel 分发的那份静态界面——
+#      也就是用户真正看到的界面。对着 dev server 拍，拍的是只有开发者见得到的东西。
+#   2. 实测（2026-08-01）：headless Chrome 打开 dev server 的 /awi，SSR 的静态文字渲染得出来，
+#      但客户端那次 `fetch('/api/awi')` 的数据**始终进不了 DOM**，于是拍出一张
+#      "框架都在、世界卡片全空" 的壳（110 KB vs 正常的 472 KB）。同一时刻同一后端，
+#      换成 :8000 立刻正常——那边还是同源，连跨域都不牵涉。
+#   ⚠️ 所以拍图前要先 `python scripts/build_ui.py`，否则 :8000 端的是上一次构建的旧界面。
+WEB = os.getenv("ANIMA_WEB", "http://localhost:8000")
 WORLD = os.getenv("HOUSENAV_WEB", "http://localhost:8112")
 
 # 每张图:名字 → (URL, 窗口宽, 窗口高, 说明)
@@ -41,7 +49,12 @@ SHOTS = {
     "world": (WORLD, 1400, 900, "sim-house 世界自己的人类页（排障用，不进 README）"),
 }
 
-# 语言 → (Chrome 的 --lang, 文件名后缀)。界面首次访问跟随浏览器语言,所以用它就能切。
+# 语言 → (Chrome 的 --accept-lang, 文件名后缀)。界面首次访问跟随 `navigator.language`,所以用它就能切。
+#
+# ⛔ 是 `--accept-lang`,**不是 `--lang`**。2026-08-01 实测（Chrome 149 headless）：`--lang=zh-CN`
+#    根本不改 `navigator.language`（照旧是 en-US），于是拍出来的"中文图"其实是英文界面、
+#    只是文件名叫 `-zh`。这是最坏的一类失效——图出来了、尺寸也正常，只有打开看才发现是错的。
+#    `--accept-lang=zh-CN` 才真的把 `navigator.language` 改成 zh-CN（同一次实测验证）。
 #
 # ⛔ **只出英文和中文两套,别给新语言加一行**(2026-07-29 Jeff 定)。截图是**展示界面长什么样**,
 # 不是展示界面说什么话——英文那张对任何语言的读者都够用。中文这套留着是因为它本来就在;
@@ -64,7 +77,9 @@ SHOT_TIMEOUT_MS = int(os.getenv("CAPTURE_SHOT_TIMEOUT_MS", "25000"))
 def shoot(url: str, w: int, h: int, lang_flag: str, path: str) -> None:
     subprocess.run(
         [CHROME, "--headless", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
-         f"--lang={lang_flag}", f"--window-size={w},{h}",
+         # 两个都给：--accept-lang 改 navigator.language（界面据此选语言，这个是真起作用的
+         # 那一个，见上面 LANGS 的注释）；--lang 只影响浏览器自身 UI，留着无害。
+         f"--accept-lang={lang_flag}", f"--lang={lang_flag}", f"--window-size={w},{h}",
          # ⛔ 必须用 --timeout(到点强制出图),不能只靠 --virtual-time-budget。
          #    AWI 仪表盘开着一条 SSE 长连接(实时流量),Chrome 永远等不到"网络空闲",
          #    只给 virtual-time-budget 的话进程会一直挂着、一张图都不写(实测挂满 240 秒)。

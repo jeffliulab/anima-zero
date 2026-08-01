@@ -11,6 +11,7 @@ ANIMA 只能【看画面】+【发导航原语】，靠自己认出身处哪间�
 from __future__ import annotations
 
 import math
+import os
 
 import config as C
 import scene_assets
@@ -326,7 +327,10 @@ class HouseNavWorld:
             "room_label": L.room_label(room),
             "fallen": self.sim.fallen(),
             "tilt_deg": round(math.degrees(self.sim.tilt()), 1),
-            "policy": self.sim.policy_path,
+            # ⛔ 只报文件名，不报完整路径。这个字段是给人看的"用的是哪个策略"，那由文件名就
+            #    答完了；而完整路径是**这台机器上的绝对路径**，`/home/<用户名>/…` 会跟着
+            #    人类页和 README 的 AWI 截图一起发出去。2026-08-01 重拍截图时逮到的。
+            "policy": os.path.basename(self.sim.policy_path or "") or "(none)",
         }
 
     def reset(self) -> dict:

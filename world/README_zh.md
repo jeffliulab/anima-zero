@@ -106,7 +106,6 @@
    - `src/config.py` 的 `worlds()` 默认清单
    - `.env.example` 的 `ANIMA_WORLDS`
    - `tests/test_awi_mcp_copies.py` 的 `COPIES`
-   - `anima-zero-个人用详细开发日志/运行命令.md` 的启动命令
 6. **起完世界记得让大脑重新握手**：能力清单在首次握手时缓存，世界那边改了工具而后端没重启的话，
    新工具**永远**上不了 LLM 的工具单。网页 AWI 页每个世界卡上有「重新握手」按钮；
    排查口诀：`curl -s localhost:8000/api/awi` 看大脑**实际**拿到的工具名。

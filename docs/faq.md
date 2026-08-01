@@ -28,7 +28,8 @@ connects to ones already running. Either the world is not started, or it is list
 on a different address than the one registered.
 
 **What to do**: start the world first (each world's README has its one-line start
-command, e.g. `cd world/sim-chess && uvicorn server:app --port 8102`), then check the
+command, e.g. `cd world/sim-chess && pip install -e . && uvicorn server:app --port 8102`
+— a world has its own dependencies, so the install step is not optional), then check the
 address matches: the world's own log line prints its port, and `ANIMA_WORLDS` in your
 `.env` must point at the same one. `curl http://localhost:<port>/health` should answer
 `{"ok":true}`.
@@ -53,8 +54,9 @@ back changed, you are asked again. While developing your own world,
 **Symptom**: every brain in `anima doctor` shows "not configured".
 
 **What to do**, three free paths:
-- `anima demo` — offers to pull **Qwen3-4B-Instruct-2507** via Ollama (~2.5 GB, runs
-  purely on CPU). It really thinks; this is the intended keyless path.
+- `anima demo` — offers to pull **Qwen3-4B-Instruct** via Ollama (the tag is
+  `qwen3:4b-instruct`; ~2.5 GB, runs purely on CPU). It really thinks; this is the
+  intended keyless path.
 - For the full web app with eyes: install [Ollama](https://ollama.com/download), then
   `ollama pull qwen3-vl:8b` and pick `qwen3-vl` in the brain dropdown.
 - The **mock brain** needs nothing at all — but it does not think; it only walks the

@@ -155,7 +155,9 @@ class Orchestrator:
         # ⛔ 但先问一句「这个脑长眼睛吗」：llm.vision=False（纯文本脑，如 demo 的 Qwen3-4B）时
         #    画面不进模型——它处理不了 image_url，喂了只会浪费 token 或直接报错。
         #    画面照常落会话留痕（下面的 append_perception 不受影响），那是给人看的。
-        vision = getattr(state.get("llm"), "vision", True)
+        #    没声明 vision 的按「没眼睛」算，与 LoggingLLM 同一个方向：漏喂图只是少了信息，
+        #    错喂图是直接报错——两种猜错的代价不对等，所以往安全那边猜。
+        vision = getattr(state.get("llm"), "vision", False)
         image = None
         if obs:
             if vision:

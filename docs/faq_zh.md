@@ -25,7 +25,8 @@
 要么它监听的地址和你登记的不一样。
 
 **怎么办**：先把世界起起来（每个世界的 README 都有一行启动命令，比如
-`cd world/sim-chess && uvicorn server:app --port 8102`），再核对地址：世界自己的
+`cd world/sim-chess && pip install -e . && uvicorn server:app --port 8102`——世界有自己的
+依赖，那一步 install 不能省），再核对地址：世界自己的
 启动日志会打印端口，`.env` 里 `ANIMA_WORLDS` 必须指向同一个。
 `curl http://localhost:<端口>/health` 应该回 `{"ok":true}`。
 
@@ -47,8 +48,8 @@
 **症状**：`anima doctor` 里每个大脑都显示 not configured。
 
 **怎么办**，三条免费路径：
-- `anima demo`——会提出帮你拉 **Qwen3-4B-Instruct-2507**（经 Ollama，约 2.5GB，
-  纯 CPU 跑）。它是真会思考的，这是官方的无 key 路径。
+- `anima demo`——会提出帮你拉 **Qwen3-4B-Instruct**（Ollama tag 是 `qwen3:4b-instruct`，
+  约 2.5GB，纯 CPU 跑）。它是真会思考的，这是官方的无 key 路径。
 - 想用带眼睛的完整网页：装 [Ollama](https://ollama.com/download)，然后
   `ollama pull qwen3-vl:8b`，在大脑下拉里选 `qwen3-vl`。
 - **mock brain** 什么都不需要——但它不思考，只把链路走一遍给你看管道。
