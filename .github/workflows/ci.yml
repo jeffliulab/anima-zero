@@ -25,7 +25,7 @@ jobs:
         with:
           fetch-depth: 0          # check_readme.py inspects git-tracked content / 按 git 内容查图片
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -86,7 +86,7 @@ jobs:
       # a build that breaks the day the image changes, in a job nobody thinks of as Python.
       # 本 job 末尾那步 wheel 校验要跑 python。显式装一个，别赌 runner 镜像里碰巧预装的那个
       # ——否则镜像哪天一变，这个"没人当成 Python job"的地方就会莫名其妙地红。
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
