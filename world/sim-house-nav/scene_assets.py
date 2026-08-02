@@ -23,7 +23,8 @@ import os
 
 import config as C
 
-_cached = None
+_cached: dict = {}          # 场景 key -> layout 模块
+_scenes_cached = None       # scenes/manifest.py 模块
 _robots = None
 
 
@@ -55,36 +56,61 @@ def robot_key() -> str:
     return C.ROBOT or robots().DEFAULT_ROBOT
 
 
-def layout():
-    """场景的 layout 模块（房间矩形 / 出生点 / 家具 / 房间归属判定）。加载一次即缓存。"""
-    global _cached
-    if _cached is not None:
-        return _cached
-    path = os.path.join(C.ASSETS_ROOT, "layout.py")
+def scenes():
+    """资产库的场景清单（`scenes/manifest.py`）：一个地方一条。
+
+    ⚠️ 2026-08-02 资产库从单场景改成多场景。老资产库没有这个文件——那时 layout 直接
+    躺在仓根。这里不做静默降级：找不到清单就直接报错说清楚该升级，
+    因为"悄悄退回单场景"会让 HOUSENAV_SCENE 变成一个看着生效、实际被忽略的配置。
+    """
+    global _scenes_cached
+    if _scenes_cached is not None:
+        return _scenes_cached
+    path = os.path.join(C.ASSETS_ROOT, "scenes", "manifest.py")
     if not os.path.exists(path):
         raise FileNotFoundError(
-            f"找不到场景布局 {path}。\n"
-            f"场景住在独立的资产库（默认在项目根的 alice-house/），"
-            f"用 HOUSENAV_ASSETS_ROOT 指过去。")
-    spec = importlib.util.spec_from_file_location("assets_layout", path)
+            f"找不到场景清单 {path}。\n"
+            f"资产库 2026-08-02 起改为多场景（scenes/<key>/layout.py + scenes/manifest.py）——"
+            f"升级资产库，或把 HOUSENAV_ASSETS_ROOT 指到新的。")
+    spec = importlib.util.spec_from_file_location("assets_scenes_manifest", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    _cached = mod
+    _scenes_cached = mod
+    return mod
+
+
+def scene_key() -> str:
+    """当前配置去哪个场景（空配置 = 清单里的默认那个）。"""
+    return C.SCENE or scenes().DEFAULT_SCENE
+
+
+def layout():
+    """当前场景的 layout 模块（房间矩形 / 出生点 / 家具 / 房间归属判定）。
+
+    按场景缓存：同一进程里换场景要重建仿真，缓存以 key 区分，免得换了地方还读旧布局。
+    """
+    key = scene_key()
+    if key in _cached:
+        return _cached[key]
+    mod = scenes().load_layout(key)
+    _cached[key] = mod
     return mod
 
 
 def scene_xml_for(key: str) -> str:
     """某台机器人对应的场景 MJCF 的完整路径。
 
-    **一台机器人一份场景文件**（`house-go2.xml` / `house-g1.xml`）——机器人的网格路径在编译期
-    就定死了，两台塞不进同一份 MJCF。命名规则与资产库 `make_house.py` 的 `scene_filename()`
-    是同一条，改名要两边一起改。
+    **一个（场景, 机器人）组合一份文件**（`house1-go2.xml` / `house2-g1.xml`）——
+    机器人的网格路径在编译期就定死了，两台塞不进同一份 MJCF；场景同理。
+    文件名规则的单一真相源是资产库 `scenes/manifest.py` 的 `scene_filename()`，
+    这里直接调它，不再自己拼字符串（以前两边各拼一份，改名就得记得改两处）。
     """
-    path = os.path.join(C.ASSETS_ROOT, f"house-{key}.xml")
+    scene = scene_key()
+    path = os.path.join(C.ASSETS_ROOT, scenes().scene_filename(scene, key))
     if not os.path.exists(path):
         raise FileNotFoundError(
             f"找不到场景 {path}。先在资产库里生成它：\n"
-            f"    cd {C.ASSETS_ROOT} && python make_house.py --robot {key}")
+            f"    cd {C.ASSETS_ROOT} && python make_house.py --scene {scene} --robot {key}")
     return path
 
 

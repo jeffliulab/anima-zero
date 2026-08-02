@@ -43,6 +43,11 @@ ASSETS_ROOT = _s("HOUSENAV_ASSETS_ROOT",
 #    不是对话中途能切的东西；网页上的切换走世界的 POST /config，那边会重建。
 ROBOT = _s("HOUSENAV_ROBOT", "")
 
+# 去哪个场景（资产库 scenes/manifest.py 里的 key，如 house1 / house2）。空 = 清单里的默认那个。
+# ⚠️ 和换身体同理：换地方要重建整个仿真，所以是**开跑前**的配置。
+# 身体与地方是正交的两件事——同一台机器人可以放进任何一个场景，反之亦然。
+SCENE = _s("HOUSENAV_SCENE", "")
+
 # ---------------------------------------------------------------- 策略与模型
 # 训好的 Go2 行走策略（ONNX）。默认找仓内 policy/ 目录；换策略只改这个 env。
 POLICY_PATH = _s("HOUSENAV_POLICY", "")          # 空 = 用 policy/ 下的默认文件（见 sim.py 的发现逻辑）
